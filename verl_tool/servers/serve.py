@@ -15,13 +15,11 @@ logger = logging.getLogger(__name__)
 def parse_agent_request(data):
     trajectory_ids = data.get("trajectory_ids")
     actions = data.get("actions")
-    queries = data.get("queries")
     extra_data = data.get("extra_data") 
     
     parsed_agent_request = {
-        "trajectory_id": trajectory_ids,
+        "trajectory_ids": trajectory_ids,
         "actions": actions,
-        "queries": queries,
         "extra_data": extra_data,
     }
     return parsed_agent_request
@@ -42,8 +40,8 @@ def main(
     async def get_observation(request: Request):
         data = await request.json()
         parsed_data = parse_agent_request(data)
-        observations = tool.get_observations(**parsed_data)
-        result = {"observations": observations}
+        observations, dones, valids = tool.get_observations(**parsed_data)
+        result = {"observations": observations, "dones": dones, "valids": valids}
         logger.info(f"Sent JSON: {result}")
         return JSONResponse(result)
     

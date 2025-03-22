@@ -15,7 +15,6 @@ def test_connection(
     trajectory_id: str = "test-trajectory-001",
     action: str = "test-action",
     query: str = "test-query",
-    extra_data: dict = None
 ):
     """
     Test the connection to the tool server.
@@ -30,15 +29,11 @@ def test_connection(
     Returns:
         True if test passed, False otherwise
     """
-    if extra_data is None:
-        extra_data = {"test_key": "test_value"}
     
     # Prepare the request payload
     payload = {
         "trajectory_ids": [trajectory_id],
         "actions": [action],
-        "queries": [query],
-        "extra_data": extra_data
     }
     
     logger.info(f"Sending request to {url}")

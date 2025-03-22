@@ -88,12 +88,17 @@ class AgentActorRolloutRefWorker(Worker, ActorRolloutRefWorker, metaclass=AgentA
         for key in getattr(self.config, 'agent', {}).keys():
             if key in self.agent_config.__dict__.keys():
                 setattr(self.agent_config, key, self.config.agent[key])
+        setattr(self.agent_config, 'n', self.config.rollout.n)
+        print(f"AgentActorRolloutRefWorker: {self.agent_config}")
         self.tokenizer = hf_tokenizer(self.agent_config.tokenizer_path)
         self.super_generate_sequences = self.super_methods_record['generate_sequences']
         self.super_generate_sequences = partial(self.super_generate_sequences, self)
-        self.manager = AgentActorManager(self.tokenizer, self.super_generate_sequences, self.agent_config)
-        
+        self.manager = AgentActorManager(self.tokenizer, self, self.agent_config)
+    
     @register(dispatch_mode=Dispatch.DP_COMPUTE_PROTO)
     def generate_sequences(self, prompts):
-        # return self.super_generate_sequences(prompts) # exactly the original verl behavior, for debug
-        return self.manager.run_llm_loop(prompts) # our agent behavior
+        if not self.agent_config.enable_agent:
+            outputs = self.super_generate_sequences(prompts)
+        else:
+            outputs = self.manager.run_llm_loop(prompts) # our agent behavior
+        return outputs

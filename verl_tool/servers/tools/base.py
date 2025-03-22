@@ -1,4 +1,6 @@
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from tqdm import tqdm
 registered_tools = {}
 ALL_TOOLS = []
 
@@ -25,13 +27,106 @@ def register_tool(cls):
 class BaseTool:
     tool_type = __name__
     
-    def __init__(self, tool_type=None):
-        self.tool_type = tool_type if tool_type else self.__class__.tool_type
+    def __init__(self, num_workers=1):
+        self.num_workers = num_workers
         registered_tools[self.tool_type] = self.__class__
+        self.env_cache = {}
     
-    def get_observations(self, trajectory_id, actions, queries, extra_data):
-        return [f"Base observation for {trajectory_id}"]
-
+    def load_env(self, trajectory_id):
+        """
+        Load the environment for the given trajectory_id
+        """
+        env = self.env_cache.get(trajectory_id)
+        if env == None:
+            env = {
+                "trajectory_id": trajectory_id,
+                "metadata": {
+                    "turns": 0,
+                },
+                "previous_obs": [],
+            }
+        return env
+    
+    def save_env(self, trajectory_id, env):
+        """
+        Save the environment for the given trajectory_id
+        """
+        self.env_cache[trajectory_id] = env
+    
+    def update_env(self, trajectory_id, env, action, is_valid, extra_data, observation):
+        """
+        Update the environment for the given trajectory_id
+        """
+        env["metadata"]["turns"] += 1
+        env["previous_obs"].append({
+            "action": action,
+            "is_valid": is_valid,
+            "observation": observation,
+            "extra_data": extra_data,
+        })
+    
+    def delete_env(self, trajectory_id):
+        """
+        Delete the environment for the given trajectory_id
+        """
+        if trajectory_id in self.env_cache:
+            del self.env_cache[trajectory_id]
+    
+    def parse_action(self, action:str):
+        """
+        Parse the raw action string (which is the llm response) into a actual action and it's contents
+        Args:
+            action: The raw action string
+        Returns:
+            action: The parsed action
+            valid: Whether the action is valid
+        """
+        action = action[:10]
+        valid = True
+        return action, valid
+    
+    def conduct_action(self, trajectory_id, action, extra_data):
+        """
+        Conduct the action on the environment and return the observation
+        Args:
+            trajectory_id: The trajectory ID
+            action: The action to conduct
+            extra_data: Extra data to include in the request
+        Returns:
+            observation: The observation after conducting the
+            done: Whether the trajectory is done
+            valid: Whether the action is valid
+        """
+        parsed_action, is_valid = self.parse_action(action)
+        env = self.load_env(trajectory_id)
+        
+        # any other processing that gets the observation, whether the trajectory is done, and whether the action is valid
+        observation = f"Base observation for {trajectory_id} in turn {env['metadata']['turns']}"
+        done = True
+        valid = True
+        
+        self.update_env(trajectory_id, env, parsed_action, is_valid, extra_data, observation)
+        self.save_env(trajectory_id, env)
+        
+        return observation, done, valid
+        
+    def get_observations(self, trajectory_ids, actions, extra_data):
+        """
+        Get the observations for the given trajectory IDs and actions
+        Args:
+            trajectory_ids: The list of trajectory IDs
+            actions: The list of actions
+            extra_data: Extra data to include in the request
+        Returns:
+            observations: The list of observations
+            dones: The list of done flags
+            valids: The list of valid flags
+        """
+        with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
+            results = list(tqdm(executor.map(self.conduct_action, trajectory_ids, actions, [extra_data]*len(trajectory_ids)), total=len(trajectory_ids), desc=f"Getting observations using tool {self.tool_type}"))
+            
+        observations, dones, valids = zip(*results)
+        return observations, dones, valids
 
 # go through all files in the tools directory and register them
 cur_dir = Path(__file__).parent
