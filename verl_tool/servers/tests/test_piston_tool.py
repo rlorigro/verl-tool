@@ -5,8 +5,6 @@ import fire
 import logging
 import sys
 import os
-import asyncio
-import time
 
 # Add parent directory to path to import PistonTool
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
