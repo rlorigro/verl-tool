@@ -3,10 +3,12 @@ An unified and easy-to-extend tool-agent training framework based on verl.
 
 ## Installation
 ```bash
+pip install uv # if not installed
 uv sync
 uv pip install -e verl
 uv pip install vllm==0.7.3
 uv pip install flash-attn --no-build-isolation
+source .venv/bin/activate
 ```
 
 ## Training
