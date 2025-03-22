@@ -13,6 +13,7 @@ source .venv/bin/activate
 
 ## Training
 ```bash
+python examples/data_preprocess/gsm8k.py # Preprocess the data
 bash examples/train/train_gsm8k.sh
 ```
 
