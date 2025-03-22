@@ -323,10 +323,16 @@ def add(a, b):
             valid = False
         else:
             try:
+                # Create a new event loop for this thread if needed
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    # No event loop in current thread, create a new one
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                
                 # Execute code
-                result = asyncio.get_event_loop().run_until_complete(
-                    self._execute_code(parsed_action)
-                )
+                result = loop.run_until_complete(self._execute_code(parsed_action))
                 
                 # Format output
                 if "error" in result:

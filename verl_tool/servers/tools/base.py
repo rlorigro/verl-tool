@@ -8,8 +8,15 @@ def get_tool_cls(tool_type):
     if tool_type in ALL_TOOLS:
         if tool_type == "base":
             return BaseTool
-        __import__(f".{tool_type}", globals(), locals(), [tool_type], 0)
+        
+        # Use absolute import
+        import importlib
+        module_path = f"verl_tool.servers.tools.{tool_type}"
+        importlib.import_module(module_path)
+        
         tool_class = registered_tools.get(tool_type)
+        if tool_class is None:
+            raise ValueError(f"Tool class for {tool_type} was not registered properly")
         return tool_class
     else:
         raise ValueError(f"Tool type {tool_type} not found. Available tools: {ALL_TOOLS}")
@@ -140,4 +147,3 @@ for file in cur_dir.iterdir():
 print("Registered Tools:")
 for tool in ALL_TOOLS:
     print(f"  - {tool}")
-    
