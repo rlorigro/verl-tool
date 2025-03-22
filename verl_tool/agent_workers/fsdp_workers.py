@@ -1,6 +1,7 @@
 from verl.workers.fsdp_workers import ActorRolloutRefWorker, Worker, DictConfig
 from verl.workers.fsdp_workers import *
 from verl.utils import hf_tokenizer
+from functools import partial
 from ..llm_agent.config import AgentActorConfig
 from ..llm_agent.manager import AgentActorManager
 
@@ -84,15 +85,15 @@ class AgentActorRolloutRefWorker(Worker, ActorRolloutRefWorker, metaclass=AgentA
         self.role = role
         self.agent_config = AgentActorConfig()
         # for key in get(self.config.agent_config
-        for key in getattr(self.config, 'agent_config', {}).keys():
+        for key in getattr(self.config, 'agent', {}).keys():
             if key in self.agent_config.__dict__.keys():
-                setattr(self.agent_config, key, self.config[key])
-        # self.tokenizer = hf_tokenizer(self.agent_config.tokenizer_path)
-        # self.manager = AgentActorManager(self.tokenizer, self, self.agent_config)
-            
+                setattr(self.agent_config, key, self.config.agent[key])
+        self.tokenizer = hf_tokenizer(self.agent_config.tokenizer_path)
+        self.super_generate_sequences = self.super_methods_record['generate_sequences']
+        self.super_generate_sequences = partial(self.super_generate_sequences, self)
+        self.manager = AgentActorManager(self.tokenizer, self.super_generate_sequences, self.agent_config)
+        
     @register(dispatch_mode=Dispatch.DP_COMPUTE_PROTO)
     def generate_sequences(self, prompts):
-        return self.super_methods_record['generate_sequences'](self, prompts)
-        # return self.manager.generate_sequences(prompts)
-    
-    
+        # return self.super_generate_sequences(prompts) # exactly the original verl behavior, for debug
+        return self.manager.run_llm_loop(prompts) # our agent behavior
