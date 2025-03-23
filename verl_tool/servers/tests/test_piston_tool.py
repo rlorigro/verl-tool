@@ -281,7 +281,11 @@ def _run_all_tests(url=None, use_local=False, format_type="xml"):
     return results
 
 def main():
-    """Main entry point for the test script"""
+    """Main entry point for the test script
+    Run with:
+        python -m verl_tool.servers.tests.test_piston_tool python --url=http://localhost:5000/get_observation
+        python -m verl_tool.servers.tests.test_piston_tool all --url=http://localhost:5000/get_observation
+    """
     fire.Fire({
         "python": test_python,
         "cpp": test_cpp,

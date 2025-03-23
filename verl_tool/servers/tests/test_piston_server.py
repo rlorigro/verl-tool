@@ -222,7 +222,9 @@ def test_all_languages(url="http://localhost:5000/get_observation", format_type=
 def main():
     """
     Entry point for the test script.
-    Run with: python test_server_piston.py --url=http://localhost:5000/get_observation
+    Run with: 
+        python -m verl_tool.servers.tests.test_piston_server python --url=http://localhost:5000/get_observation
+        python -m verl_tool.servers.tests.test_piston_server all --url=http://localhost:5000/get_observation
     """
     fire.Fire({
         "python": lambda url=None, format_type="xml": test_piston_server(url, "python", format_type),
