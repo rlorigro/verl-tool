@@ -39,6 +39,12 @@ class BaseTool:
         registered_tools[self.tool_type] = self.__class__
         self.env_cache = {}
     
+    def get_usage_inst(self):
+        """
+        Get the usage instructions for the tool
+        """
+        return "Base usage instructions"
+    
     def load_env(self, trajectory_id):
         """
         Load the environment for the given trajectory_id
