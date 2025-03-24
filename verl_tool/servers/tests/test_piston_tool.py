@@ -244,7 +244,7 @@ def _send_test_request(url, trajectory_id, action, test_name, use_local=False):
         payload = {
             "trajectory_ids": [trajectory_id],
             "actions": [action],
-            "extra_data": {}
+            "extra_field": {}
         }
         
         try:

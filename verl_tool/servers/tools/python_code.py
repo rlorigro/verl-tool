@@ -14,7 +14,7 @@ class PythonCodeTool(BaseTool):
         """
         return action
     
-    def conduct_action(self, trajectory_id, action, extra_data):
+    def conduct_action(self, trajectory_id, action, extra_field):
         parsed = self.parse_action(action)
         env = self.load_env(trajectory_id)
         

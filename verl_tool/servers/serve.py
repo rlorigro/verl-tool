@@ -14,15 +14,15 @@ logger = logging.getLogger(__name__)
 def parse_agent_request(data):
     trajectory_ids = data.get("trajectory_ids")
     actions = data.get("actions")
-    extra_data = data.get("extra_data")
+    extra_fields = data.get("extra_fields")
     assert len(trajectory_ids) == len(actions), f"Number of trajectory_ids ({len(trajectory_ids)}) does not match number of actions ({len(actions)})"
-    if not extra_data:
-        extra_data = [None for _ in range(len(actions))]
+    if not extra_fields:
+        extra_fields = [None for _ in range(len(actions))]
     
     parsed_agent_request = {
         "trajectory_ids": trajectory_ids,
         "actions": actions,
-        "extra_data": extra_data,
+        "extra_fields": extra_fields,
     }
     return parsed_agent_request
 
@@ -45,7 +45,7 @@ def get_tool_type_for_action(tools, action):
             return tool_type
     return None
 
-def get_multi_tool_observations(tools, trajectory_ids, actions, extra_data):
+def get_multi_tool_observations(tools, trajectory_ids, actions, extra_fields):
     tool_type_each_action = [get_tool_type_for_action(tools, action) for action in actions]
     # get observations for each tool
     all_tool_types = set(tool_type_each_action)
@@ -63,8 +63,8 @@ def get_multi_tool_observations(tools, trajectory_ids, actions, extra_data):
         else:
             tool_trajectory_ids = [trajectory_ids[i] for i in tool_indices]
             tool_actions = [actions[i] for i in tool_indices]
-            tool_extra_data = [extra_data[i] for i in tool_indices]
-            observations, dones, valids = tool.get_observations(tool_trajectory_ids, tool_actions, tool_extra_data)
+            tool_extra_fields = [extra_fields[i] for i in tool_indices]
+            observations, dones, valids = tool.get_observations(tool_trajectory_ids, tool_actions, tool_extra_fields)
         for i, idx in enumerate(tool_indices):
             all_observations[idx] = observations[i]
             all_dones[idx] = dones[i]

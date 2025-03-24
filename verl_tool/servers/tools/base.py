@@ -6,8 +6,13 @@ ALL_TOOLS = []
 
 def get_tool_cls(tool_type):
     if tool_type in ALL_TOOLS:
+        print(ALL_TOOLS)
+        print(registered_tools)
         if tool_type == "base":
             return BaseTool
+        # elif tool_type == "text_browser":
+        #     from .text_browser import TextBrowserTool
+        #     return TextBrowserTool
         
         # Use absolute import
         import importlib
@@ -66,7 +71,7 @@ class BaseTool:
         """
         self.env_cache[trajectory_id] = env
     
-    def update_env(self, trajectory_id, env, action, is_valid, extra_data, observation):
+    def update_env(self, trajectory_id, env, action, is_valid, extra_field, observation):
         """
         Update the environment for the given trajectory_id
         """
@@ -75,7 +80,7 @@ class BaseTool:
             "action": action,
             "is_valid": is_valid,
             "observation": observation,
-            "extra_data": extra_data,
+            "extra_field": extra_field,
         })
     
     def delete_env(self, trajectory_id):
@@ -98,13 +103,13 @@ class BaseTool:
         valid = True
         return action, valid
     
-    def conduct_action(self, trajectory_id, action, extra_data):
+    def conduct_action(self, trajectory_id, action, extra_field):
         """
         Conduct the action on the environment and return the observation
         Args:
             trajectory_id: The trajectory ID
             action: The action to conduct
-            extra_data: Extra data to include in the request
+            extra_field: Extra data to include in the request
         Returns:
             observation: The observation after conducting the
             done: Whether the trajectory is done
@@ -118,25 +123,26 @@ class BaseTool:
         done = True
         valid = True
         
-        self.update_env(trajectory_id, env, parsed_action, is_valid, extra_data, observation)
+        self.update_env(trajectory_id, env, parsed_action, is_valid, extra_field, observation)
         self.save_env(trajectory_id, env)
         
         return observation, done, valid
         
-    def get_observations(self, trajectory_ids, actions, extra_data):
+    def get_observations(self, trajectory_ids, actions, extra_fields):
         """
         Get the observations for the given trajectory IDs and actions
         Args:
             trajectory_ids: The list of trajectory IDs
             actions: The list of actions
-            extra_data: Extra data to include in the request
+            extra_fields: Extra data to include in the request
         Returns:
             observations: The list of observations
             dones: The list of done flags
             valids: The list of valid flags
         """
         with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
-            results = list(tqdm(executor.map(self.conduct_action, trajectory_ids, actions, [extra_data]*len(trajectory_ids)), total=len(trajectory_ids), desc=f"Getting observations using tool {self.tool_type}"))
+            results = list(tqdm(executor.map(self.conduct_action, trajectory_ids, actions, extra_fields,
+                                             total=len(trajectory_ids), desc=f"Getting observations using tool {self.tool_type}")))
             
         observations, dones, valids = zip(*results)
         return observations, dones, valids
