@@ -80,7 +80,8 @@ def test_connection(
 def main():
     """
     Entry point for the test script.
-    Run with: python test_base.py --url=http://your-server:port/get_observation
+    Run with: 
+        python -m verl_tool.servers.tests.test_base --url=http://localhost:5000/get_observation
     """
     fire.Fire(test_connection)
 

@@ -10,6 +10,8 @@ from typing import List, Dict, Any, Tuple
 from dataclasses import dataclass
 from verl import DataProto
 from verl.utils.tracking import Tracking
+from verl.utils import hf_tokenizer
+from verl.utils.model import get_generation_config
 from tqdm import tqdm
 from typing import List
 from .config import AgentActorConfig
@@ -18,19 +20,22 @@ from .tensor_helper import TensorHelper, TensorConfig
 class AgentActorManager:
     def __init__(
         self,
-        tokenizer,
+        model_path,
         actor_rollout_wg,
         config: AgentActorConfig,
         is_validation: bool = False,
     ):
-        self.tokenizer = tokenizer
+        self.model_path = model_path
+        self.tokenizer = hf_tokenizer(self.model_path)
+        self.generation_config = get_generation_config(self.model_path)
         self.actor_rollout_wg = actor_rollout_wg
         self.config = config
         # self.logger = logger
         self.is_validation = is_validation
-
+        self.eos_token_id = self.generation_config.eos_token_id \
+            if self.generation_config is not None else self.tokenizer.eos_token_id
         self.tensor_fn = TensorHelper(TensorConfig(
-            pad_token_id=tokenizer.pad_token_id,
+            pad_token_id=self.tokenizer.pad_token_id,
             max_prompt_length=config.max_prompt_length,
             max_obs_length=config.max_obs_length,
             max_start_length=config.max_start_length
@@ -54,8 +59,13 @@ class AgentActorManager:
         this version verl do not repeat the input by n times, so we manually repeat the input by n times
         
         """
-        n = self.config.n
-        inputs = inputs.repeat(n)
+        # we manually repeat the input by n times if needed since every trajectory is independent
+        do_sample = inputs.meta_info.get("do_sample", True)
+        if not do_sample:
+            n = 1
+        else:
+            n = self.config.n 
+            inputs = inputs.repeat(n)
         inputs.non_tensor_batch['uid'] = np.array([str(uuid.uuid4()) for _ in range(len(inputs.batch))], dtype=object)
         return inputs
         
@@ -65,15 +75,18 @@ class AgentActorManager:
             responses, 
             skip_special_tokens=True
         )
-        # like </answer>
-        for i, action_stop_token in enumerate(self.action_stop_tokens):
-            responses_str = [resp.split(action_stop_token)[0] + action_stop_token
-                             if action_stop_token in resp 
-                             else resp
-                             for resp in responses_str]
+        do_actions = []
+        for i, resp in enumerate(responses_str):
+            has_action = False
+            for j in range(len(self.action_stop_tokens)):
+                if resp.endswith(self.action_stop_tokens[j]):
+                    has_action = True
+                    responses_str[i] = resp.split(self.action_stop_tokens[j])[0] + self.action_stop_tokens[j]
+                    break
+            do_actions.append(has_action)
 
         responses = self._batch_tokenize(responses_str)
-        return responses, responses_str
+        return responses, responses_str, do_actions
 
     def _process_next_obs(self, next_obs: List[str]) -> torch.Tensor:
         """Process next observations from environment."""
@@ -83,7 +96,7 @@ class AgentActorManager:
             padding='longest',
             return_tensors='pt',
             add_special_tokens=False,  # Prevents adding special tokens
-        )['input_ids']
+        )['input_ids'].to(torch.int64)
 
         if next_obs_ids.shape[1] > self.config.max_obs_length:
             print(f"[WARNING] OBSERVATION TOO LONG, CONSIDER CHANGING YOUR CONFIG, {next_obs_ids.shape[1]} & {self.config.max_obs_length}")            
@@ -161,13 +174,14 @@ class AgentActorManager:
         agent_sampling_params = {
             "n": 1, # already repeated by n times in _preprocess_inputs
             "stop_token": self.action_stop_tokens, # stop when generated an end of action
+            "include_stop_str_in_output": True,
         }
         # Main generation loop
         for step in range(self.config.max_turns):
             if not active_mask.sum():
                 print("All trajectories are done.")
                 break
-            print(f"Step {step+1}/{self.config.max_turns}")
+            print(f"Action step {step+1}/{self.config.max_turns}")
             rollings.batch = self.tensor_fn.cut_to_effective_len(
                 rollings.batch,
                 keys=['input_ids', 'attention_mask', 'position_ids']
@@ -176,16 +190,16 @@ class AgentActorManager:
             rollings_active = DataProto.from_dict({
                 k: v[active_mask] for k, v in rollings.batch.items()
             })
-            with self.actor_rollout_wg.rollout.update_sampling_params(n=1):
+            with self.actor_rollout_wg.rollout.update_sampling_params(**agent_sampling_params):
                 gen_output = self.actor_rollout_wg.super_generate_sequences(rollings_active)
 
             meta_info = gen_output.meta_info            
-            responses_ids, responses_str = self._postprocess_responses(gen_output.batch['responses'])
+            responses_ids, responses_str, do_actions = self._postprocess_responses(gen_output.batch['responses'])
             responses_ids, responses_str = self.tensor_fn._example_level_pad(responses_ids, responses_str, active_mask)
 
             # Execute in environment and process observations
             active_uids = [uuids[i] for i in range(len(uuids)) if active_mask[i]]
-            next_obs, dones, valid_action = self.interact_with_tool_server(active_uids, responses_str, active_mask)
+            next_obs, dones, valid_action = self.interact_with_tool_server(active_uids, responses_str, do_actions, active_mask)
             
             curr_active_mask = torch.tensor([not done for done in dones], dtype=torch.bool)
             active_mask = active_mask * curr_active_mask
@@ -218,7 +232,7 @@ class AgentActorManager:
             rollings_active = DataProto.from_dict({
                 k: v[active_mask] for k, v in rollings.batch.items()
             })
-            with self.actor_rollout_wg.rollout.update_sampling_params(n=1):
+            with self.actor_rollout_wg.rollout.update_sampling_params(**agent_sampling_params):
                 gen_output = self.actor_rollout_wg.super_generate_sequences(rollings_active)
 
             meta_info = gen_output.meta_info            
@@ -233,15 +247,15 @@ class AgentActorManager:
             active_mask = active_mask * curr_active_mask
             active_num_list.append(active_mask.sum().item())
             valid_action_stats += torch.tensor(valid_action, dtype=torch.int)
-            
-            meta_info['turns_stats'] = turns_stats.tolist()
-            meta_info['active_mask'] = active_mask.tolist()
-            meta_info['valid_action_stats'] = valid_action_stats.tolist()
 
             original_right_side = self._update_right_side(
                 original_right_side,
                 responses_ids,
             )
+            
+        meta_info['turns_stats'] = turns_stats.tolist()
+        meta_info['active_mask'] = active_mask.tolist()
+        meta_info['valid_action_stats'] = valid_action_stats.tolist()
         
         print("ACTIVE_TRAJ_NUM:", active_num_list)
         
@@ -276,7 +290,7 @@ class AgentActorManager:
         
         return final_output
 
-    def interact_with_tool_server(self, active_uids:List[str], responses: List[str], active_mask=None) -> List[str]:
+    def interact_with_tool_server(self, active_uids:List[str], responses: List[str], do_actions:List[bool], active_mask=None) -> List[str]:
         """
         Call tool server for queries.
         Args:
@@ -293,6 +307,7 @@ class AgentActorManager:
         data = {
             "trajectory_ids": active_uids,
             "actions": responses,
+            "finish": [not do_action for do_action in do_actions], # if do_action is False, then it is a finish action, finishing the trajectory
         }
         print(f"Sending request to {self.config.tool_server_url}")
         response = requests.post(self.config.tool_server_url, json=data)

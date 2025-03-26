@@ -5,7 +5,7 @@ import uvicorn
 import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from .tools import get_tool_cls
+from .tools import get_tool_cls, ALL_TOOLS
 from typing import List, Union
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 def parse_agent_request(data):
     trajectory_ids = data.get("trajectory_ids")
     actions = data.get("actions")
-    extra_data = data.get("extra_data")
+    extra_data_keys = [key for key in data if key not in ["trajectory_ids", "actions"]]
+    extra_data = [{key: data.get(key)[i] for key in extra_data_keys} for i in range(len(actions))]
     assert len(trajectory_ids) == len(actions), f"Number of trajectory_ids ({len(trajectory_ids)}) does not match number of actions ({len(actions)})"
     if not extra_data:
         extra_data = [None for _ in range(len(actions))]
@@ -34,7 +35,11 @@ def get_tools_usage_instructions(tools):
     message += "\n".join([f"- {tool_type}: {usage_instructions[tool_type]}" for tool_type in usage_instructions])
     return message
 
-def get_tool_type_for_action(tools, action):
+def get_tool_type_for_action(tools, action, extra_data):
+    finish = extra_data.get("finish", False)
+    if finish:
+        # finish is a special keyword to indicate the end of the generation, if it is set to True, return "finish"
+        return "finish"
     if len(tools) == 1:
         # if there is only one tool, always use that tool
         return list(tools.keys())[0]
@@ -46,7 +51,7 @@ def get_tool_type_for_action(tools, action):
     return None
 
 def get_multi_tool_observations(tools, trajectory_ids, actions, extra_data):
-    tool_type_each_action = [get_tool_type_for_action(tools, action) for action in actions]
+    tool_type_each_action = [get_tool_type_for_action(tools, actions[i], extra_data[i]) for i in range(len(actions))]
     # get observations for each tool
     all_tool_types = set(tool_type_each_action)
     all_observations = [None for _ in range(len(actions))]
@@ -91,9 +96,16 @@ def main(
     app = FastAPI()
     if isinstance(tool_type, str):
         tool_type = (tool_type,)
+    if "finish" not in tool_type:
+        tool_type = tool_type + ("finish",)
     
     print(f"Starting server with tools: {tool_type}")
     tools = {t_type: get_tool_cls(t_type)(num_workers=num_workers) for t_type in tool_type}
+    
+    # Print all registered tools
+    print("Available Tools:")
+    for tool in ALL_TOOLS:
+        print(f"  - {tool}" + " (serving)" if tool in tools else "")
     
     @app.post("/get_observation")
     async def get_observation(request: Request):

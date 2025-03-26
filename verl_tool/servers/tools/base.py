@@ -148,8 +148,3 @@ ALL_TOOLS.append("base")
 for file in cur_dir.iterdir():
     if file.is_file() and file.name not in excluding_files:
         ALL_TOOLS.append(file.stem)
-
-# Print all registered tools
-print("Registered Tools:")
-for tool in ALL_TOOLS:
-    print(f"  - {tool}")

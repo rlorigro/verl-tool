@@ -8,7 +8,6 @@ class AgentActorConfig:
     max_prompt_length: int=None
     max_response_length: int=None
     max_obs_length: int=None
-    tokenizer_path: str=None
     # logging: dict
     num_gpus: int=1
     tool_server_url: str = None

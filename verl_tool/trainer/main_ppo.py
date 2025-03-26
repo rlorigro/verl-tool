@@ -14,6 +14,7 @@
 """
 Note that we don't combine the main with ray_trainer as ray_trainer is used by other main.
 """
+import verl_tool.llm_agent.metric_utils # override some original functions in verl.trainer.ppo.metric_utils
 from verl.trainer.ppo.ray_trainer import RayPPOTrainer
 
 import os
