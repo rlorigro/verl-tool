@@ -6,15 +6,9 @@ ALL_TOOLS = []
 
 def get_tool_cls(tool_type):
     if tool_type in ALL_TOOLS:
-        print(ALL_TOOLS)
-        print(registered_tools)
         if tool_type == "base":
             return BaseTool
-        # elif tool_type == "text_browser":
-        #     from .text_browser import TextBrowserTool
-        #     return TextBrowserTool
-        
-        # Use absolute import
+
         import importlib
         module_path = f"verl_tool.servers.tools.{tool_type}"
         importlib.import_module(module_path)
@@ -141,8 +135,8 @@ class BaseTool:
             valids: The list of valid flags
         """
         with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
-            results = list(tqdm(executor.map(self.conduct_action, trajectory_ids, actions, extra_fields,
-                                             total=len(trajectory_ids), desc=f"Getting observations using tool {self.tool_type}")))
+            results = list(tqdm(executor.map(self.conduct_action, trajectory_ids, actions, extra_fields),
+                                             total=len(trajectory_ids), desc=f"Getting observations using tool {self.tool_type}"))
             
         observations, dones, valids = zip(*results)
         return observations, dones, valids
