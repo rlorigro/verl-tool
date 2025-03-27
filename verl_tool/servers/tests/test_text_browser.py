@@ -86,6 +86,7 @@ def main():
     Entry point for the test script.
     
     Start the Server:
+    rm *.db* # Delete existed environment
     python -m verl_tool.servers.serve --tool_type text_browser --url=http://localhost:5000/get_observation
 
     Run with:
