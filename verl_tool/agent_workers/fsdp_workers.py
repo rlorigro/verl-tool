@@ -1,6 +1,5 @@
 from verl.workers.fsdp_workers import ActorRolloutRefWorker, Worker, DictConfig
 from verl.workers.fsdp_workers import *
-from verl.utils import hf_tokenizer
 from functools import partial
 from ..llm_agent.config import AgentActorConfig
 from ..llm_agent.manager import AgentActorManager
@@ -90,10 +89,10 @@ class AgentActorRolloutRefWorker(Worker, ActorRolloutRefWorker, metaclass=AgentA
                 setattr(self.agent_config, key, self.config.agent[key])
         setattr(self.agent_config, 'n', self.config.rollout.n)
         print(f"AgentActorRolloutRefWorker: {self.agent_config}")
-        self.tokenizer = hf_tokenizer(self.agent_config.tokenizer_path)
+        self.model_path = self.config.model.path
         self.super_generate_sequences = self.super_methods_record['generate_sequences']
         self.super_generate_sequences = partial(self.super_generate_sequences, self)
-        self.manager = AgentActorManager(self.tokenizer, self, self.agent_config)
+        self.manager = AgentActorManager(self.model_path, self, self.agent_config)
     
     @register(dispatch_mode=Dispatch.DP_COMPUTE_PROTO)
     def generate_sequences(self, prompts):

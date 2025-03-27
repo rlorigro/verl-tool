@@ -1,6 +1,7 @@
 aanswerset -x
-train_data=~/data/gsm8k/train.parquet
-val_data=~/data/gsm8k/test.parquet
+dataset_name=AceCoderV2-150K-processed-with-execution-prompt
+train_data=data/acecoder/$dataset_name/train.parquet
+val_data=data/acecoder/$dataset_name/test.parquet
 model_name=Qwen/Qwen2.5-1.5B-Instruct
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
 n_gpus_per_node=2
@@ -9,16 +10,17 @@ n=2
 batch_size=16
 ppo_mini_batch_size=8
 max_prompt_length=2048
-max_response_length=256
+max_response_length=1024
+max_obs_length=512
 temperature=1.2
 strategy="fsdp_agent" # remove _agent for normal verl behavior
-valid_actions="[answer,python]" # "[answer,python]" are two valid actions, they are used to determine the stop token of each action, which are </answer> and </python> respectively
+valid_actions="[python]" # "[answer,python]" are two valid actions, they are used to determine the stop token of each action, which are </answer> and </python> respectively
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
 run_name="${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}"
 
 host=0.0.0.0
-port=$(shuf -i 30000-31000 -n 1)
+port=12345
 tool_server_url=http://$host:$port/get_observation
 python -m verl_tool.servers.serve --host $host --port $port --tool_type "python_code" &
 server_pid=$!
@@ -40,8 +42,8 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     +actor_rollout_ref.agent.tool_server_url=$tool_server_url \
     +actor_rollout_ref.agent.max_prompt_length=$max_prompt_length \
     +actor_rollout_ref.agent.max_response_length=$max_response_length \
-    +actor_rollout_ref.agent.max_start_length=2048 \
-    +actor_rollout_ref.agent.max_obs_length=512 \
+    +actor_rollout_ref.agent.max_start_length=$max_prompt_length \
+    +actor_rollout_ref.agent.max_obs_length=$max_obs_length \
     +actor_rollout_ref.agent.max_turns=10 \
     +actor_rollout_ref.agent.num_gpus=$n_gpus_per_node \
     +actor_rollout_ref.agent.valid_actions=$valid_actions \
@@ -67,8 +69,8 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     trainer.default_hdfs_dir=null \
     trainer.n_gpus_per_node=$n_gpus_per_node \
     trainer.nnodes=$n_nodes \
-    trainer.save_freq=10 \
-    trainer.test_freq=10 \
+    trainer.save_freq=1 \
+    trainer.test_freq=1 \
     trainer.total_epochs=5 2>&1 | tee verl_demo.log
 
 
