@@ -8,6 +8,7 @@ class TensorConfig:
     max_prompt_length: int
     max_obs_length: int
     max_start_length: int
+    max_response_length: int
 
 class TensorHelper:
     def __init__(self, config: TensorConfig):
@@ -75,3 +76,27 @@ class TensorHelper:
                 s += 1
                 
         return padded_responses, padded_responses_str
+    
+    def pad_tensor(self, tensor: torch.Tensor, max_length: int, padding_side: str = "right") -> torch.Tensor:
+        """
+            Pad tensor with pad token id to a specified length in the sequence dimension.
+            Args:
+                tensor (torch.Tensor): The tensor to pad (batch_size, seq_len).
+                max_length (int): The length to pad to.
+                padding_side (str): 'right' or 'left' padding.
+            Returns:
+                torch.Tensor: The padded tensor.    
+        """
+        pad_token_id = self.config.pad_token_id
+        batch_size, seq_len = tensor.shape
+        
+        if padding_side == "right":
+            padded_tensor = torch.full((batch_size, max_length), pad_token_id, dtype=tensor.dtype, device=tensor.device)
+            padded_tensor[:, :seq_len] = tensor
+        elif padding_side == "left":
+            padded_tensor = torch.full((batch_size, max_length), pad_token_id, dtype=tensor.dtype, device=tensor.device)
+            padded_tensor[:, -seq_len:] = tensor
+        else:
+            raise ValueError("padding_side must be either 'right' or 'left'")
+        
+        return padded_tensor

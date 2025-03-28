@@ -38,7 +38,8 @@ class AgentActorManager:
             pad_token_id=self.tokenizer.pad_token_id,
             max_prompt_length=config.max_prompt_length,
             max_obs_length=config.max_obs_length,
-            max_start_length=config.max_start_length
+            max_start_length=config.max_start_length,
+            max_response_length=config.max_response_length,
         ))
         if config.valid_actions is not None:
             self.action_stop_tokens = [f"</{action}>" for action in config.valid_actions]
@@ -77,6 +78,7 @@ class AgentActorManager:
         )
         do_actions = []
         for i, resp in enumerate(responses_str):
+            resp = resp.strip(' \n')
             has_action = False
             for j in range(len(self.action_stop_tokens)):
                 if resp.endswith(self.action_stop_tokens[j]):
@@ -172,8 +174,9 @@ class AgentActorManager:
         
         agent_sampling_params = {
             "n": 1, # already repeated by n times in _preprocess_inputs
-            "stop_token": self.action_stop_tokens, # stop when generated an end of action
+            "stop": self.action_stop_tokens, # stop when generated an end of action
             "include_stop_str_in_output": True,
+            "detokenize": True
         }
         # Main generation loop
         for step in range(self.config.max_turns):
@@ -233,6 +236,7 @@ class AgentActorManager:
             rollings_active = DataProto.from_dict({
                 k: v[active_mask] for k, v in rollings.batch.items()
             })
+            rollings_active.meta_info.update(ori_meta_info)
             with self.actor_rollout_wg.rollout.update_sampling_params(**agent_sampling_params):
                 gen_output = self.actor_rollout_wg.rollout.generate_sequences(rollings_active)
 
@@ -270,10 +274,18 @@ class AgentActorManager:
         final_output = right_side.copy()
         final_output['prompts'] = left_side['input_ids']
         
+        # padding responses length to max_response_length
+        if final_output['responses'].shape[1] < self.config.max_response_length:
+            final_output['responses'] = self.tensor_fn.pad_tensor(
+                final_output['responses'],
+                max_length=self.config.max_response_length,
+                padding_side='right'
+            )
+        
         # Combine input IDs
         final_output['input_ids'] = torch.cat([
             left_side['input_ids'],
-            right_side['responses']
+            final_output['responses']
         ], dim=1)
         
         # Create attention mask and position ids
