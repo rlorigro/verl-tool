@@ -61,7 +61,9 @@ def main(config):
             'env_vars': {
                 'TOKENIZERS_PARALLELISM': 'true',
                 'NCCL_DEBUG': 'WARN',
-                'VLLM_LOGGING_LEVEL': 'WARN'
+                'VLLM_LOGGING_LEVEL': 'WARN',
+                
+                "RAY_DEBUG_POST_MORTEM": "0"
             }
         })
 

@@ -38,7 +38,8 @@ class AgentActorManager:
             pad_token_id=self.tokenizer.pad_token_id,
             max_prompt_length=config.max_prompt_length,
             max_obs_length=config.max_obs_length,
-            max_start_length=config.max_start_length
+            max_start_length=config.max_start_length,
+            max_response_length=config.max_response_length,
         ))
         if config.valid_actions is not None:
             self.action_stop_tokens = [f"</{action}>" for action in config.valid_actions]
@@ -126,32 +127,88 @@ class AgentActorManager:
         effective_len = new_attention_mask.sum(dim=1).max()
         max_len = min(self.config.max_prompt_length, effective_len)
         
-        return DataProto.from_dict({
+        new_rollings = DataProto.from_dict({
             'input_ids': new_input_ids[:, -max_len:],
             'position_ids': new_position_ids[:, -max_len:],
             'attention_mask': new_attention_mask[:, -max_len:]
         })
+        
+        new_rollings.meta_info.update(rollings.meta_info)
+        
+        return new_rollings
+    
+    def _info_masked_concatenate_with_padding(self, 
+                prompt: torch.Tensor, 
+                prompt_with_mask: torch.Tensor, 
+                response: torch.Tensor, 
+                info: torch.Tensor = None,
+                pad_to_left: bool = True
+            ) -> torch.Tensor:
+        """Concatenate tensors and handle padding. Additionally, create a mask (info_mask) to cover the information block if it exists."""
+        
+        # move response tensor to the same device as prompt
+        # prompt: GPU, response: cpu, info: cpu
+        response = response.to(prompt.device)
+        if info is not None:
+            info = info.to(prompt.device)
+        
+        # set padding ids
+        pad_id = self.tokenizer.pad_token_id
+        tensors = [prompt, response]
+        tensors_with_mask = [prompt_with_mask, response]
+        
+        # info: observations, need to be masked
+        if info is not None:
+            # for non-masked tensors, just append the observation
+            tensors.append(info)
+            
+            # assemble the mask for the observation part
+            info_mask = torch.full(info.size(), pad_id, dtype=info.dtype, device=info.device) # information mask
+            # extend the mask for the observation part, to update masked tensors
+            tensors_with_mask.append(info_mask)
+        
+        
+        concatenated = torch.cat(tensors, dim=1)
+        concatenated_with_info = torch.cat(tensors_with_mask, dim=1)
+        
+        mask = concatenated != pad_id if pad_to_left else concatenated == pad_id
+        sorted_indices = mask.to(torch.int64).argsort(dim=1, stable=True)
+        padded_tensor = concatenated.gather(1, sorted_indices)
+        padded_tensor_with_info = concatenated_with_info.gather(1, sorted_indices)
+
+        return padded_tensor, padded_tensor_with_info
 
     def _update_right_side(self, right_side: Dict, 
                           cur_responses: torch.Tensor,
                           next_obs_ids: torch.Tensor = None) -> Dict:
         """Update right side state."""
+        
+        
+        # observation exists, perform concatenation and masked concatenation
         if next_obs_ids != None:
-            responses = self.tensor_fn.concatenate_with_padding([
-                right_side['responses'],
-                cur_responses,
-                next_obs_ids
-            ], pad_to_left=False)
+            responses, responses_with_info_mask = self._info_masked_concatenate_with_padding(
+                    right_side['responses'],
+                    right_side['responses_with_info_mask'],
+                    cur_responses,
+                    next_obs_ids, 
+                    pad_to_left=False
+                )
         else:
-            responses = self.tensor_fn.concatenate_with_padding([
-                right_side['responses'],
-                cur_responses,
-            ], pad_to_left=False)
+            # no observation, only concatenate the response with generated response
+            responses, responses_with_info_mask = self._info_masked_concatenate_with_padding(
+                    right_side['responses'],
+                    right_side['responses_with_info_mask'],
+                    cur_responses,
+                    pad_to_left=False
+                )
+            
+            
         
         effective_len = self.tensor_fn.create_attention_mask(responses).sum(dim=1).max()
         max_len = min(self.config.max_response_length, effective_len)
         
-        return {'responses': responses[:, :max_len]}
+        # return the updated responses along with its masked version
+        return {'responses': responses[:, :max_len], 'responses_with_info_mask': responses_with_info_mask[:, :max_len]}
 
     def run_llm_loop(self, gen_batch) -> Tuple[Dict, Dict]:
         """Run main LLM generation loop."""
@@ -161,7 +218,8 @@ class AgentActorManager:
         initial_input_ids = gen_batch.batch['input_ids'][:, -self.config.max_start_length:].clone()
         
         original_left_side = {'input_ids': initial_input_ids[:, -self.config.max_start_length:]}
-        original_right_side = {'responses': initial_input_ids[:, []]}
+        # original_right_side = {'responses': initial_input_ids[:, []]}
+        original_right_side = {'responses': initial_input_ids[:, []], 'responses_with_info_mask': initial_input_ids[:, []]}
         
         turns_stats = torch.ones(gen_batch.batch['input_ids'].shape[0], dtype=torch.int)
         valid_action_stats = torch.zeros(gen_batch.batch['input_ids'].shape[0], dtype=torch.int)
@@ -233,6 +291,7 @@ class AgentActorManager:
             rollings_active = DataProto.from_dict({
                 k: v[active_mask] for k, v in rollings.batch.items()
             })
+            rollings_active.meta_info.update(ori_meta_info)
             with self.actor_rollout_wg.rollout.update_sampling_params(**agent_sampling_params):
                 gen_output = self.actor_rollout_wg.rollout.generate_sequences(rollings_active)
 
@@ -270,16 +329,30 @@ class AgentActorManager:
         final_output = right_side.copy()
         final_output['prompts'] = left_side['input_ids']
         
+        # padding responses length to max_response_length
+        if final_output['responses'].shape[1] < self.config.max_response_length:
+            final_output['responses'] = self.tensor_fn.pad_tensor(
+                final_output['responses'],
+                max_length=self.config.max_response_length,
+                padding_side='right'
+            )
+        
         # Combine input IDs
         final_output['input_ids'] = torch.cat([
             left_side['input_ids'],
-            right_side['responses']
+            final_output['responses']
         ], dim=1)
         
         # Create attention mask and position ids
         final_output['attention_mask'] = torch.cat([
             self.tensor_fn.create_attention_mask(left_side['input_ids']),
             self.tensor_fn.create_attention_mask(final_output['responses'])
+        ], dim=1)
+        
+        # Create observation mask 
+        final_output['info_mask'] = torch.cat([
+            self.tensor_fn.create_attention_mask(left_side['input_ids']),
+            self.tensor_fn.create_attention_mask(final_output['responses_with_info_mask'])
         ], dim=1)
         
         final_output['position_ids'] = self.tensor_fn.create_position_ids(
