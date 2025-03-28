@@ -43,6 +43,8 @@ class TensorHelper:
     def concatenate_with_padding(self, tensors: List[torch.Tensor], 
                                pad_to_left: bool = True) -> torch.Tensor:
         """Concatenate tensors and handle padding."""
+        device = tensors[0].device
+        tensors = [tensor.to(device) for tensor in tensors]
         concatenated = torch.cat(tensors, dim=1)
         padded_tensor, _ = self.convert_pad_structure(concatenated, pad_to_left)
         return padded_tensor
