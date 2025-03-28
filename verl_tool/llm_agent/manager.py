@@ -78,6 +78,7 @@ class AgentActorManager:
         )
         do_actions = []
         for i, resp in enumerate(responses_str):
+            resp = resp.strip(' \n')
             has_action = False
             for j in range(len(self.action_stop_tokens)):
                 if resp.endswith(self.action_stop_tokens[j]):
@@ -230,8 +231,9 @@ class AgentActorManager:
         
         agent_sampling_params = {
             "n": 1, # already repeated by n times in _preprocess_inputs
-            "stop_token": self.action_stop_tokens, # stop when generated an end of action
+            "stop": self.action_stop_tokens, # stop when generated an end of action
             "include_stop_str_in_output": True,
+            "detokenize": True
         }
         # Main generation loop
         for step in range(self.config.max_turns):
