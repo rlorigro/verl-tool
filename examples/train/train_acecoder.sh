@@ -73,8 +73,8 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     trainer.default_hdfs_dir=null \
     trainer.n_gpus_per_node=$n_gpus_per_node \
     trainer.nnodes=$n_nodes \
-    trainer.save_freq=1 \
-    trainer.test_freq=1 \
+    trainer.save_freq=10 \
+    trainer.test_freq=10 \
     trainer.total_epochs=5
 
 

@@ -163,5 +163,4 @@ class AgentActorRolloutRefWorker(Worker, ActorRolloutRefWorker, metaclass=AgentA
 
         # clear kv cache
         log_gpu_memory_usage('After recompute log prob', logger=logger)
-        print("output:", output)
         return output
