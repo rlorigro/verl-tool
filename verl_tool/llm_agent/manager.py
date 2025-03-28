@@ -210,6 +210,7 @@ class AgentActorManager:
         
         # return the updated responses along with its masked version
         return {'responses': responses[:, :max_len], 'responses_with_info_mask': responses_with_info_mask[:, :max_len]}
+        
 
     def run_llm_loop(self, gen_batch) -> Tuple[Dict, Dict]:
         """Run main LLM generation loop."""
@@ -356,6 +357,9 @@ class AgentActorManager:
             self.tensor_fn.create_attention_mask(left_side['input_ids']),
             self.tensor_fn.create_attention_mask(final_output['responses_with_info_mask'])
         ], dim=1)
+        
+        print("Final output shapes:")
+        print(len(final_output['responses_with_info_mask']), len(final_output['info_mask']))
         
         final_output['position_ids'] = self.tensor_fn.create_position_ids(
             final_output['attention_mask']

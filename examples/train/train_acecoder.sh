@@ -39,7 +39,6 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     data.train_batch_size=$batch_size \
     data.max_prompt_length=$max_prompt_length \
     data.max_response_length=$max_response_length \
-    data.truncation='right' \
     reward_model.reward_manager=acecoder \
     actor_rollout_ref.model.path=$model_name \
     actor_rollout_ref.actor.optim.lr=1e-6 \
