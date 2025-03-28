@@ -37,7 +37,7 @@ def test_piston_server(
     payload = {
         "trajectory_ids": [trajectory_id],
         "actions": [action],
-        "extra_data": {
+        "extra_field": {
             "tool_type": "piston"  # Explicitly request the piston tool
         }
     }

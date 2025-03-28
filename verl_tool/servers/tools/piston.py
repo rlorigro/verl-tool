@@ -275,7 +275,7 @@ PistonTool(use_local=True) or PistonTool(api_url="http://localhost:2000/api/v2")
             logger.error(f"Error executing code: {str(e)}")
             return {"error": f"Failed to execute code: {str(e)}"}
     
-    def conduct_action(self, trajectory_id, action, extra_data):
+    def conduct_action(self, trajectory_id, action, extra_field):
         """Execute action and return observation result"""
         parsed_action, is_valid = self.parse_action(action)
         env = self.load_env(trajectory_id)
@@ -396,7 +396,7 @@ Status: {result["compile"].get("status", "Unknown")}
                 valid = False
         
         self.update_env(trajectory_id, env, parsed_action if is_valid else action, 
-                        is_valid, extra_data, observation)
+                        is_valid, extra_field, observation)
         self.save_env(trajectory_id, env)
         
         return observation, done, valid

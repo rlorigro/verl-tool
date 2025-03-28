@@ -82,7 +82,7 @@ class PythonCodeTool(BaseTool):
             action = all_valid_python_code[0][0]
         return action, valid
     
-    def conduct_action(self, trajectory_id, action, extra_data):
+    def conduct_action(self, trajectory_id, action, extra_field):
         action, is_valid = self.parse_action(action)
         if not is_valid:
             observation = "No valid python code between <python> and </python> tags found."
