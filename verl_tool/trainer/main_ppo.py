@@ -63,7 +63,7 @@ def main(config):
                 'NCCL_DEBUG': 'WARN',
                 'VLLM_LOGGING_LEVEL': 'WARN',
                 
-                "RAY_DEBUG_POST_MORTEM": "0"
+                "RAY_DEBUG_POST_MORTEM": "1"
             }
         })
 

@@ -147,8 +147,7 @@ class AgentActorManager:
             ) -> torch.Tensor:
         """Concatenate tensors and handle padding. Additionally, create a mask (info_mask) to cover the information block if it exists."""
         
-        # move response tensor to the same device as prompt
-        # prompt: GPU, response: cpu, info: cpu
+        # move `response` and `info` tensor to the same device as `prompt`
         response = response.to(prompt.device)
         if info is not None:
             info = info.to(prompt.device)
@@ -166,8 +165,7 @@ class AgentActorManager:
             # assemble the mask for the observation part
             info_mask = torch.full(info.size(), pad_id, dtype=info.dtype, device=info.device) # information mask
             # extend the mask for the observation part, to update masked tensors
-            tensors_with_mask.append(info_mask)
-        
+            tensors_with_mask.append(info_mask)    
         
         concatenated = torch.cat(tensors, dim=1)
         concatenated_with_info = torch.cat(tensors_with_mask, dim=1)
@@ -183,7 +181,6 @@ class AgentActorManager:
                           cur_responses: torch.Tensor,
                           next_obs_ids: torch.Tensor = None) -> Dict:
         """Update right side state."""
-        
         
         # observation exists, perform concatenation and masked concatenation
         if next_obs_ids != None:
@@ -203,8 +200,6 @@ class AgentActorManager:
                     pad_to_left=False
                 )
             
-            
-        
         effective_len = self.tensor_fn.create_attention_mask(responses).sum(dim=1).max()
         max_len = min(self.config.max_response_length, effective_len)
         
@@ -253,7 +248,7 @@ class AgentActorManager:
             rollings_active.meta_info.update(ori_meta_info)
             with self.actor_rollout_wg.rollout.update_sampling_params(**agent_sampling_params):
                 gen_output = self.actor_rollout_wg.rollout.generate_sequences(rollings_active)
-
+            
             meta_info = gen_output.meta_info            
             responses_ids, responses_str, do_actions = self._postprocess_responses(gen_output.batch['responses'])
             responses_ids, _ = self.tensor_fn._example_level_pad(responses_ids, responses_str, active_mask)
@@ -332,10 +327,19 @@ class AgentActorManager:
         final_output = right_side.copy()
         final_output['prompts'] = left_side['input_ids']
         
+
         # padding responses length to max_response_length
         if final_output['responses'].shape[1] < self.config.max_response_length:
             final_output['responses'] = self.tensor_fn.pad_tensor(
                 final_output['responses'],
+                max_length=self.config.max_response_length,
+                padding_side='right'
+            )
+        
+        # padding response_with_info_mask length to max_response_length 
+        if final_output['responses_with_info_mask'].shape[1] < self.config.max_response_length:
+            final_output['responses_with_info_mask'] = self.tensor_fn.pad_tensor(
+                final_output['responses_with_info_mask'],
                 max_length=self.config.max_response_length,
                 padding_side='right'
             )
@@ -346,7 +350,7 @@ class AgentActorManager:
             final_output['responses']
         ], dim=1)
         
-        # Create attention mask and position ids
+        # Create attention mask 
         final_output['attention_mask'] = torch.cat([
             self.tensor_fn.create_attention_mask(left_side['input_ids']),
             self.tensor_fn.create_attention_mask(final_output['responses'])
@@ -358,9 +362,7 @@ class AgentActorManager:
             self.tensor_fn.create_attention_mask(final_output['responses_with_info_mask'])
         ], dim=1)
         
-        print("Final output shapes:")
-        print(len(final_output['responses_with_info_mask']), len(final_output['info_mask']))
-        
+        # Create position ids
         final_output['position_ids'] = self.tensor_fn.create_position_ids(
             final_output['attention_mask']
         )
