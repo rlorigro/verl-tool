@@ -1,10 +1,10 @@
 set -x
-dataset_name=AceCoderV2-150K-processed-with-execution-prompt
+dataset_name=AceCoderV2-mini-processed-with-execution-prompt
 train_data=data/acecoder/$dataset_name/train.parquet
 val_data=data/acecoder/$dataset_name/test.parquet
-model_name=Qwen/Qwen2.5-1.5B-Instruct
+model_name=Qwen/Qwen2.5-7B-Instruct
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
-n_gpus_per_node=2    #2
+n_gpus_per_node=2
 n_nodes=1
 n=8
 batch_size=128
@@ -39,6 +39,7 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     data.train_batch_size=$batch_size \
     data.max_prompt_length=$max_prompt_length \
     data.max_response_length=$max_response_length \
+    data.truncation='right' \
     reward_model.reward_manager=acecoder \
     actor_rollout_ref.model.path=$model_name \
     actor_rollout_ref.actor.optim.lr=1e-6 \
