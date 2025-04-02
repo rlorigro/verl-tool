@@ -70,7 +70,7 @@ class AgentActorManager:
         inputs.non_tensor_batch['traj_ids'] = np.array([str(uuid.uuid4()) for _ in range(len(inputs.batch))], dtype=object)
         return inputs
         
-    def _postprocess_responses(self, responses: torch.Tensor) -> torch.Tensor:
+    def _postprocess_responses(self, responses: torch.Tensor, action_step: int) -> torch.Tensor:
         """Process responses to stop at python operation or answer operation."""
         responses_str = self.tokenizer.batch_decode(
             responses, 
@@ -79,12 +79,15 @@ class AgentActorManager:
         do_actions = []
         for i, resp in enumerate(responses_str):
             resp = resp.strip(' \n')
-            has_action = False
-            for j in range(len(self.action_stop_tokens)):
-                if resp.endswith(self.action_stop_tokens[j]):
-                    has_action = True
-                    responses_str[i] = resp.split(self.action_stop_tokens[j])[0] + self.action_stop_tokens[j]
-                    break
+            if self.config.no_action_as_stop and action_step >= self.config.min_action_num:
+                has_action = False
+                for j in range(len(self.action_stop_tokens)):
+                    if resp.endswith(self.action_stop_tokens[j]):
+                        has_action = True
+                        responses_str[i] = resp.split(self.action_stop_tokens[j])[0] + self.action_stop_tokens[j]
+                        break
+            else:
+                has_action = True
             do_actions.append(has_action)
         responses = self._batch_tokenize(responses_str).to(torch.int64)
         return responses, responses_str, do_actions
@@ -207,7 +210,7 @@ class AgentActorManager:
         return {'responses': responses[:, :max_len], 'responses_with_info_mask': responses_with_info_mask[:, :max_len]}
         
 
-    def run_llm_loop(self, gen_batch) -> Tuple[Dict, Dict]:
+    def run_llm_loop(self, gen_batch: DataProto) -> Tuple[Dict, Dict]:
         """Run main LLM generation loop."""
         ori_meta_info = gen_batch.meta_info
         gen_batch = self._preprocess_inputs(gen_batch)
@@ -244,13 +247,12 @@ class AgentActorManager:
             
             rollings_active = DataProto.from_dict({
                 k: v[active_mask] for k, v in rollings.batch.items()
-            })
-            rollings_active.meta_info.update(ori_meta_info)
+            }, meta_info=ori_meta_info)
             with self.actor_rollout_wg.rollout.update_sampling_params(**agent_sampling_params):
                 gen_output = self.actor_rollout_wg.rollout.generate_sequences(rollings_active)
             
             meta_info = gen_output.meta_info            
-            responses_ids, responses_str, do_actions = self._postprocess_responses(gen_output.batch['responses'])
+            responses_ids, responses_str, do_actions = self._postprocess_responses(gen_output.batch['responses'], step)
             responses_ids, _ = self.tensor_fn._example_level_pad(responses_ids, responses_str, active_mask)
             print(f"Number of active trajectories: {active_mask.sum().item()}")
             print(f"Length of responses: {responses_ids.shape[1]}")
@@ -288,13 +290,12 @@ class AgentActorManager:
 
             rollings_active = DataProto.from_dict({
                 k: v[active_mask] for k, v in rollings.batch.items()
-            })
-            rollings_active.meta_info.update(ori_meta_info)
+            }, meta_info=ori_meta_info)
             with self.actor_rollout_wg.rollout.update_sampling_params(**agent_sampling_params):
                 gen_output = self.actor_rollout_wg.rollout.generate_sequences(rollings_active)
 
             meta_info = gen_output.meta_info            
-            responses_ids, responses_str, do_actions = self._postprocess_responses(gen_output.batch['responses'])
+            responses_ids, responses_str, do_actions = self._postprocess_responses(gen_output.batch['responses'], step)
             responses_ids, _ = self.tensor_fn._example_level_pad(responses_ids, responses_str, active_mask)
 
             # Execute in environment and process observations
@@ -389,7 +390,7 @@ class AgentActorManager:
         data = {
             "trajectory_ids": active_uids,
             "actions": responses,
-            "finish": [not do_action for do_action in do_actions], # if do_action is False, then it is a finish action, finishing the trajectory
+            "finish": [not do_action for do_action in do_actions], # if do_action is False, then it is a finish action, finishing the trajectory,
         }
         print(f"Sending request to {self.config.tool_server_url}")
         print(f" - Number of non-finished actions: {len([x for x in do_actions if not x])} / {len(do_actions)}")
@@ -398,7 +399,7 @@ class AgentActorManager:
         active_dones = [int(x) for x in response.json()['dones']]
         active_valid_actions = [int(x) for x in response.json()['valids']]
         print("Received observations from tool server. Samples:", len(active_observations))
-        print(f" - Number of valid actions: {len([x for x in active_valid_actions if x])} / {len(active_valid_actions)}")
+        print(f" - Number of valid actions (exclusing finish action): {len([x for x in active_valid_actions if x])} / {len(active_valid_actions)}")
         print(f" - Number of dones: {len([x for x in active_dones if x])} / {len(active_dones)}")
         print("Example observations:")
         non_empty_observations = [obs for obs in active_observations if obs]
