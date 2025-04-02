@@ -328,7 +328,6 @@ class AgentActorManager:
         final_output = right_side.copy()
         final_output['prompts'] = left_side['input_ids']
         
-
         # padding responses length to max_response_length
         if final_output['responses'].shape[1] < self.config.max_response_length:
             final_output['responses'] = self.tensor_fn.pad_tensor(
