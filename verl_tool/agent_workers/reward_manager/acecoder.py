@@ -141,7 +141,7 @@ class AceCoderRewardManager:
         tool_call_counts = [len(re.findall(r"<python>(.|\n)*?</python>", response)) for response in response_str]
         tool_use_min = self.rm_config.reward_model.tool_use_min_calls
         tool_use_max = self.rm_config.reward_model.tool_use_max_calls
-        tool_call_rewards = [1.0 if tool_use_min < count <= tool_use_max else 0.0 for count in tool_call_counts]
+        tool_call_rewards = [1.0 if tool_use_min <= count <= tool_use_max else 0.0 for count in tool_call_counts]
         
         # TODO: report average_toll_call_cnt to wandb
         avg_tool_call_cnt = sum(tool_call_counts) / len(tool_call_counts)
