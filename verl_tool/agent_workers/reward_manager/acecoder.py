@@ -31,6 +31,8 @@ import subprocess
 import time
 from pathlib import Path
 
+import wandb
+
 def hash_string(s):
     return hashlib.sha256(s.encode()).hexdigest()
 
@@ -141,7 +143,10 @@ class AceCoderRewardManager:
         tool_use_max = self.rm_config.reward_model.tool_use_max_calls
         tool_call_rewards = [1.0 if tool_use_min < count <= tool_use_max else 0.0 for count in tool_call_counts]
         
-        print(f"[DEBUG] average tool call counts: {sum(tool_call_counts) / len(tool_call_counts)}")
+        # TODO: report average_toll_call_cnt to wandb
+        avg_tool_call_cnt = sum(tool_call_counts) / len(tool_call_counts)
+        print(f"[DEBUG] average tool call counts: {avg_tool_call_cnt}")
+        wandb.log({"toll_use/avg_tool_call_cnt": avg_tool_call_cnt})
         
         samples = [
             {
