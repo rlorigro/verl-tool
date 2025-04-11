@@ -374,7 +374,7 @@ class AgentActorManager:
             final_output['attention_mask']
         )
         
-        final_output = DataProto.from_dict(final_output, non_tensor_batch=non_tensors)
+        final_output = DataProto.from_dict(final_output, non_tensors=non_tensors)
         final_output.meta_info.update(meta_info)
         
         return final_output
