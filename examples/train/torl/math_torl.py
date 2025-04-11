@@ -111,5 +111,5 @@ if __name__ == '__main__':
     fire.Fire(main)
     
 """
-python examples/train/torl/math.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl
+python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl
 """
