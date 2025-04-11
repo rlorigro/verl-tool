@@ -163,6 +163,9 @@ class TaskRunner:
         elif reward_manager_name == 'acecoder':
             from verl_tool.agent_workers.reward_manager.acecoder import AceCoderRewardManager
             reward_manager_cls = AceCoderRewardManager
+        elif reward_manager_name == 'torl':
+            from verl_tool.agent_workers.reward_manager.torl import ToRLRewardManager
+            reward_manager_cls = ToRLRewardManager
         else:
             raise NotImplementedError
 

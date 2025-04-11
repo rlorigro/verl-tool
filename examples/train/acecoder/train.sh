@@ -19,7 +19,6 @@ valid_actions="[python]" # "[answer,python]" are two valid actions, they are use
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
 run_name="${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}"
 export VERL_RUN_ID=$run_name
-export VLLM_ATTENTION_BACKEND=XFORMERS
 
 host=0.0.0.0
 port=$(shuf -i 30000-31000 -n 1)
@@ -70,7 +69,7 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     trainer.logger=['console'] \
     trainer.project_name='acecoder' \
     trainer.experiment_name=$run_name \
-    +trainer.val_before_train=False \
+    trainer.val_before_train=False \
     trainer.default_hdfs_dir=null \
     trainer.n_gpus_per_node=$n_gpus_per_node \
     trainer.nnodes=$n_nodes \

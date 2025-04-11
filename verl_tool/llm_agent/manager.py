@@ -312,17 +312,24 @@ class AgentActorManager:
                 responses_ids,
             )
             
-        meta_info['turns_stats'] = turns_stats.tolist()
-        meta_info['active_mask'] = active_mask.tolist()
-        meta_info['valid_action_stats'] = valid_action_stats.tolist()
+        # meta_info['turns_stats'] = turns_stats.tolist()
+        # meta_info['active_mask'] = active_mask.tolist()
+        # meta_info['valid_action_stats'] = valid_action_stats.tolist()
+        non_tensors = {
+            'traj_ids': traj_ids.tolist(),
+            'turns_stats': turns_stats.tolist(),
+            'valid_action_stats': valid_action_stats.tolist(),
+            'active_mask': active_mask.tolist(),
+        }
         
         print("ACTIVE_TRAJ_NUM:", active_num_list)
         
-        results = self._compose_final_output(original_left_side, original_right_side, meta_info)
+        results = self._compose_final_output(original_left_side, original_right_side, non_tensors, meta_info)
         return results
 
     def _compose_final_output(self, left_side: Dict,
                             right_side: Dict,
+                            non_tensors: Dict,
                             meta_info: Dict) -> Tuple[Dict, Dict]:
         """Compose final generation output."""
         final_output = right_side.copy()
@@ -367,7 +374,7 @@ class AgentActorManager:
             final_output['attention_mask']
         )
         
-        final_output = DataProto.from_dict(final_output)
+        final_output = DataProto.from_dict(final_output, non_tensor_batch=non_tensors)
         final_output.meta_info.update(meta_info)
         
         return final_output
