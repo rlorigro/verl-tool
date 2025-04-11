@@ -17,7 +17,7 @@ import json
 from pathlib import Path
 from verl import DataProto
 from verl.utils.reward_score import _default_compute_score
-from .reward_score.torl_math import compute_score
+from .reward_score.torl_math import compute_score as torl_compute_score
 import torch
 from collections import defaultdict
 
@@ -29,7 +29,7 @@ class ToRLRewardManager:
     def __init__(self, tokenizer, num_examine, compute_score=None, reward_fn_key='data_source') -> None:
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
-        self.compute_score = compute_score or compute_score
+        self.compute_score = compute_score or torl_compute_score
         self.reward_fn_key = reward_fn_key
         self.run_id = os.getenv("VERL_RUN_ID", f"acecoder_{time.strftime('%Y-%m-%d-%H-%M-%S')}")
         self.record_dir = Path(__file__).parent.parent.parent.parent / "verl_step_records" / self.run_id
@@ -80,7 +80,7 @@ class ToRLRewardManager:
                 # data_source=data_source,
                 solution_str=response_str,
                 ground_truth=ground_truth,
-                extra_info=extra_info,
+                # extra_info=extra_info,
             )
 
             if isinstance(score, dict):
@@ -92,8 +92,8 @@ class ToRLRewardManager:
                 reward = score
             
             # execution penalty to do
-            if "turn_stats" in data_item.non_tensor_batch:
-                num_turn = data_item.non_tensor_batch["turn_stats"]
+            if "turns_stats" in data_item.non_tensor_batch:
+                num_turn = data_item.non_tensor_batch["turns_stats"]
                 num_valid_action = data_item.non_tensor_batch["valid_action_stats"]
 
             reward_tensor[i, valid_response_length - 1] = reward
