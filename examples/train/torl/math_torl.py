@@ -1,5 +1,3 @@
-import datasets
-
 # Copyright 2024 Bytedance Ltd. and/or its affiliates
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,7 +32,7 @@ system_prompot = '''A conversation between User and Assistant. The user asks a q
 
 def main(
     data_source='DigitalLearningGmbH/MATH-lighteval',
-    local_dir='~/data/math_ct',
+    local_dir='~/data/math_torl',
     hdfs_dir=None,
     level:str = 'hard',
 ):

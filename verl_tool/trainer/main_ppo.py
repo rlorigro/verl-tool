@@ -64,7 +64,7 @@ def main(config):
                 
                 "RAY_DEBUG_POST_MORTEM": "1"
             }
-        })
+        }, num_cpus=32)
 
     runner = TaskRunner.remote()
     ray.get(runner.run.remote(config))
