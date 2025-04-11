@@ -74,7 +74,10 @@ class PythonCodeTool(BaseTool):
         Parse the raw action string (which is the llm response) into a actual action and it's contents
         """
         all_valid_python_code = re.findall(r"<python>((.|\n)*?)</python>", action, re.DOTALL)
+        if not all_valid_python_code:
+            all_valid_python_code = re.findall(r"```python((.|\n)*?)```", action, re.DOTALL)
         if len(all_valid_python_code) == 0:
+            # search for markdown code block
             valid = False
             action = ""
         else:
@@ -83,13 +86,17 @@ class PythonCodeTool(BaseTool):
         return action, valid
     
     def conduct_action(self, trajectory_id, action, extra_field):
-        action, is_valid = self.parse_action(action)
+        parsed_action, is_valid = self.parse_action(action)
         if not is_valid:
             observation = "No valid python code between <python> and </python> tags found."
             done = True
         else:
-            observation = _execute_program(action, timeout=self.timeout)
+            observation = _execute_program(parsed_action, timeout=self.timeout)
             done = False
-        observation = f"\nHere is the returned execution results of the above python codes:\n<output>{observation}</output>\n"
+        if action.endswith("```output"):
+            observation = f"{observation}```"
+        else:
+            observation = f"\nHere is the returned execution results of the above python codes:\n"
+            observation += f"<output>{observation}</output>"
         return observation, done, is_valid
     

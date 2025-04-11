@@ -27,7 +27,9 @@ from verl.utils.reward_score import prime_math
 def extract_solution(solution_str):
     return remove_boxed(last_boxed_only_string(solution_str))
 
-system_prompot = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. Please integrate natural language reasoning with **programs** to solve the problem above. The code in "<python>...</python>" will be executed, and the output (standard output and standard error) will be returned as "<output>..</output>". Put your final answer within \\boxed{}.
+# system_prompot = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. Please integrate natural language reasoning with **programs** to solve the problem above. The code in "<python>...</python>" will be executed, and the output (standard output and standard error) will be returned as "<output>..</output>". Put your final answer within \\boxed{}.
+# '''
+system_prompot = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem above, and put your final answer within \\boxed{}.:
 '''
 
 def main(
