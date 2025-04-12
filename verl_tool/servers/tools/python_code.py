@@ -64,7 +64,7 @@ def _execute_program(query: str, timeout: int = 10) -> str:
 @register_tool
 class PythonCodeTool(BaseTool):
     tool_type = "python_code"
-    timeout = 10
+    timeout = 5
     
     def get_usage_inst(self):
         return "You are able to write python code and run it for natural language reasoning using the markdown code block."

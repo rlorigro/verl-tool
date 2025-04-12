@@ -1,9 +1,9 @@
 """
 Tool Server - A FastAPI server to manage and execute tools based on incoming requests.
+Using asyncio for concurrent processing.
 """
 import asyncio
 import logging
-from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional, Tuple, Any, Set, Union
 
 import fire
@@ -60,8 +60,8 @@ class AgentResponse(BaseModel):
 
 # ---- Tool Management ----
 
-class ToolManager:
-    """Manages all tools and their execution"""
+class AsyncToolManager:
+    """Manages all tools and their execution using asyncio"""
     
     def __init__(self, tool_types: Tuple[str], num_workers_per_tool: int = 4):
         """
@@ -117,7 +117,6 @@ class ToolManager:
         Returns:
             The identified tool type or None if no tool matches
         """
-        return "python_code"
         # Check for finish condition
         if extra_field.get("finish", False):
             return "finish"
@@ -125,8 +124,7 @@ class ToolManager:
         # If only one tool available, use it
         if len(self.tools) == 1:
             return list(self.tools.keys())[0]
-            
-        # Try to find matching tool
+        # # Try to find matching tool
         for tool_type, tool in self.tools.items():
             _, valid = tool.parse_action(action)
             if valid:
@@ -134,14 +132,56 @@ class ToolManager:
                 
         return None
     
-    def process_actions(
+    async def identify_tool_types(self, actions: List[str], extra_fields: List[Dict[str, Any]]) -> List[Optional[str]]:
+        """
+        Asynchronously identify tools for a batch of actions
+        
+        Args:
+            actions: List of action strings
+            extra_fields: List of extra fields for each action
+            
+        Returns:
+            List of identified tool types
+        """
+        # The issue with the previous implementation is that asyncio.to_thread can be inefficient
+        # for quick CPU-bound operations and might get stuck in some environments.
+        # Instead, we'll create a more direct approach by processing items in batches
+        
+        tool_types = []
+        
+        # Process in small batches to avoid blocking the event loop
+        batch_size = 10
+        for i in range(0, len(actions), batch_size):
+            batch_end = min(i + batch_size, len(actions))
+            batch_actions = actions[i:batch_end]
+            batch_extra_fields = extra_fields[i:batch_end]
+            
+            # Process this batch
+            batch_results = []
+            for j in range(len(batch_actions)):
+                # Yield control back to event loop periodically
+                if j % 3 == 0:
+                    await asyncio.sleep(0)
+                
+                tool_type = self.identify_tool_for_action(batch_actions[j], batch_extra_fields[j])
+                batch_results.append(tool_type)
+            
+            tool_types.extend(batch_results)
+            
+            # Yield control back to event loop between batches
+            await asyncio.sleep(0)
+        
+        logger.debug(f"Identified tool types: {tool_types}")
+        return tool_types
+    
+    async def process_actions(
         self, 
         trajectory_ids: List[str], 
         actions: List[str], 
         extra_fields: List[Dict[str, Any]]
     ) -> Tuple[List[str], List[bool], List[bool]]:
         """
-        Process a batch of actions using appropriate tools
+        Process a batch of actions asynchronously using appropriate tools
         
         Args:
             trajectory_ids: List of trajectory IDs
@@ -152,12 +192,13 @@ class ToolManager:
             Tuple of (observations, dones, valids) lists
         """
         # Identify which tool should process each action
-        tool_types = []
+        # tool_types = await self.identify_tool_types(actions, extra_fields)
+        # just use a tqdm for loop
         from tqdm import tqdm
-        for i in tqdm(range(len(actions)), desc="Identifying tool types"):
+        tool_types = []
+        for i in tqdm(range(len(actions)), desc="Identifying tool types", unit="action"):
             tool_type = self.identify_tool_for_action(actions[i], extra_fields[i])
             tool_types.append(tool_type)
-        logger.debug(f"Identified tool types: {tool_types}")
         
         # Prepare result containers
         all_observations = [None] * len(actions)
@@ -167,28 +208,50 @@ class ToolManager:
         # Group actions by tool type for batch processing
         unique_tool_types: Set[Optional[str]] = set(tool_types)
         
+        # Create tasks for each tool type
+        tasks = []
+        indices_by_tool = {}
+        
         for tool_type in unique_tool_types:
             # Get indices of actions for this tool type
             indices = [i for i, t in enumerate(tool_types) if t == tool_type]
+            indices_by_tool[tool_type] = indices
             
             if tool_type is None:
-                # Handle actions that don't match any tool
-                usage_instructions = self.get_tool_usage_instructions()
-                observations = [usage_instructions] * len(indices)
-                dones = [False] * len(indices)
-                valids = [False] * len(indices)
-            else:
-                # Process with the appropriate tool
-                tool = self.tools[tool_type]
-                tool_trajectory_ids = [trajectory_ids[i] for i in indices]
-                tool_actions = [actions[i] for i in indices]
-                tool_extra_fields = [extra_fields[i] for i in indices]
+                # No processing needed for actions that don't match any tool
+                continue
                 
-                observations, dones, valids = tool.get_observations(
-                    tool_trajectory_ids, tool_actions, tool_extra_fields
-                )
+            # Process with the appropriate tool
+            tool = self.tools[tool_type]
+            tool_trajectory_ids = [trajectory_ids[i] for i in indices]
+            tool_actions = [actions[i] for i in indices]
+            tool_extra_fields = [extra_fields[i] for i in indices]
+            
+            # Create task for tool processing
+            # We use asyncio.to_thread for potentially blocking operations
+            task = asyncio.to_thread(
+                tool.get_observations,
+                tool_trajectory_ids, 
+                tool_actions, 
+                tool_extra_fields
+            )
+            tasks.append((tool_type, task))
+        
+        # Process all non-matching actions
+        if None in indices_by_tool:
+            usage_instructions = self.get_tool_usage_instructions()
+            indices = indices_by_tool[None]
+            for idx in indices:
+                all_observations[idx] = usage_instructions
+                all_dones[idx] = False
+                all_valids[idx] = False
+        
+        # Await all tool processing tasks
+        for tool_type, task in tasks:
+            observations, dones, valids = await task
             
             # Store results in the appropriate positions
+            indices = indices_by_tool[tool_type]
             for idx_pos, result_idx in enumerate(indices):
                 all_observations[result_idx] = observations[idx_pos]
                 all_dones[result_idx] = dones[idx_pos]
@@ -199,8 +262,8 @@ class ToolManager:
 
 # ---- Server Implementation ----
 
-class ToolServer:
-    """Server to handle tool execution requests"""
+class AsyncToolServer:
+    """Server to handle tool execution requests using asyncio"""
     
     def __init__(
         self,
@@ -224,16 +287,13 @@ class ToolServer:
         self.port = port
         self.max_concurrent_requests = max_concurrent_requests
         
-        # Initialize tool manager
-        self.tool_manager = ToolManager(tool_types, workers_per_tool)
-        
-        # Initialize thread pool for concurrent processing
-        self.thread_pool = ThreadPoolExecutor(max_workers=max_concurrent_requests)
+        # Initialize async tool manager
+        self.tool_manager = AsyncToolManager(tool_types, workers_per_tool)
         
         # Create FastAPI app
         self.app = FastAPI(
-            title="Tool Server",
-            description="A server for executing tools based on agent requests",
+            title="Async Tool Server",
+            description="A server for executing tools based on agent requests using asyncio",
             version="1.0.0",
         )
         
@@ -265,7 +325,7 @@ class ToolServer:
                     agent_request = AgentRequest.parse_obj(data)
                     
                     # Process the request asynchronously
-                    observations, dones, valids = await self._process_request(
+                    observations, dones, valids = await self.tool_manager.process_actions(
                         agent_request.trajectory_ids,
                         agent_request.actions,
                         agent_request.extra_fields
@@ -292,42 +352,10 @@ class ToolServer:
         async def health_check():
             return {"status": "healthy"}
             
-        # Shutdown event handler
-        @self.app.on_event("shutdown")
-        async def shutdown_event():
-            logger.info("Shutting down server...")
-            self.thread_pool.shutdown(wait=True)
-            logger.info("Server shutdown complete")
-    
-    async def _process_request(
-        self,
-        trajectory_ids: List[str],
-        actions: List[str],
-        extra_fields: List[Dict[str, Any]]
-    ) -> Tuple[List[str], List[bool], List[bool]]:
-        """
-        Process a batch of actions asynchronously
-        
-        Args:
-            trajectory_ids: List of trajectory IDs
-            actions: List of action strings
-            extra_fields: List of extra fields for each action
-            
-        Returns:
-            Tuple of (observations, dones, valids) lists
-        """
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(
-            self.thread_pool,
-            self.tool_manager.process_actions,
-            trajectory_ids,
-            actions,
-            extra_fields
-        )
     
     def start(self):
         """Start the server"""
-        logger.info(f"Starting server on {self.host}:{self.port}")
+        logger.info(f"Starting async server on {self.host}:{self.port}")
         logger.info(f"Server configured for up to {self.max_concurrent_requests} concurrent requests")
         
         uvicorn.run(
@@ -349,7 +377,7 @@ def main(
     log_level: str = "info",
 ):
     """
-    Start the tool server
+    Start the async tool server
     
     Args:
         host: The host address
@@ -372,7 +400,7 @@ def main(
             tool_type = (tool_type,)
     
     # Create and start server
-    server = ToolServer(
+    server = AsyncToolServer(
         tool_types=tool_type,
         host=host,
         port=port,
