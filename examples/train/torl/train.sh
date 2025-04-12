@@ -34,9 +34,9 @@ echo "$action_stop_tokens" > $action_stop_tokens_file
 echo "action_stop_tokens_file=$action_stop_tokens_file"
 
 host=0.0.0.0
-port=$(shuf -i 30000-31000 -n 1)
+port=23131
 tool_server_url=http://$host:$port/get_observation
-python -m verl_tool.servers.serve --host $host --port $port --tool_type "python_code" --num_workers 4 &
+python -m verl_tool.servers.serve --host $host --port $port --tool_type "python_code" --workers_per_tool 16 &
 server_pid=$!
 echo "Server (pid=$server_pid) started at $tool_server_url"
 

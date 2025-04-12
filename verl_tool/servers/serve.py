@@ -89,11 +89,15 @@ class AsyncToolManager:
             except Exception as e:
                 logger.error(f"Failed to initialize tool {tool_type}: {e}")
                 
-        # Log available vs. active tools
+        # Log available vs. active tools with emoji indicators
         logger.info("Available Tools:")
         for tool in ALL_TOOLS:
-            status = "active" if tool in self.tools else "inactive"
-            logger.info(f"  - {tool}: {status}")
+            if tool in self.tools:
+                status = "active 🟢"  # Green circle for active tools
+                logger.info(f"  - {tool}: {status}")
+            else:
+                status = "inactive ⚪"  # White circle for inactive tools
+                logger.info(f"  - {tool}: {status}")
     
     def get_tool_usage_instructions(self) -> str:
         """Get usage instructions for all available tools"""
@@ -102,7 +106,7 @@ class AsyncToolManager:
             if tool_type not in ["finish", "base"]:
                 usage_instructions[tool_type] = tool.get_usage_inst()
                 
-        message = "Your action did not match any of the available tools, please use one of the following tools: \n"
+        message = "\nYour action did not match any of the available tools, please use one of the following tools: \n"
         message += "\n".join([f"- {tool_type}: {usage_instructions[tool_type]}" for tool_type in usage_instructions])
         return message
     
@@ -126,6 +130,8 @@ class AsyncToolManager:
             return list(self.tools.keys())[0]
         # # Try to find matching tool
         for tool_type, tool in self.tools.items():
+            if tool_type == "finish":
+                continue
             _, valid = tool.parse_action(action)
             if valid:
                 return tool_type
@@ -371,7 +377,7 @@ class AsyncToolServer:
 def main(
     host: str = "0.0.0.0",
     port: int = 5000,
-    workers_per_tool: int = 4,
+    workers_per_tool: int = 8,
     max_concurrent_requests: int = 50,
     tool_type: Union[str, Tuple[str]] = "base",
     log_level: str = "info",

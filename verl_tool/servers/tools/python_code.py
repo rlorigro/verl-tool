@@ -10,7 +10,7 @@ from typing import List
 from tqdm import tqdm
 
 
-def _execute_program(query: str, timeout: int = 10) -> str:
+def _execute_program(query: str, timeout: int = 30) -> str:
     """
     Execute a single Python program and return its output with a timeout.
     
@@ -64,7 +64,7 @@ def _execute_program(query: str, timeout: int = 10) -> str:
 @register_tool
 class PythonCodeTool(BaseTool):
     tool_type = "python_code"
-    timeout = 5
+    timeout = 15
     
     def get_usage_inst(self):
         return "You are able to write python code and run it for natural language reasoning using the markdown code block."
@@ -73,20 +73,17 @@ class PythonCodeTool(BaseTool):
         """
         Parse the raw action string (which is the llm response) into a actual action and it's contents
         """
-        key_words = ["<python>", "</python>", "```python", "```output"]
-        if not any(keyword in action for keyword in key_words):
-            # if no keywords are found, return the action as is
-            return action, False
-        all_valid_python_code = re.findall(r"<python>((.|\n)*?)</python>", action, re.DOTALL)
+        all_valid_python_code = re.findall(r"<python>(.*?)</python>", action, re.DOTALL)
         if not all_valid_python_code:
-            all_valid_python_code = re.findall(r"```python((.|\n)*?)```", action, re.DOTALL)
+            all_valid_python_code = re.findall(r"```python(.*?)```", action, re.DOTALL)
+        
         if len(all_valid_python_code) == 0:
             # search for markdown code block
             valid = False
             action = ""
         else:
             valid = True
-            action = all_valid_python_code[0][0]
+            action = all_valid_python_code[0]
         return action, valid
     
     def conduct_action(self, trajectory_id, action, extra_field):
