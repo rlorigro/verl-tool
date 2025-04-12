@@ -299,6 +299,23 @@ class AgentActorManager:
             meta_info = gen_output.meta_info            
             responses_ids, responses_str, do_actions = self._postprocess_responses(gen_output.batch['responses'], step)
             responses_ids, _ = self.tensor_fn._example_level_pad(responses_ids, responses_str, active_mask)
+            
+            dones = []
+            j=0
+            for i, active in enumerate(active_mask):
+                if not active:
+                    dones.append(1)
+                else:
+                    if do_actions[j]:
+                        dones.append(0)
+                    else:
+                        dones.append(1)
+                    j += 1
+            assert j == len(do_actions), f"j: {j}, len(do_actions): {len(do_actions)}"
+
+            curr_active_mask = torch.tensor([not done for done in dones], dtype=torch.bool)
+            active_mask = active_mask * curr_active_mask
+            active_num_list.append(active_mask.sum().item())
 
             original_right_side = self._update_right_side(
                 original_right_side,

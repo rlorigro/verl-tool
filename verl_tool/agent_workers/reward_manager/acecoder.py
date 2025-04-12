@@ -20,7 +20,7 @@ from functools import partial
 import torch
 
 from verl import DataProto
-from verl.utils.reward_score import _default_compute_score
+from .reward_score import _default_compute_score
 
 
 import hashlib

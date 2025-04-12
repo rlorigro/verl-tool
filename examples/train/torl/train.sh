@@ -1,6 +1,9 @@
 set -x
 train_data=data/math_torl/train.parquet
-val_data=data/math_torl/test.parquet
+val_data=[data/math_torl/test.parquet,\
+data/math_torl/math500_test.parquet,\
+data/math_torl/aime24_test.parquet,\
+data/math_torl/aime25_test.parquet]
 model_name=Qwen/Qwen2.5-Math-7B
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
 n_gpus_per_node=8
