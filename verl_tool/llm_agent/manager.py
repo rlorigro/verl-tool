@@ -223,7 +223,7 @@ class AgentActorManager:
         # original_right_side = {'responses': initial_input_ids[:, []]}
         original_right_side = {'responses': initial_input_ids[:, []], 'responses_with_info_mask': initial_input_ids[:, []]}
         
-        turns_stats = torch.ones(gen_batch.batch['input_ids'].shape[0], dtype=torch.int)
+        turns_stats = torch.zeros(gen_batch.batch['input_ids'].shape[0], dtype=torch.int)
         valid_action_stats = torch.zeros(gen_batch.batch['input_ids'].shape[0], dtype=torch.int)
         active_mask = torch.ones(gen_batch.batch['input_ids'].shape[0], dtype=torch.bool)
         active_num_list = [active_mask.sum().item()]
@@ -299,15 +299,6 @@ class AgentActorManager:
             meta_info = gen_output.meta_info            
             responses_ids, responses_str, do_actions = self._postprocess_responses(gen_output.batch['responses'], step)
             responses_ids, _ = self.tensor_fn._example_level_pad(responses_ids, responses_str, active_mask)
-
-            # Execute in environment and process observations
-            active_uids = [traj_ids[i] for i in range(len(traj_ids)) if active_mask[i]]
-            next_obs, dones, valid_action = self.interact_with_tool_server(active_uids, responses_str, do_actions, active_mask)
-
-            curr_active_mask = torch.tensor([not done for done in dones], dtype=torch.bool)
-            active_mask = active_mask * curr_active_mask
-            active_num_list.append(active_mask.sum().item())
-            valid_action_stats += torch.tensor(valid_action, dtype=torch.int)
 
             original_right_side = self._update_right_side(
                 original_right_side,

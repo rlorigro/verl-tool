@@ -82,6 +82,13 @@ class ToRLRewardManager:
                 ground_truth=ground_truth,
                 # extra_info=extra_info,
             )
+            # penalty to errored or timeout execution
+            keywords = ["ERROR:\nTraceback", "Execution timed out"]
+            if any(keyword in response_str for keyword in keywords):
+                score -= 0.5
+                add_exec_penalty = True
+            else:
+                add_exec_penalty = False
 
             if isinstance(score, dict):
                 reward = score["score"]
@@ -118,6 +125,7 @@ class ToRLRewardManager:
                 'response': response_str,
                 'ground_truth': ground_truth,
                 'score': score,
+                'add_exec_penalty': add_exec_penalty,
                 'extra_info': extra_info,
                 'num_turn': num_turn,
                 'num_valid_action': num_valid_action,
