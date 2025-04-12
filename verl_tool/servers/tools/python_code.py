@@ -98,7 +98,7 @@ class PythonCodeTool(BaseTool):
             observation = _execute_program(parsed_action, timeout=self.timeout)
             done = False
         if action.endswith("```output"):
-            observation = f"{observation}```"
+            observation = f"\n{observation}```"
         else:
             observation = f"\nHere is the returned execution results of the above python codes:\n"
             observation += f"<output>{observation}</output>"
