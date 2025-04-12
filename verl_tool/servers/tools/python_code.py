@@ -73,6 +73,10 @@ class PythonCodeTool(BaseTool):
         """
         Parse the raw action string (which is the llm response) into a actual action and it's contents
         """
+        key_words = ["<python>", "</python>", "```python", "```output"]
+        if not any(keyword in action for keyword in key_words):
+            # if no keywords are found, return the action as is
+            return action, False
         all_valid_python_code = re.findall(r"<python>((.|\n)*?)</python>", action, re.DOTALL)
         if not all_valid_python_code:
             all_valid_python_code = re.findall(r"```python((.|\n)*?)```", action, re.DOTALL)

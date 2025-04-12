@@ -41,11 +41,12 @@ class AgentActorManager:
             max_start_length=config.max_start_length,
             max_response_length=config.max_response_length,
         ))
-        self.action_stop_tokens = config.action_stop_tokens
-        # if config.valid_actions is not None:
-        #     self.action_stop_tokens = [f"</{action}>" for action in config.valid_actions]
-        # else:
-        #     self.action_stop_tokens = [
+        if os.path.exists(self.config.action_stop_tokens):
+            with open(self.config.action_stop_tokens, 'r') as f:
+                self.action_stop_tokens = f.read().strip('\n').split(',')
+            print(f"Using action stop tokens: {self.action_stop_tokens}")
+        else:
+            raise FileNotFoundError(f"Action stop tokens file '{self.config.action_stop_tokens}' not found.")
 
     def _batch_tokenize(self, responses: List[str]) -> torch.Tensor:
         """Tokenize a batch of responses."""

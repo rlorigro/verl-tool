@@ -61,8 +61,6 @@ def main(config):
                 'TOKENIZERS_PARALLELISM': 'true',
                 'NCCL_DEBUG': 'WARN',
                 'VLLM_LOGGING_LEVEL': 'WARN',
-                
-                "RAY_DEBUG_POST_MORTEM": "1"
             }
         }, num_cpus=32)
 
