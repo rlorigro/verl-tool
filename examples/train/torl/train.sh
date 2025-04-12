@@ -21,11 +21,12 @@ kl_coef=0
 entropy_coeff=0
 kl_loss_type=low_var_kl
 lr=1e-6
+reward_manager=torl
 ppo_micro_batch_size_per_gpu=1
 log_prob_micro_batch_size_per_gpu=2
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
-run_name="torl-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}"
+run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}-$(date +%Y%m%d-%H%M%S)"
 export VERL_RUN_ID=$run_name
 
 # temp file for action tokens as verl cannot pass special strs as params
@@ -34,7 +35,7 @@ echo "$action_stop_tokens" > $action_stop_tokens_file
 echo "action_stop_tokens_file=$action_stop_tokens_file"
 
 host=0.0.0.0
-port=23131
+port=$(shuf -i 30000-31000 -n 1)
 tool_server_url=http://$host:$port/get_observation
 python -m verl_tool.servers.serve --host $host --port $port --tool_type "python_code" --workers_per_tool 16 &
 server_pid=$!
@@ -52,7 +53,7 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     data.max_prompt_length=$max_prompt_length \
     data.max_response_length=$max_response_length \
     data.truncation='right' \
-    reward_model.reward_manager=torl \
+    reward_model.reward_manager=$reward_manager \
     actor_rollout_ref.model.path=$model_name \
     actor_rollout_ref.actor.optim.lr=$lr \
     actor_rollout_ref.actor.ppo_mini_batch_size=$ppo_mini_batch_size \
@@ -95,7 +96,7 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     +trainer.remove_previous_ckpt_in_save=True \
     trainer.save_freq=10 \
     trainer.test_freq=10 \
-    trainer.total_epochs=300 
+    trainer.total_epochs=10
 
 
 pkill -P -9 $server_pid
