@@ -10,13 +10,13 @@ from typing import List
 from tqdm import tqdm
 
 
-def _execute_program(query: str, timeout: int = 30) -> str:
+def _execute_program(query: str, timeout: int = 10) -> str:
     """
     Execute a single Python program and return its output with a timeout.
     
     Args:
         query: Python program to execute as a string
-        timeout: Maximum execution time in seconds (default: 30)
+        timeout: Maximum execution time in seconds (default: 10)
     
     Returns:
         String containing both stdout and stderr outputs
@@ -67,7 +67,7 @@ class PythonCodeTool(BaseTool):
     timeout = 10
     
     def get_usage_inst(self):
-        return "You are able to run the python code in your responses that are enclosed in <python> and </python> tags. The output of the code (stdout and stderr) will be returned between <output> and </output> tags."
+        return "You are able to write python code and run it for natural language reasoning using the markdown code block."
     
     def parse_action(self, action:str):
         """
