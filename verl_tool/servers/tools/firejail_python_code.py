@@ -10,6 +10,7 @@ import os
 import timeout_decorator
 import sys
 from typing import Tuple, Dict, Any, Optional
+from ..utils import kill_python_subprocess_processes
 
 # Timeout for code execution in seconds
 TIMEOUT = 10
@@ -192,4 +193,13 @@ class FirejailPythonCodeTool(BaseTool):
             observation = f"Error during execution: {str(e)}"
             return observation, True, False
         
+    def get_observations(self, trajectory_ids, actions, extra_fields):
+        # Get results from the parent class implementation
+        results = super().get_observations(trajectory_ids, actions, extra_fields)
         
+        # Kill any lingering Python processes
+        killed_count = kill_python_subprocess_processes()
+        if killed_count > 0:
+            print(f"Terminated {killed_count} lingering Python execution processes")
+        
+        return results
