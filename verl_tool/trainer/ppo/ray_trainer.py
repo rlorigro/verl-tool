@@ -4,6 +4,7 @@ from .metric_utils import (
     agent_compute_data_metrics as compute_data_metrics,
     compute_timing_metrics,
 )
+from tqdm import tqdm
 
 def apply_kl_penalty(data: DataProto, kl_ctrl: core_algos.AdaptiveKLController, kl_penalty='kl'):
     responses = data.batch['responses']
