@@ -183,8 +183,8 @@ class AgentActorManager:
         return padded_tensor, padded_tensor_with_info
 
     def _update_right_side(self, right_side: Dict, 
-                          cur_responses: torch.Tensor,
-                          next_obs_ids: torch.Tensor = None) -> Dict:
+                cur_responses: torch.Tensor,
+                next_obs_ids: torch.Tensor = None) -> Dict:
         """Update right side state."""
         
         # observation exists, perform concatenation and masked concatenation
