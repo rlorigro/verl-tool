@@ -282,7 +282,10 @@ class AgentActorManager:
                 responses_ids,
                 next_obs_ids
             )
-            
+        
+        agent_sampling_params = {
+            "n": 1, # already repeated by n times in _preprocess_inputs
+        } # reomve stop related params in the last call
         # final LLM rollout
         if active_mask.sum():
             rollings.batch = self.tensor_fn.cut_to_effective_len(
