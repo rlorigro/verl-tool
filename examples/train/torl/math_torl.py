@@ -94,9 +94,9 @@ def main(
 
         return process_fn
 
-    train_dataset = train_dataset.map(function=make_map_fn('train', data_source), with_indices=True)
-    test_dataset = test_dataset.map(function=make_map_fn('test', data_source), with_indices=True)
-    math500_test_dataset = math500_test_dataset.map(function=make_map_fn('test', 'HuggingFaceH4/MATH-500'), with_indices=True)
+    train_dataset = train_dataset.map(function=make_map_fn('train', data_source), with_indices=True, remove_columns=train_dataset.column_names)
+    test_dataset = test_dataset.map(function=make_map_fn('test', data_source), with_indices=True, remove_columns=test_dataset.column_names)
+    math500_test_dataset = math500_test_dataset.map(function=make_map_fn('test', 'HuggingFaceH4/MATH-500'), with_indices=True, remove_columns=math500_test_dataset.column_names)
     
     print(train_dataset)
     print(train_dataset[0])
@@ -112,7 +112,7 @@ def main(
 
         def process_fn(example, idx):
             question = example.pop('Problem')
-            answer = example.pop('Answer')
+            answer = str(example.pop('Answer'))
             solution = example.pop('Solution')
             
             data = {
@@ -135,14 +135,13 @@ def main(
                     'split': split,
                     'index': idx,
                     'question': question,
-                    'solution': solution,
                 }
             }
             return data
 
         return process_fn
     
-    aime24_dataset = aime24_dataset.map(function=make_map_fn('test', 'aime24'), with_indices=True)
+    aime24_dataset = aime24_dataset.map(function=make_map_fn('test', 'aime24'), with_indices=True, remove_columns=aime24_dataset.column_names)
     aime24_dataset.to_parquet(os.path.join(local_dir, 'aime24_test.parquet'))
     print(aime24_dataset)
     print(aime24_dataset[0])
@@ -157,7 +156,7 @@ def main(
 
         def process_fn(example, idx):
             question = example.pop('question')
-            answer = example.pop('answer')
+            answer = str(example.pop('answer'))
             
             data = {
                 "data_source": data_source,
