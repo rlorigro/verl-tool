@@ -375,11 +375,11 @@ class AsyncToolServer:
 # ---- CLI Entry Point ----
 
 def main(
+    tool_type: Union[str, Tuple[str]] = "base",
     host: str = "0.0.0.0",
     port: int = 5000,
     workers_per_tool: int = 8,
     max_concurrent_requests: int = 50,
-    tool_type: Union[str, Tuple[str]] = "base",
     log_level: str = "info",
 ):
     """
@@ -418,3 +418,8 @@ def main(
 
 if __name__ == "__main__":
     fire.Fire(main)
+    
+    
+"""
+python -m verl_tool.servers.serve --tool_type "python_code" --workers_per_tool 8
+"""
