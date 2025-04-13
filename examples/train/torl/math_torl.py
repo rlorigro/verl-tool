@@ -27,7 +27,9 @@ from verl.utils.reward_score import prime_math
 def extract_solution(solution_str):
     return remove_boxed(last_boxed_only_string(solution_str))
 
-system_prompot = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. Please integrate natural language reasoning with **programs** to solve the problem above. The code in "<python>...</python>" will be executed, and the output (standard output and standard error) will be returned as "<output>..</output>". Put your final answer within \\boxed{}.
+# system_prompot = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. Please integrate natural language reasoning with **programs** to solve the problem above. The code in "<python>...</python>" will be executed, and the output (standard output and standard error) will be returned as "<output>..</output>". Put your final answer within \\boxed{}.
+# '''
+system_prompot = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem above, and put your final answer within \\boxed{}.:
 '''
 
 def main(
@@ -56,9 +58,10 @@ def main(
         raise ValueError(f"Unknown level: {level}. Please choose from easy, medium, or hard.")
     train_dataset = train_dataset.filter(lambda x: x['level'] in [f"Level {i}" for i in range(level_range[0], level_range[1])])
     test_dataset = test_dataset.filter(lambda x: x['level'] in [f"Level {i}" for i in range(level_range[0], level_range[1])])
+    math500_test_dataset = datasets.load_dataset('HuggingFaceH4/MATH-500', split='test')
     
     # add a row to each data item that represents a unique id
-    def make_map_fn(split):
+    def make_map_fn(split, data_source):
 
         def process_fn(example, idx):
             question = example.pop('problem')
@@ -91,8 +94,9 @@ def main(
 
         return process_fn
 
-    train_dataset = train_dataset.map(function=make_map_fn('train'), with_indices=True)
-    test_dataset = test_dataset.map(function=make_map_fn('test'), with_indices=True)
+    train_dataset = train_dataset.map(function=make_map_fn('train', data_source), with_indices=True, remove_columns=train_dataset.column_names)
+    test_dataset = test_dataset.map(function=make_map_fn('test', data_source), with_indices=True, remove_columns=test_dataset.column_names)
+    math500_test_dataset = math500_test_dataset.map(function=make_map_fn('test', 'HuggingFaceH4/MATH-500'), with_indices=True, remove_columns=math500_test_dataset.column_names)
     
     print(train_dataset)
     print(train_dataset[0])
@@ -100,6 +104,90 @@ def main(
 
     train_dataset.to_parquet(os.path.join(local_dir, 'train.parquet'))
     test_dataset.to_parquet(os.path.join(local_dir, 'test.parquet'))
+    math500_test_dataset.to_parquet(os.path.join(local_dir, 'math500_test.parquet'))
+    
+    # aime24
+    aime24_dataset = datasets.load_dataset('Maxwell-Jia/AIME_2024', split='train') # actually test set
+    def make_map_fn(split, data_source):
+
+        def process_fn(example, idx):
+            question = example.pop('Problem')
+            answer = str(example.pop('Answer'))
+            solution = example.pop('Solution')
+            
+            data = {
+                "data_source": data_source,
+                "prompt": [
+                {
+                    "role": "system",
+                    "content": system_prompot
+                },
+                {
+                    "role": "user",
+                    "content": question
+                }],
+                "ability": "math",
+                "reward_model": {
+                    "style": "rule",
+                    "ground_truth": answer
+                },
+                "extra_info": {
+                    'split': split,
+                    'index': idx,
+                    'question': question,
+                }
+            }
+            return data
+
+        return process_fn
+    
+    aime24_dataset = aime24_dataset.map(function=make_map_fn('test', 'aime24'), with_indices=True, remove_columns=aime24_dataset.column_names)
+    aime24_dataset.to_parquet(os.path.join(local_dir, 'aime24_test.parquet'))
+    print(aime24_dataset)
+    print(aime24_dataset[0])
+    
+    # aime25
+    aime25_dataset = datasets.load_dataset('opencompass/AIME2025', 'AIME2025-I', split='test') # actually test set
+    aime25_dataset2 = datasets.load_dataset('opencompass/AIME2025', 'AIME2025-II', split='test') # actually test set
+    # concatenate the two datasets
+    aime25_dataset = datasets.concatenate_datasets([aime25_dataset, aime25_dataset2])
+    
+    def make_map_fn(split, data_source):
+
+        def process_fn(example, idx):
+            question = example.pop('question')
+            answer = str(example.pop('answer'))
+            
+            data = {
+                "data_source": data_source,
+                "prompt": [
+                {
+                    "role": "system",
+                    "content": system_prompot
+                },
+                {
+                    "role": "user",
+                    "content": question
+                }],
+                "ability": "math",
+                "reward_model": {
+                    "style": "rule",
+                    "ground_truth": answer
+                },
+                "extra_info": {
+                    'split': split,
+                    'index': idx,
+                    'question': question,
+                }
+            }
+            return data
+
+        return process_fn
+
+    aime25_dataset = aime25_dataset.map(function=make_map_fn('test', 'aime25'), with_indices=True)
+    aime25_dataset.to_parquet(os.path.join(local_dir, 'aime25_test.parquet'))
+    print(aime25_dataset)
+    print(aime25_dataset[0])
     
     if hdfs_dir is not None:
         makedirs(hdfs_dir)

@@ -16,7 +16,7 @@ import time
 import json
 from pathlib import Path
 from verl import DataProto
-from verl.utils.reward_score import _default_compute_score
+from .reward_score import _default_compute_score
 from .reward_score.torl_math import compute_score as torl_compute_score
 import torch
 from collections import defaultdict
@@ -29,7 +29,8 @@ class ToRLRewardManager:
     def __init__(self, tokenizer, num_examine, compute_score=None, reward_fn_key='data_source') -> None:
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
-        self.compute_score = compute_score or torl_compute_score
+        self.compute_score = compute_score if compute_score else _default_compute_score
+        self.torl_compute_score = torl_compute_score
         self.reward_fn_key = reward_fn_key
         self.run_id = os.getenv("VERL_RUN_ID", f"acecoder_{time.strftime('%Y-%m-%d-%H-%M-%S')}")
         self.record_dir = Path(__file__).parent.parent.parent.parent / "verl_step_records" / self.run_id
@@ -76,12 +77,34 @@ class ToRLRewardManager:
 
             extra_info = data_item.non_tensor_batch.get('extra_info', None)
 
-            score = self.compute_score(
+            score = self.torl_compute_score(
                 # data_source=data_source,
                 solution_str=response_str,
                 ground_truth=ground_truth,
                 # extra_info=extra_info,
             )
+        
+            # if data_source == 'torl_math':
+            #     score = self.torl_compute_score(
+            #         # data_source=data_source,
+            #         solution_str=response_str,
+            #         ground_truth=ground_truth,
+            #         # extra_info=extra_info,
+            #     )
+            # else:
+            #     score = self.compute_score(
+            #         data_source=data_source,
+            #         solution_str=response_str,
+            #         ground_truth=ground_truth,
+            #         extra_info=extra_info,
+            #     )
+            # penalty to errored or timeout execution
+            keywords = ["ERROR:\nTraceback", "Execution timed out"]
+            if any(keyword in response_str for keyword in keywords):
+                score -= 0.5
+                add_exec_penalty = True
+            else:
+                add_exec_penalty = False
 
             if isinstance(score, dict):
                 reward = score["score"]
@@ -95,6 +118,8 @@ class ToRLRewardManager:
             if "turns_stats" in data_item.non_tensor_batch:
                 num_turn = data_item.non_tensor_batch["turns_stats"]
                 num_valid_action = data_item.non_tensor_batch["valid_action_stats"]
+                is_active = data_item.non_tensor_batch["active_mask"]
+                is_done = not is_active
 
             reward_tensor[i, valid_response_length - 1] = reward
 
@@ -118,10 +143,12 @@ class ToRLRewardManager:
                 'response': response_str,
                 'ground_truth': ground_truth,
                 'score': score,
+                'add_exec_penalty': add_exec_penalty,
                 'extra_info': extra_info,
                 'num_turn': num_turn,
                 'num_valid_action': num_valid_action,
                 'data_source': data_source,
+                'is_done': is_done,
             })
         
         # Save the records to a file
