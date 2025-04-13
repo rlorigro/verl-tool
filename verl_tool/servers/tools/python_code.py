@@ -143,14 +143,3 @@ class PythonCodeTool(BaseTool):
             observation += f"<output>{observation}</output>"
         
         return observation, done, is_valid
-
-    def get_observations(self, trajectory_ids, actions, extra_fields):
-        # Get results from the parent class implementation
-        results = super().get_observations(trajectory_ids, actions, extra_fields)
-        
-        # Kill any lingering Python processes
-        killed_count = kill_python_subprocess_processes()
-        if killed_count > 0:
-            print(f"Terminated {killed_count} lingering Python execution processes")
-        
-        return results

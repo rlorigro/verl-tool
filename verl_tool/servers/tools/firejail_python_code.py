@@ -1,13 +1,8 @@
-# Firejail is a local sandbox and strikes the best balance of reliability, scalability, and security
-# https://github.com/netblue30/firejail
-# sudo add-apt-repository ppa:deki/firejail
-# sudo apt-get update
-# sudo apt-get install firejail firejail-profiles
 from .base import BaseTool, register_tool
 import regex as re
 import subprocess
 import os
-import timeout_decorator
+import signal
 import sys
 from typing import Tuple, Dict, Any, Optional
 from ..utils import kill_python_subprocess_processes
@@ -48,8 +43,7 @@ def check_forbidden_imports(code: str) -> bool:
     
     return False
 
-@timeout_decorator.timeout(TIMEOUT, use_signals=False)
-def _exec_firejail_with_timeout(code: str, stdin: Optional[str] = None) -> str:
+def execute_python_in_firejail(code: str, stdin: Optional[str] = None) -> str:
     """
     Execute Python code in a Firejail sandbox with a timeout.
     
@@ -58,14 +52,18 @@ def _exec_firejail_with_timeout(code: str, stdin: Optional[str] = None) -> str:
         stdin: Optional input to provide to the executed code
         
     Returns:
-        String containing execution output
+        String containing execution output or error message
     """
+    # Check for forbidden imports first
+    if check_forbidden_imports(code):
+        return "Execution blocked: Code contains potentially dangerous operations or imports."
+    
     env = os.environ.copy()
     env["OPENBLAS_NUM_THREADS"] = "1"
     if "PYTHONPATH" in env:
         del env["PYTHONPATH"]  # avoid importing wrong stuff
     
-    # Build the firejail command with resource limits and cleanup options
+    # Build the firejail command with resource limits
     command = [
         "firejail",
         "--private",
@@ -79,40 +77,61 @@ def _exec_firejail_with_timeout(code: str, stdin: Optional[str] = None) -> str:
     ]
     command.extend(["python3", "-c", code])
     
-    result = subprocess.run(
-        command,
-        input=stdin.encode() if stdin else None,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        env=env,
-        check=False
-    )
-    
-    stdout = result.stdout.decode()
-    stderr = result.stderr.decode().strip()
-    
-    if result.returncode == 0:
-        return stdout
-    
-    return f"{stdout}\nERROR:\n{stderr}"
-
-def execute_python_in_firejail(code: str, stdin: Optional[str] = None) -> str:
-    """
-    Wrapper function to execute Python code in Firejail with exception handling.
-    
-    Args:
-        code: Python code string to execute
-        stdin: Optional input to provide to the executed code
-        
-    Returns:
-        String containing execution output or error message
-    """
     try:
-        return _exec_firejail_with_timeout(code, stdin)
-    except timeout_decorator.TimeoutError:
-        return "Execution timed out after {} seconds.".format(TIMEOUT)
+        # Start process in its own process group for better control
+        process = subprocess.Popen(
+            command,
+            stdin=subprocess.PIPE if stdin else None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+            text=False,
+            preexec_fn=os.setsid  # Creates a new process group
+        )
+        
+        # If stdin provided, write it to the process
+        if stdin:
+            process.stdin.write(stdin.encode())
+            process.stdin.close()
+        
+        # Capture output and errors with timeout
+        try:
+            stdout, stderr = process.communicate(timeout=TIMEOUT)
+            stdout_str = stdout.decode()
+            stderr_str = stderr.decode().strip()
+            
+            if process.returncode == 0:
+                return stdout_str
+            
+            return f"{stdout_str}\nERROR:\n{stderr_str}"
+            
+        except subprocess.TimeoutExpired:
+            # Kill the entire process group if timeout occurs
+            os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+            
+            # Try to get any partial output
+            try:
+                stdout, stderr = process.communicate(timeout=0.5)
+                stdout_str = stdout.decode() if stdout else ""
+                stderr_str = stderr.decode().strip() if stderr else ""
+            except:
+                stdout_str = ""
+                stderr_str = ""
+            
+            # Force kill if still running
+            if process.poll() is None:
+                os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+            
+            result = f"Execution timed out after {TIMEOUT} seconds.\n"
+            if stdout_str:
+                result += f"Partial stdout:\n{stdout_str}\n"
+            if stderr_str:
+                result += f"Partial stderr:\n{stderr_str}"
+            
+            return result
+            
     except Exception as e:
-        return f"Exception during execution: {str(e)}"
+        return f"Error executing program: {str(e)}"
 
 
 @register_tool
@@ -169,37 +188,19 @@ class FirejailPythonCodeTool(BaseTool):
             observation = "No valid Python code found. Please provide code in either <python>...</python> tags or ```python...``` code blocks."
             return observation, True, False
         
-        # Check for forbidden imports first
-        if check_forbidden_imports(parsed_action):
-            observation = "Execution blocked: Code contains potentially dangerous operations or imports."
-            return observation, True, False
-        
         # Extract stdin if provided in extra_field
         stdin = extra_field.get("stdin", None) if extra_field else None
         
         # Execute the code using firejail
-        try:
-            execution_result = execute_python_in_firejail(parsed_action, stdin)
+        execution_result = execute_python_in_firejail(parsed_action, stdin)
+        
+        # Format the result
+        if "Execution timed out" in execution_result:
+            observation = execution_result
+        elif "ERROR:" in execution_result:
+            observation = f"Execution completed with errors:\n{execution_result}"
+        else:
+            observation = f"Execution result:\n{execution_result}"
             
-            # Format the result
-            if "ERROR:" in execution_result:
-                observation = f"Execution completed with errors:\n{execution_result}"
-            else:
-                observation = f"Execution result:\n{execution_result}"
-                
-            return observation, False, True
-            
-        except Exception as e:
-            observation = f"Error during execution: {str(e)}"
-            return observation, True, False
+        return observation, False, True
         
-    def get_observations(self, trajectory_ids, actions, extra_fields):
-        # Get results from the parent class implementation
-        results = super().get_observations(trajectory_ids, actions, extra_fields)
-        
-        # Kill any lingering Python processes
-        killed_count = kill_python_subprocess_processes()
-        if killed_count > 0:
-            print(f"Terminated {killed_count} lingering Python execution processes")
-        
-        return results

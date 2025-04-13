@@ -7,6 +7,7 @@ def kill_python_subprocess_processes():
     """
     Kill any lingering Python processes that were spawned with the -c flag.
     This is useful for cleaning up processes that might have escaped the timeout mechanism.
+    Only kills individual processes, not process groups, to avoid affecting unrelated processes.
     
     Returns:
         int: Number of processes killed
@@ -44,14 +45,8 @@ def kill_python_subprocess_processes():
                 # Don't kill our own process or the ps process
                 if pid != own_pid and pid != ps_pid:
                     try:
-                        # Try to kill the process group first for better cleanup
-                        try:
-                            pgid = os.getpgid(pid)
-                            os.killpg(pgid, signal.SIGKILL)
-                        except (ProcessLookupError, PermissionError):
-                            # Fall back to regular kill if process group kill fails
-                            os.kill(pid, signal.SIGKILL)
-                        
+                        # Kill only this specific process, not its process group
+                        os.kill(pid, signal.SIGKILL)
                         killed_count += 1
                     except (ProcessLookupError, PermissionError) as e:
                         # Process may have already terminated or we don't have permission
