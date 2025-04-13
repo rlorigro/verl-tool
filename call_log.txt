@@ -1,1 +1,9 @@
 Function multiply has been called 1 times.
+Function multiply has been called 1 times.
+Function dummy_func has been called 1 times.
+Function dummy_func has been called 2 times.
+Function dummy_func has been called 3 times.
+Function multiply has been called 1 times.
+Function multiply has been called 1 times.
+Function multiply has been called 1 times.
+Function multiply has been called 1 times.

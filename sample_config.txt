@@ -1,4 +1,3 @@
-
 # Application Configuration
 database = production_db
 port = 5432

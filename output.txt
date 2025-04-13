@@ -1,0 +1,6 @@
+Configuration Key: TIMEOUT, Value: 30
+Configuration Key: RETRY_LIMIT, Value: 5
+Configuration Key: LOG_LEVEL, Value: INFO
+Configuration Key: CACHE_SIZE, Value: 256
+Configuration Key: MAX_CLIENTS, Value: 100
+Configuration Key: LOGGING_ENABLED, Value: True

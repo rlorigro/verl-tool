@@ -7,7 +7,7 @@ rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group
 n_gpus_per_node=4
 n_nodes=1
 n=8
-batch_size=512
+batch_size=256
 ppo_mini_batch_size=64
 max_prompt_length=3072
 max_response_length=2048
@@ -77,8 +77,8 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     trainer.default_hdfs_dir=null \
     trainer.n_gpus_per_node=$n_gpus_per_node \
     trainer.nnodes=$n_nodes \
-    trainer.save_freq=40 \
-    trainer.test_freq=10 \
+    trainer.save_freq=1 \
+    trainer.test_freq=1 \
     trainer.total_epochs=5
 
 

@@ -146,7 +146,7 @@ class AceCoderRewardManager:
         # TODO: report average_toll_call_cnt to wandb
         avg_tool_call_cnt = sum(tool_call_counts) / len(tool_call_counts)
         print(f"[DEBUG] average tool call counts: {avg_tool_call_cnt}")
-        wandb.log({"toll_use/avg_tool_call_cnt": avg_tool_call_cnt})
+        wandb.log({"tool_use/avg_tool_call_cnt": avg_tool_call_cnt})
         
         samples = [
             {
@@ -177,11 +177,13 @@ class AceCoderRewardManager:
         
         # remove temp_file
         try:
-            os.remove(temp_file)
+            # os.remove(temp_file)
+            pass
         except:
             pass
         try:
             os.remove(output_file)
+            # pass
         except:
             pass
         # save random 100 samples into a file for debugging
