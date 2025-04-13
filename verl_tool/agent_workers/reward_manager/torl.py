@@ -77,20 +77,27 @@ class ToRLRewardManager:
 
             extra_info = data_item.non_tensor_batch.get('extra_info', None)
 
-            if data_source == 'torl_math':
-                score = self.torl_compute_score(
-                    # data_source=data_source,
-                    solution_str=response_str,
-                    ground_truth=ground_truth,
-                    # extra_info=extra_info,
-                )
-            else:
-                score = self.compute_score(
-                    data_source=data_source,
-                    solution_str=response_str,
-                    ground_truth=ground_truth,
-                    extra_info=extra_info,
-                )
+            score = self.torl_compute_score(
+                # data_source=data_source,
+                solution_str=response_str,
+                ground_truth=ground_truth,
+                # extra_info=extra_info,
+            )
+        
+            # if data_source == 'torl_math':
+            #     score = self.torl_compute_score(
+            #         # data_source=data_source,
+            #         solution_str=response_str,
+            #         ground_truth=ground_truth,
+            #         # extra_info=extra_info,
+            #     )
+            # else:
+            #     score = self.compute_score(
+            #         data_source=data_source,
+            #         solution_str=response_str,
+            #         ground_truth=ground_truth,
+            #         extra_info=extra_info,
+            #     )
             # penalty to errored or timeout execution
             keywords = ["ERROR:\nTraceback", "Execution timed out"]
             if any(keyword in response_str for keyword in keywords):
