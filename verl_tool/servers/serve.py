@@ -5,12 +5,13 @@ Using asyncio for concurrent processing.
 import asyncio
 import logging
 from typing import Dict, List, Optional, Tuple, Any, Set, Union
+from tqdm import tqdm
 
 import fire
 import uvicorn
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, validator
 
 from .tools import get_tool_cls, ALL_TOOLS
 
@@ -63,7 +64,7 @@ class AgentResponse(BaseModel):
 class AsyncToolManager:
     """Manages all tools and their execution using asyncio"""
     
-    def __init__(self, tool_types: Tuple[str], num_workers_per_tool: int = 4):
+    def __init__(self, tool_types: Tuple[str], num_workers_per_tool: int = 4, use_tqdm: bool = False):
         """
         Initialize the tool manager with specified tools
         
@@ -72,12 +73,14 @@ class AsyncToolManager:
             num_workers_per_tool: Number of workers for each tool
         """
         self.tools: Dict[str, Any] = {}
+        self.use_tqdm = use_tqdm
         self._initialize_tools(tool_types, num_workers_per_tool)
         
     def _initialize_tools(self, tool_types: Tuple[str], num_workers: int) -> None:
         """Initialize all tools based on tool types"""
         # Ensure we have the finish tool
-        if "finish" not in tool_types:
+        if "finish" in tool_types:
+            tool_types = tuple(t for t in tool_types if t != "finish")
             tool_types = tool_types + ("finish",)
             
         logger.info(f"Initializing tools: {tool_types}")
@@ -88,6 +91,10 @@ class AsyncToolManager:
                 logger.info(f"Initialized tool: {tool_type}")
             except Exception as e:
                 logger.error(f"Failed to initialize tool {tool_type}: {e}")
+        
+        # initialize the finish tool
+        finish_tool = get_tool_cls("finish")
+        self.tools["finish"] = finish_tool(num_workers=num_workers, other_tools=list(self.tools.values()))
                 
         # Log available vs. active tools with emoji indicators
         logger.info("Available Tools:")
@@ -200,9 +207,8 @@ class AsyncToolManager:
         # Identify which tool should process each action
         # tool_types = await self.identify_tool_types(actions, extra_fields)
         # just use a tqdm for loop
-        from tqdm import tqdm
         tool_types = []
-        for i in tqdm(range(len(actions)), desc="Identifying tool types", unit="action"):
+        for i in tqdm(range(len(actions)), desc="Identifying tool types", unit="action", disable=not self.use_tqdm):
             tool_type = self.identify_tool_for_action(actions[i], extra_fields[i])
             tool_types.append(tool_type)
         
@@ -278,6 +284,7 @@ class AsyncToolServer:
         port: int = 5000,
         workers_per_tool: int = 4,
         max_concurrent_requests: int = 50,
+        use_tqdm: bool = False,
     ):
         """
         Initialize the tool server
@@ -294,7 +301,7 @@ class AsyncToolServer:
         self.max_concurrent_requests = max_concurrent_requests
         
         # Initialize async tool manager
-        self.tool_manager = AsyncToolManager(tool_types, workers_per_tool)
+        self.tool_manager = AsyncToolManager(tool_types, workers_per_tool, use_tqdm)
         
         # Create FastAPI app
         self.app = FastAPI(
@@ -328,7 +335,7 @@ class AsyncToolServer:
                                                  for tid in data.get("trajectory_ids", [])]
                     
                     # Validate request with pydantic model
-                    agent_request = AgentRequest.parse_obj(data)
+                    agent_request = AgentRequest.model_validate(data)
                     
                     # Process the request asynchronously
                     observations, dones, valids = await self.tool_manager.process_actions(
@@ -380,6 +387,7 @@ def main(
     port: int = 5000,
     workers_per_tool: int = 8,
     max_concurrent_requests: int = 50,
+    use_tqdm: bool = False,
     log_level: str = "info",
 ):
     """
@@ -412,6 +420,7 @@ def main(
         port=port,
         workers_per_tool=workers_per_tool,
         max_concurrent_requests=max_concurrent_requests,
+        use_tqdm=use_tqdm,
     )
     server.start()
 
