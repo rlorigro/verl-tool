@@ -1,7 +1,7 @@
 import re
 import requests
 import uuid
-from typing import List, Dict, Tuple, Any, Optional
+from typing import Dict, Tuple, Optional
 
 def extract_python_tags(text: str) -> Tuple[Optional[str], bool]:
     code_blocks = re.findall(r"```python\s*([\s\S]*?)```", text)
