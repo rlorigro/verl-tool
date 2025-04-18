@@ -1,6 +1,4 @@
 export CUDA_VISIBLE_DEVICES=6
-export WANDB_API_KEY="31800be459915fc29628b8c03920c3b526d64109"
-export HF_TOKEN="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"
 
 set -x
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
