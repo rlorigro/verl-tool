@@ -8,16 +8,17 @@ class ModelConfig(BaseModel):
     tensor_parallel_size: int = 1
 
 class ToolConfig(BaseModel):
-    tool_server_url: str = "http://localhost:30286/get_observation"
-    valid_actions: List[str] = ["python"]  # 工具名称列表，用于检测结束标记
-    max_turns: int = 1  # 最大工具调用轮次
-    no_action_as_stop: bool = True  # 无工具调用视为停止
-    min_action_num: int = 1  # 最少工具调用次数
-    truncate_obs_side: str = "left"  # 截断方向
-    max_prompt_length: int = 4096  # 最大提示长度
-    max_obs_length: int = 1024  # 最大观察结果长度
-    max_start_length: int = 4096  # 最大开始长度
-    max_response_length: int = 4096  # 最大响应长度
+    tool_server_url: str = "http://localhost:30150/get_observation"
+    valid_actions: List[str] = ["python"]  # list of valid tool actions, will automatically add "```"
+    min_turns: int = 2  # least generation turns
+    max_turns: int = 5  # max generation turns
+    no_action_as_stop: bool = True  # if no action, stop generation
+    min_action_num: int = 2  # minimun number of tool-calling actions required
+    truncate_obs_side: str = "left"  # "left" or "right", which side to truncate when the observation is too long
+    max_prompt_length: int = 4096  # maximum length of prompt
+    max_obs_length: int = 1024  # maximum length of observation
+    max_start_length: int = 4096  
+    max_response_length: int = 4096
 
 class ServerConfig(BaseModel):
     host: str = "0.0.0.0"

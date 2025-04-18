@@ -9,27 +9,35 @@ import json
 from config import ServerConfig, ModelConfig, ToolConfig
 from model_service import ModelService
 
-# 定义API请求模型
+# Define API request models
 class ChatMessage(BaseModel):
-    role: str
-    content: str
+    role: str  # Role of the message (system, user, assistant)
+    content: str  # Content of the message
 
 class ChatCompletionRequest(BaseModel):
-    model: str
-    messages: List[ChatMessage]
-    temperature: Optional[float] = 0.7
-    top_p: Optional[float] = 0.9
-    max_tokens: Optional[int] = 1024
+    model: str  # Model identifier
+    messages: List[ChatMessage]  # List of conversation messages
+    temperature: Optional[float] = 0.7  # Controls randomness in generation
+    top_p: Optional[float] = 0.9  # Nucleus sampling parameter
+    max_tokens: Optional[int] = 1024  # Maximum number of tokens to generate
 
 def create_app(config: ServerConfig):
-    """创建并配置FastAPI应用"""
+    """
+    Create and configure the FastAPI application
+    
+    Args:
+        config: Server configuration object
+        
+    Returns:
+        Configured FastAPI application instance
+    """
     app = FastAPI(
-        title="LLM代码工具服务",
-        description="兼容OpenAI API的大模型代码工具调用服务",
+        title="LLM Code Tool Service",
+        description="Large language model code tool calling service compatible with OpenAI API",
         version="1.0.0"
     )
     
-    # 添加CORS中间件
+    # Add CORS middleware to allow cross-origin requests
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -38,26 +46,31 @@ def create_app(config: ServerConfig):
         allow_headers=["*"],
     )
     
-    # 初始化模型服务
+    # Initialize the model service
     model_service = ModelService(config.llm_config, config.tool_config)
     
-    # 存储服务到应用状态
+    # Store service in application state
     app.state.model_service = model_service
     
     @app.on_event("startup")
     async def startup_event():
-        """启动时加载模型"""
+        """Load model when application starts"""
         app.state.model_service.load_model()
-        print(f"模型已加载: {config.llm_config.model_path}")
+        print(f"Model loaded: {config.llm_config.model_path}")
     
     @app.post("/chat/completions")
     async def chat_completions(request: ChatCompletionRequest, req: Request):
-        """兼容OpenAI的聊天完成API端点"""
+        """
+        Chat completion API endpoint compatible with OpenAI
+        
+        Processes chat messages and returns model-generated responses
+        with tool calling capabilities
+        """
         try:
-            # 将Pydantic模型转换为字典
+            # Convert Pydantic model to dictionary
             messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
             
-            # 生成响应
+            # Generate response using the model service
             response = app.state.model_service.generate_response(messages)
             
             return response
@@ -66,26 +79,26 @@ def create_app(config: ServerConfig):
 
     @app.get("/health")
     async def health_check():
-        """健康检查端点"""
+        """Health check endpoint to verify service availability"""
         return {"status": "healthy"}
     
     return app
 
 if __name__ == "__main__":
-    # 从环境变量加载配置
+    # Load configuration from environment variables
     config = ServerConfig(
         llm_config=ModelConfig(
-            model_path=os.environ.get("MODEL_PATH", "yi-34b-chat"),
+            model_path=os.environ.get("MODEL_PATH", "yi-34b-chat"),  # Path to the model
         ),
         tool_config=ToolConfig(
-            tool_server_url=os.environ.get("TOOL_SERVER_URL", "http://localhost:30286/get_observation"),
-            valid_actions=json.loads(os.environ.get("VALID_ACTIONS", '["python"]')),
-            max_turns=int(os.environ.get("MAX_TURNS", "5")),
+            tool_server_url=os.environ.get("TOOL_SERVER_URL", "http://localhost:30150/get_observation"),  # URL for tool server
+            valid_actions=json.loads(os.environ.get("VALID_ACTIONS", '["python"]')),  # List of valid tool actions
+            max_turns=int(os.environ.get("MAX_TURNS", "5")),  # Maximum number of tool interaction turns
         ),
-        host=os.environ.get("HOST", "0.0.0.0"),
-        port=int(os.environ.get("PORT", "8000")),
+        host=os.environ.get("HOST", "0.0.0.0"),  # Host to bind the server
+        port=int(os.environ.get("PORT", "8000")),  # Port to bind the server
     )
     
-    # 创建并运行应用
+    # Create and run the application
     app = create_app(config)
     uvicorn.run(app, host=config.host, port=config.port)
