@@ -18,3 +18,4 @@ class AgentActorConfig:
     no_action_as_stop: bool=True
     min_action_num: int=0
     action_stop_tokens: list=None
+    tool_batch_size: int=16
