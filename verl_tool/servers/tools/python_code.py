@@ -1,16 +1,14 @@
 from .base import BaseTool, register_tool
 import regex as re
 import subprocess
-import sys
-import io
-import concurrent.futures
-from concurrent.futures import ThreadPoolExecutor
-from typing import List
-from tqdm import tqdm
-import signal
 import os
+import signal
+import sys
+from typing import Tuple, Dict, Any, Optional
 from ..utils import kill_python_subprocess_processes
 
+# Timeout for code execution in seconds
+TIMEOUT = 10
 
 def check_forbidden_imports(code: str) -> bool:
     """
@@ -44,102 +42,121 @@ def check_forbidden_imports(code: str) -> bool:
             return True
     
     return False
-
-def _execute_program(query: str, timeout: int = 30) -> str:
+    
+def execute_python(code: str, timeout: int=TIMEOUT, stdin: Optional[str] = None) -> str:
     """
-    Execute a single Python program and return its output with a timeout.
-    This method uses a safer, sandboxed execution environment for security.
+    Execute Python code with a timeout.
     
     Args:
-        query: Python program to execute as a string
-        timeout: Maximum execution time in seconds (default: 30)
-    
+        code: Python code string to execute
+        stdin: Optional input to provide to the executed code
+        
     Returns:
-        String containing both stdout and stderr outputs
+        String containing execution output or error message
     """
     # Check for forbidden imports first
-    if check_forbidden_imports(query):
+    if check_forbidden_imports(code):
         return "Execution blocked: Code contains potentially dangerous operations or imports."
-    result = ""
+    
+    # Create a minimal environment instead of copying everything
+    env = os.environ.copy()
+    
+    # Explicitly set optimization variables
+    env["OPENBLAS_NUM_THREADS"] = "1"
+    
+    if "PYTHONPATH" in env:
+        del env["PYTHONPATH"]
+    
+    command = ["python3", "-c", code]
     
     try:
-        # Create a subprocess with restricted execution environment
-        process = subprocess.Popen(
-            [sys.executable, "-c", query],
+        result = subprocess.run(
+            command,
+            input=stdin if stdin else None,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            env=env,
             text=True,
-            preexec_fn=os.setsid  # This will isolate the subprocess into its own process group for better control
+            timeout=timeout
         )
         
-        # Capture output and errors with timeout
-        try:
-            # Use a timeout mechanism with the signal module to prevent hanging
-            stdout, stderr = process.communicate(timeout=timeout)
-            
-            # Combine the outputs
-            result = stdout
-            if stderr:
-                result += f"\nERROR:\n{stderr}"
-                
-        except subprocess.TimeoutExpired:
-            # Kill the process if it exceeds the timeout using signal for safer termination
-            os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-            stdout, stderr = process.communicate()
-
-            result = f"Execution timed out after {timeout} seconds.\n"
-            if stdout:
-                result += f"Partial stdout:\n{stdout}\n"
-            if stderr:
-                result += f"Partial stderr:\n{stderr}"
-
-    except Exception as e:
-        # Capture any exceptions that might occur during execution
-        result = f"Error executing program: {str(e)}"
-    
+        stdout = result.stdout
+        stderr = result.stderr.strip()
+        
+        result = f"{stdout}\nError:\n{stderr}" if stderr else stdout
+        if result:
+            result = result.strip()
+    except subprocess.TimeoutExpired:
+        result = f"Execution timed out after {timeout} seconds.\n"
     return result
-
 
 @register_tool
 class PythonCodeTool(BaseTool):
     tool_type = "python_code"
-    timeout = 15
+    timeout = TIMEOUT
     
     def get_usage_inst(self):
-        return "You are able to write python code and run it for natural language reasoning using the markdown code block."
+        return "You are able to write and execute Python code"
     
-    def parse_action(self, action: str):
+    def parse_action(self, action: str) -> Tuple[str, bool]:
         """
-        Parse the raw action string (which is the llm response) into a actual action and its contents.
+        Parse the raw action string (which is the llm response) into an actual action and its contents.
         Ensures that the parsed code is valid and safe for execution.
+        
+        Args:
+            action: Raw action string containing Python code
+            
+        Returns:
+            Tuple containing the extracted code and a validity flag
         """
+        # Try to find Python code in various formats
         all_valid_python_code = re.findall(r"<python>(.*?)</python>", action, re.DOTALL)
+        
         if not all_valid_python_code:
             all_valid_python_code = re.findall(r"```python(.*?)```", action, re.DOTALL)
         
+        if not all_valid_python_code:
+            all_valid_python_code = re.findall(r"```(.*?)```", action, re.DOTALL)
+        
         if len(all_valid_python_code) == 0:
-            # Search for markdown code block
-            valid = False
-            action = ""
-        else:
-            valid = True
-            action = all_valid_python_code[0]
-        return action, valid
+            return "", False
+        
+        # Use the first code block found (we could extend this to support multiple blocks)
+        parsed_code = all_valid_python_code[0].strip()
+        
+        return parsed_code, True
     
     def conduct_action(self, trajectory_id, action, extra_field):
+        """
+        Execute the parsed action.
+        
+        Args:
+            trajectory_id: ID for tracking the action
+            action: Raw action string
+            extra_field: Additional parameters
+            
+        Returns:
+            Tuple containing observation, done flag, and validity flag
+        """
         parsed_action, is_valid = self.parse_action(action)
         
         if not is_valid:
-            observation = "No valid python code between <python> and </python> tags found."
-            done = True
-        else:
-            observation = _execute_program(parsed_action, timeout=self.timeout)
-            done = False
+            observation = "No valid Python code found. Please provide code in either <python>...</python> tags or ```python...``` code blocks."
+            return observation, True, False
         
-        if action.endswith("```output"):
-            observation = f"\n{observation}```"
-        else:
-            observation = f"\nHere is the returned execution results of the above python codes:\n"
-            observation += f"<output>{observation}</output>"
+        # Extract stdin if provided in extra_field
+        stdin = extra_field.get("stdin", None) if extra_field else None
         
-        return observation, done, is_valid
+        # Execute the code
+        execution_result = execute_python(parsed_action, self.timeout, stdin)
+        
+        # Format the result
+        if "Execution timed out" in execution_result:
+            observation = execution_result
+        elif "ERROR:" in execution_result:
+            observation = f"Execution completed with errors:\n{execution_result}"
+        else:
+            observation = f"Execution result:\n{execution_result}"
+            
+        return observation, False, True
+        

@@ -9,6 +9,10 @@ class FinishTool(BaseTool):
     tool_type = "finish"
     timeout = 10
     
+    def __init__(self, num_workers=1, other_tools:list = []):
+        super().__init__(num_workers)
+        self.other_tools = other_tools
+    
     def get_usage_inst(self):
         return ""
     
@@ -22,5 +26,10 @@ class FinishTool(BaseTool):
         action, is_valid = self.parse_action(action)
         observation = ""
         done = True
+        # delete the environment
+        for tool in self.other_tools:
+            if tool.has_env(trajectory_id):
+                tool.delete_env(trajectory_id)
+            print(f"Deleted environment for {tool.tool_type} with trajectory_id {trajectory_id}")
         return observation, done, is_valid
     

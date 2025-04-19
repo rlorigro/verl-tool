@@ -69,7 +69,7 @@ class AgentActorManager:
         else:
             n = self.config.n 
             inputs = inputs.repeat(n)
-        inputs.non_tensor_batch['traj_ids'] = np.array([str(uuid.uuid4()) for _ in range(len(inputs.batch))], dtype=object)
+        inputs.non_tensor_batch['traj_ids'] = np.array([str(uuid.uuid4()) for _ in range(len(inputs.batch))], dtype=object) # [bs*n]
         return inputs
         
     def _postprocess_responses(self, responses: torch.Tensor, action_step: int) -> torch.Tensor:
@@ -225,7 +225,7 @@ class AgentActorManager:
         
         turns_stats = torch.zeros(gen_batch.batch['input_ids'].shape[0], dtype=torch.int)
         valid_action_stats = torch.zeros(gen_batch.batch['input_ids'].shape[0], dtype=torch.int)
-        active_mask = torch.ones(gen_batch.batch['input_ids'].shape[0], dtype=torch.bool)
+        active_mask = torch.ones(gen_batch.batch['input_ids'].shape[0], dtype=torch.bool) # [bs*n]
         active_num_list = [active_mask.sum().item()]
         rollings = gen_batch
         traj_ids = gen_batch.non_tensor_batch['traj_ids']
@@ -245,23 +245,23 @@ class AgentActorManager:
             rollings.batch = self.tensor_fn.cut_to_effective_len(
                 rollings.batch,
                 keys=['input_ids', 'attention_mask', 'position_ids']
-            )
+            ) # TODO: delete 
             
             rollings_active = DataProto.from_dict({
                 k: v[active_mask] for k, v in rollings.batch.items()
             }, meta_info=ori_meta_info)
             with self.actor_rollout_wg.rollout.update_sampling_params(**agent_sampling_params):
-                gen_output = self.actor_rollout_wg.rollout.generate_sequences(rollings_active)
+                gen_output = self.actor_rollout_wg.rollout.generate_sequences(rollings_active) # [active_size, response_length]
             
             meta_info = gen_output.meta_info            
-            responses_ids, responses_str, do_actions = self._postprocess_responses(gen_output.batch['responses'], step)
-            responses_ids, _ = self.tensor_fn._example_level_pad(responses_ids, responses_str, active_mask)
+            responses_ids, responses_str, do_actions = self._postprocess_responses(gen_output.batch['responses'], step) # [active_size, ...]
+            responses_ids, _ = self.tensor_fn._example_level_pad(responses_ids, responses_str, active_mask) # [bs*n, response_length]
             print(f"Number of active trajectories: {active_mask.sum().item()}")
             print(f"Length of responses: {responses_ids.shape[1]}")
 
             # Execute in environment and process observations
             active_uids = [traj_ids[i] for i in range(len(traj_ids)) if active_mask[i]]
-            next_obs, dones, valid_action = self.interact_with_tool_server(active_uids, responses_str, do_actions, active_mask)
+            next_obs, dones, valid_action = self.interact_with_tool_server(active_uids, responses_str, do_actions, active_mask) # [active_size,]
             
             curr_active_mask = torch.tensor([not done for done in dones], dtype=torch.bool)
             active_mask = active_mask * curr_active_mask
@@ -269,7 +269,7 @@ class AgentActorManager:
             turns_stats[curr_active_mask] += 1
             valid_action_stats += torch.tensor(valid_action, dtype=torch.int)
 
-            next_obs_ids = self._process_next_obs(next_obs)
+            next_obs_ids = self._process_next_obs(next_obs) # [active_size, obs_length]
             
             # Update states
             rollings = self._update_rolling_state(
@@ -346,7 +346,7 @@ class AgentActorManager:
                             meta_info: Dict) -> Tuple[Dict, Dict]:
         """Compose final generation output."""
         final_output = right_side.copy()
-        final_output['prompts'] = left_side['input_ids']
+        final_output['prompts'] = left_side['input_ids'] # [bs*n, prompt_length]
         
         # padding responses length to max_response_length
         if final_output['responses'].shape[1] < self.config.max_response_length:
@@ -354,7 +354,7 @@ class AgentActorManager:
                 final_output['responses'],
                 max_length=self.config.max_response_length,
                 padding_side='right'
-            )
+            ) # [bs*n, max_response_length]
         
         # padding response_with_info_mask length to max_response_length 
         if final_output['responses_with_info_mask'].shape[1] < self.config.max_response_length:
@@ -362,36 +362,117 @@ class AgentActorManager:
                 final_output['responses_with_info_mask'],
                 max_length=self.config.max_response_length,
                 padding_side='right'
-            )
+            ) # [bs*n, max_response_length]
         
         # Combine input IDs
         final_output['input_ids'] = torch.cat([
             left_side['input_ids'],
             final_output['responses']
-        ], dim=1)
+        ], dim=1) # [bs*n, prompt_length + max_response_length]
         
         # Create attention mask 
         final_output['attention_mask'] = torch.cat([
             self.tensor_fn.create_attention_mask(left_side['input_ids']),
             self.tensor_fn.create_attention_mask(final_output['responses'])
-        ], dim=1)
+        ], dim=1) # [bs*n, prompt_length + max_response_length]
         
         # Create observation mask 
         final_output['info_mask'] = torch.cat([
             self.tensor_fn.create_attention_mask(left_side['input_ids']),
             self.tensor_fn.create_attention_mask(final_output['responses_with_info_mask'])
-        ], dim=1)
+        ], dim=1) # [bs*n, prompt_length + max_response_length]
         
         # Create position ids
         final_output['position_ids'] = self.tensor_fn.create_position_ids(
             final_output['attention_mask']
-        )
+        ) # [bs*n, prompt_length + max_response_length]
         
         final_output = DataProto.from_dict(final_output, non_tensors=non_tensors)
         final_output.meta_info.update(meta_info)
         
         return final_output
+    
+    # def dummy_tool(self, trajectory_id, action, finish):
+    #     """
+    #     Dummy tool for testing purposes.
+    #     """
+    #     if finish:
+    #         observation = ""
+    #         done = True
+    #         is_valid = False
+    #     parsed_action, is_valid = parse_action(action)
+    #     if not is_valid:
+    #         observation = "No valid action found."
+    #         done = False
+    #         is_valid = False
+    #         return observation, done, is_valid
+        
+    #     result = execute_python_in_firejail(parsed_action)
+    #     done = False
+    #     is_valid = True
+    #     return result, done, is_valid
 
+    # def interact_with_tool_server(self, active_uids:List[str], responses: List[str], do_actions:List[bool], active_mask=None) -> List[str]:
+    #     """
+    #     Call tool server for queries.
+    #     Args:
+    #         batch: batch of data
+    #         resposnes: responses from the model
+    #         pad_token: pad token
+    #         active_mask: active mask
+    #     Returns:
+    #         observations: observations from the tool server. None if the the query do not need to do any action.
+    #         dones: dones
+    #         valid_actions: valid actions
+    #     """
+    #     finishs = [not do_action for do_action in do_actions]
+    #     print(f" - Number of non-finished actions: {len([x for x in do_actions if not x])} / {len(do_actions)}")
+        
+    #     from concurrent.futures import ThreadPoolExecutor
+    #     with ThreadPoolExecutor(max_workers=32) as executor:
+    #         results = list(tqdm(executor.map(self.dummy_tool, active_uids, responses, finishs), total=len(active_uids)))
+    #     active_observations = [result[0] for result in results]
+    #     active_dones = [result[1] for result in results]
+    #     active_valid_actions = [result[2] for result in results]
+        
+    #     print("Received observations from tool server. Samples:", len(active_observations))
+    #     print(f" - Number of valid actions (exclusing finish action): {len([x for x in active_valid_actions if x])} / {len(active_valid_actions)}")
+    #     print(f" - Number of dones: {len([x for x in active_dones if x])} / {len(active_dones)}")
+    #     print("Example observations:")
+    #     non_empty_observations = [obs for obs in active_observations if obs]
+    #     if len(non_empty_observations) > 0:
+    #         print(f"{non_empty_observations[0]}")
+    #     else:
+    #         print("No non-empty observations.")
+        
+    #     next_obs, dones, valid_action = [], [], []
+    #     for i, active in enumerate(active_mask):
+    #         if active:
+    #             next_obs.append(active_observations.pop(0))
+    #             dones.append(active_dones.pop(0))
+    #             valid_action.append(active_valid_actions.pop(0))
+    #         else:
+    #             next_obs.append('')
+    #             dones.append(1)
+    #             valid_action.append(0)
+        
+    #     assert len(active_observations) == 0
+    #     return next_obs, dones, valid_action
+    
+    def send_batch_requests(self, batch_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Send batch requests to the tool server.
+        Args:
+            batch_data: Batch data to send
+        Returns:
+            response: Response from the tool server
+        """
+        response = requests.post(self.config.tool_server_url, json=batch_data)
+        if response.status_code != 200:
+            print(f"Error: {response.status_code}, {response.text}")
+            raise ValueError(f"Error: {response.status_code}, {response.text}")
+        return response.json()
+    
     def interact_with_tool_server(self, active_uids:List[str], responses: List[str], do_actions:List[bool], active_mask=None) -> List[str]:
         """
         Call tool server for queries.
@@ -405,18 +486,47 @@ class AgentActorManager:
             dones: dones
             valid_actions: valid actions
         """
-        assert len(active_uids) == len(responses) == len(do_actions), f"Length mismatch: {len(active_uids)}, {len(responses)}, {len(do_actions)}"
-        data = {
-            "trajectory_ids": active_uids,
-            "actions": responses,
-            "finish": [not do_action for do_action in do_actions], # if do_action is False, then it is a finish action, finishing the trajectory,
-        }
-        print(f"Sending request to {self.config.tool_server_url}")
+        finishs = [not do_action for do_action in do_actions]
+        batch_size = self.config.tool_batch_size
+        active_observations = []
+        active_dones = []
+        active_valid_actions = []
         print(f" - Number of non-finished actions: {len([x for x in do_actions if not x])} / {len(do_actions)}")
-        response = requests.post(self.config.tool_server_url, json=data)
-        active_observations = response.json()['observations']
-        active_dones = [int(x) for x in response.json()['dones']]
-        active_valid_actions = [int(x) for x in response.json()['valids']]
+        assert len(active_uids) == len(responses) == len(do_actions), f"Length mismatch: {len(active_uids)}, {len(responses)}, {len(do_actions)}"
+        
+        all_batch_data = [
+            {
+                "trajectory_ids": active_uids[i:i + batch_size],
+                "actions": responses[i:i + batch_size],
+                "finish": finishs[i:i + batch_size], # if do_action is False, then it is a finish action, finishing the trajectory,
+            }
+            for i in range(0, len(active_uids), batch_size)
+        ]
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=32) as executor:
+            results = list(tqdm(executor.map(self.send_batch_requests, all_batch_data), total=len(all_batch_data)), desc="Sending batch requests to tool server")
+        for result in results:
+            active_observations.extend(result['observations'])
+            active_dones.extend([int(x) for x in result['dones']])
+            active_valid_actions.extend([int(x) for x in result['valids']])
+        
+        # with tqdm(total=len(active_uids), desc="Sending batch requests to tool server") as pbar:
+        #     for i in range(0, len(active_uids), batch_size):
+        #         batch_data = {
+        #             "trajectory_ids": active_uids[i:i + batch_size],
+        #             "actions": responses[i:i + batch_size],
+        #             "finish": finishs[i:i + batch_size], # if do_action is False, then it is a finish action, finishing the trajectory,
+        #         }
+        #         response = requests.post(self.config.tool_server_url, json=batch_data)
+        #         if response.status_code != 200:
+        #             print(f"Error: {response.status_code}, {response.text}")
+        #             raise ValueError(f"Error: {response.status_code}, {response.text}")
+        #         response = response.json()
+        #         active_observations.extend(response['observations'])
+        #         active_dones.extend([int(x) for x in response['dones']])
+        #         active_valid_actions.extend([int(x) for x in response['valids']])
+        #         pbar.update(len(batch_data['trajectory_ids']))           
+                 
         print("Received observations from tool server. Samples:", len(active_observations))
         print(f" - Number of valid actions (exclusing finish action): {len([x for x in active_valid_actions if x])} / {len(active_valid_actions)}")
         print(f" - Number of dones: {len([x for x in active_dones if x])} / {len(active_dones)}")
@@ -440,3 +550,148 @@ class AgentActorManager:
         
         assert len(active_observations) == 0
         return next_obs, dones, valid_action
+
+import subprocess
+from typing import Optional
+# Timeout for code execution in seconds
+TIMEOUT = 10
+
+def check_forbidden_imports(code: str) -> bool:
+    """
+    Checks if the code contains imports of potentially dangerous packages.
+    
+    Args:
+        code: Python code string to analyze
+        
+    Returns:
+        Boolean indicating if the code contains forbidden imports
+    """
+    # List of potentially dangerous modules that could affect the host system
+    forbidden_modules = [
+        'subprocess', 'multiprocessing', 'threading',
+        'socket', 'psutil', 'resource', 'ctypes'
+    ]
+    
+    # Simple string-based check for import statements
+    for module in forbidden_modules:
+        if f"import {module}" in code or f"from {module}" in code:
+            return True
+    
+    # Check for os.system, os.popen, and similar dangerous calls
+    dangerous_patterns = [
+        "os.system", "os.popen", "os.spawn", "os.fork", 
+        "os.exec", "sys.exit", "os._exit", "os.kill"
+    ]
+    
+    for pattern in dangerous_patterns:
+        if pattern in code:
+            return True
+    
+    return False
+    
+def execute_python_in_firejail(code: str, timeout: int=TIMEOUT, stdin: Optional[str] = None) -> str:
+    """
+    Execute Python code in a Firejail sandbox with a timeout.
+    
+    Args:
+        code: Python code string to execute
+        stdin: Optional input to provide to the executed code
+        
+    Returns:
+        String containing execution output or error message
+    """
+    # Check for forbidden imports first
+    if check_forbidden_imports(code):
+        return "Execution blocked: Code contains potentially dangerous operations or imports."
+    
+    # Create a minimal environment instead of copying everything
+    original_env = os.environ.copy()
+    env = {}
+    
+    # Core system variables
+    essential_vars = [
+        "PATH", "HOME", "USER", "SHELL", 
+        "LANG", "LC_ALL", "LC_CTYPE", "TERM",
+        # Python-specific
+        "PYTHONIOENCODING", "PYTHONUNBUFFERED", "PYTHONHASHSEED", "PYTHONDONTWRITEBYTECODE",
+        # Runtime optimization
+        "MKL_NUM_THREADS", "OMP_NUM_THREADS", "NUMEXPR_NUM_THREADS",
+        # Temp directories
+        "TMPDIR", "TEMP", "TMP",
+        # Display if needed
+        "DISPLAY", "XAUTHORITY"
+    ]
+    
+    # Copy only essential variables if they exist
+    for var in essential_vars:
+        if var in original_env:
+            env[var] = original_env[var]
+    
+    # Explicitly set optimization variables
+    env["OPENBLAS_NUM_THREADS"] = "1"
+    
+    if "PYTHONPATH" in env:
+        del env["PYTHONPATH"]
+    
+    # Build the firejail command with resource limits
+    command = [
+        "firejail",
+        "--private",
+        "--quiet",
+        "--seccomp=socket",
+        "--profile=pip",
+        "--rlimit-nproc=32",
+        "--rlimit-nofile=32",
+        "--rlimit-fsize=2m",  # Limit file size
+        "--rlimit-as=4096m",
+    ]
+    command.extend(["python3", "-c", code])
+    
+    try:
+        result = subprocess.run(
+            command,
+            input=stdin if stdin else None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+            text=True,
+            timeout=timeout
+        )
+        
+        stdout = result.stdout
+        stderr = result.stderr.strip()
+        
+        result = f"{stdout}\nError:\n{stderr}" if stderr else stdout
+        if result:
+            result = result.strip()
+    except subprocess.TimeoutExpired:
+        result = f"Execution timed out after {timeout} seconds.\n"
+    return result
+
+def parse_action(action: str) -> Tuple[str, bool]:
+        """
+        Parse the raw action string (which is the llm response) into an actual action and its contents.
+        Ensures that the parsed code is valid and safe for execution.
+        
+        Args:
+            action: Raw action string containing Python code
+            
+        Returns:
+            Tuple containing the extracted code and a validity flag
+        """
+        # Try to find Python code in various formats
+        all_valid_python_code = re.findall(r"<python>(.*?)</python>", action, re.DOTALL)
+        
+        if not all_valid_python_code:
+            all_valid_python_code = re.findall(r"```python(.*?)```", action, re.DOTALL)
+        
+        if not all_valid_python_code:
+            all_valid_python_code = re.findall(r"```(.*?)```", action, re.DOTALL)
+        
+        if len(all_valid_python_code) == 0:
+            return "", False
+        
+        # Use the first code block found (we could extend this to support multiple blocks)
+        parsed_code = all_valid_python_code[0].strip()
+        
+        return parsed_code, True
