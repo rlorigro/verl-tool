@@ -246,7 +246,7 @@ class AgentActorManager:
         elif self.config.truncate_response_side == 'right':
             return {'responses': responses[:, -max_len:], 'responses_with_info_mask': responses_with_info_mask[:, -max_len:]}
         else:
-            raise ValueError(f"Invalid truncate_response_side: {self.config.truncate_response_side}")
+            raise ValueError(f"Invalid truncate_response_side: {self.config.truncate_response_side}. Allowed options are 'left' or 'right'.")
         
 
     def run_llm_loop(self, gen_batch: DataProto) -> Tuple[Dict, Dict]:
