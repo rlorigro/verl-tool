@@ -182,10 +182,6 @@ class AceCoderRewardManager:
             os.remove(temp_file)
         except:
             pass
-        try:
-            os.remove(output_file)
-        except:
-            pass
         
         
         # debugging only: save random 100 samples into a sample file
