@@ -392,87 +392,26 @@ class AgentActorManager:
         
         return final_output
     
-    def dummy_tool(self, trajectory_id, action, finish):
-        """
-        Dummy tool for testing purposes.
-        """
-        if finish:
-            observation = ""
-            done = True
-            is_valid = False
-        parsed_action, is_valid = parse_action(action)
-        if not is_valid:
-            observation = "No valid action found."
-            done = False
-            is_valid = False
-            return observation, done, is_valid
+    # def dummy_tool(self, trajectory_id, action, finish):
+    #     """
+    #     Dummy tool for testing purposes.
+    #     """
+    #     if finish:
+    #         observation = ""
+    #         done = True
+    #         is_valid = False
+    #     parsed_action, is_valid = parse_action(action)
+    #     if not is_valid:
+    #         observation = "No valid action found."
+    #         done = False
+    #         is_valid = False
+    #         return observation, done, is_valid
         
-        result = execute_python_in_firejail(parsed_action)
-        done = False
-        is_valid = True
-        return result, done, is_valid
+    #     result = execute_python_in_firejail(parsed_action)
+    #     done = False
+    #     is_valid = True
+    #     return result, done, is_valid
 
-    def interact_with_tool_server(self, active_uids:List[str], responses: List[str], do_actions:List[bool], active_mask=None) -> List[str]:
-        """
-        Call tool server for queries.
-        Args:
-            batch: batch of data
-            resposnes: responses from the model
-            pad_token: pad token
-            active_mask: active mask
-        Returns:
-            observations: observations from the tool server. None if the the query do not need to do any action.
-            dones: dones
-            valid_actions: valid actions
-        """
-        finishs = [not do_action for do_action in do_actions]
-        print(f" - Number of non-finished actions: {len([x for x in do_actions if not x])} / {len(do_actions)}")
-        
-        from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=32) as executor:
-            results = list(tqdm(executor.map(self.dummy_tool, active_uids, responses, finishs), total=len(active_uids)))
-        active_observations = [result[0] for result in results]
-        active_dones = [result[1] for result in results]
-        active_valid_actions = [result[2] for result in results]
-        
-        print("Received observations from tool server. Samples:", len(active_observations))
-        print(f" - Number of valid actions (exclusing finish action): {len([x for x in active_valid_actions if x])} / {len(active_valid_actions)}")
-        print(f" - Number of dones: {len([x for x in active_dones if x])} / {len(active_dones)}")
-        print("Example observations:")
-        non_empty_observations = [obs for obs in active_observations if obs]
-        if len(non_empty_observations) > 0:
-            print(f"{non_empty_observations[0]}")
-        else:
-            print("No non-empty observations.")
-        
-        next_obs, dones, valid_action = [], [], []
-        for i, active in enumerate(active_mask):
-            if active:
-                next_obs.append(active_observations.pop(0))
-                dones.append(active_dones.pop(0))
-                valid_action.append(active_valid_actions.pop(0))
-            else:
-                next_obs.append('')
-                dones.append(1)
-                valid_action.append(0)
-        
-        assert len(active_observations) == 0
-        return next_obs, dones, valid_action
-    
-    # def send_batch_requests(self, batch_data: Dict[str, Any]) -> Dict[str, Any]:
-    #     """
-    #     Send batch requests to the tool server.
-    #     Args:
-    #         batch_data: Batch data to send
-    #     Returns:
-    #         response: Response from the tool server
-    #     """
-    #     response = requests.post(self.config.tool_server_url, json=batch_data)
-    #     if response.status_code != 200:
-    #         print(f"Error: {response.status_code}, {response.text}")
-    #         raise ValueError(f"Error: {response.status_code}, {response.text}")
-    #     return response.json()
-    
     # def interact_with_tool_server(self, active_uids:List[str], responses: List[str], do_actions:List[bool], active_mask=None) -> List[str]:
     #     """
     #     Call tool server for queries.
@@ -487,46 +426,15 @@ class AgentActorManager:
     #         valid_actions: valid actions
     #     """
     #     finishs = [not do_action for do_action in do_actions]
-    #     batch_size = 4
-    #     active_observations = []
-    #     active_dones = []
-    #     active_valid_actions = []
     #     print(f" - Number of non-finished actions: {len([x for x in do_actions if not x])} / {len(do_actions)}")
-    #     assert len(active_uids) == len(responses) == len(do_actions), f"Length mismatch: {len(active_uids)}, {len(responses)}, {len(do_actions)}"
         
-    #     all_batch_data = [
-    #         {
-    #             "trajectory_ids": active_uids[i:i + batch_size],
-    #             "actions": responses[i:i + batch_size],
-    #             "finish": finishs[i:i + batch_size], # if do_action is False, then it is a finish action, finishing the trajectory,
-    #         }
-    #         for i in range(0, len(active_uids), batch_size)
-    #     ]
     #     from concurrent.futures import ThreadPoolExecutor
     #     with ThreadPoolExecutor(max_workers=32) as executor:
-    #         results = list(tqdm(executor.map(self.send_batch_requests, all_batch_data), total=len(all_batch_data)), desc="Sending batch requests to tool server")
-    #     for result in results:
-    #         active_observations.extend(result['observations'])
-    #         active_dones.extend([int(x) for x in result['dones']])
-    #         active_valid_actions.extend([int(x) for x in result['valids']])
+    #         results = list(tqdm(executor.map(self.dummy_tool, active_uids, responses, finishs), total=len(active_uids)))
+    #     active_observations = [result[0] for result in results]
+    #     active_dones = [result[1] for result in results]
+    #     active_valid_actions = [result[2] for result in results]
         
-    #     # with tqdm(total=len(active_uids), desc="Sending batch requests to tool server") as pbar:
-    #     #     for i in range(0, len(active_uids), batch_size):
-    #     #         batch_data = {
-    #     #             "trajectory_ids": active_uids[i:i + batch_size],
-    #     #             "actions": responses[i:i + batch_size],
-    #     #             "finish": finishs[i:i + batch_size], # if do_action is False, then it is a finish action, finishing the trajectory,
-    #     #         }
-    #     #         response = requests.post(self.config.tool_server_url, json=batch_data)
-    #     #         if response.status_code != 200:
-    #     #             print(f"Error: {response.status_code}, {response.text}")
-    #     #             raise ValueError(f"Error: {response.status_code}, {response.text}")
-    #     #         response = response.json()
-    #     #         active_observations.extend(response['observations'])
-    #     #         active_dones.extend([int(x) for x in response['dones']])
-    #     #         active_valid_actions.extend([int(x) for x in response['valids']])
-    #     #         pbar.update(len(batch_data['trajectory_ids']))           
-                 
     #     print("Received observations from tool server. Samples:", len(active_observations))
     #     print(f" - Number of valid actions (exclusing finish action): {len([x for x in active_valid_actions if x])} / {len(active_valid_actions)}")
     #     print(f" - Number of dones: {len([x for x in active_dones if x])} / {len(active_dones)}")
@@ -550,6 +458,98 @@ class AgentActorManager:
         
     #     assert len(active_observations) == 0
     #     return next_obs, dones, valid_action
+    
+    def send_batch_requests(self, batch_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Send batch requests to the tool server.
+        Args:
+            batch_data: Batch data to send
+        Returns:
+            response: Response from the tool server
+        """
+        response = requests.post(self.config.tool_server_url, json=batch_data)
+        if response.status_code != 200:
+            print(f"Error: {response.status_code}, {response.text}")
+            raise ValueError(f"Error: {response.status_code}, {response.text}")
+        return response.json()
+    
+    def interact_with_tool_server(self, active_uids:List[str], responses: List[str], do_actions:List[bool], active_mask=None) -> List[str]:
+        """
+        Call tool server for queries.
+        Args:
+            batch: batch of data
+            resposnes: responses from the model
+            pad_token: pad token
+            active_mask: active mask
+        Returns:
+            observations: observations from the tool server. None if the the query do not need to do any action.
+            dones: dones
+            valid_actions: valid actions
+        """
+        finishs = [not do_action for do_action in do_actions]
+        batch_size = self.config.tool_batch_size
+        active_observations = []
+        active_dones = []
+        active_valid_actions = []
+        print(f" - Number of non-finished actions: {len([x for x in do_actions if not x])} / {len(do_actions)}")
+        assert len(active_uids) == len(responses) == len(do_actions), f"Length mismatch: {len(active_uids)}, {len(responses)}, {len(do_actions)}"
+        
+        all_batch_data = [
+            {
+                "trajectory_ids": active_uids[i:i + batch_size],
+                "actions": responses[i:i + batch_size],
+                "finish": finishs[i:i + batch_size], # if do_action is False, then it is a finish action, finishing the trajectory,
+            }
+            for i in range(0, len(active_uids), batch_size)
+        ]
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=32) as executor:
+            results = list(tqdm(executor.map(self.send_batch_requests, all_batch_data), total=len(all_batch_data)), desc="Sending batch requests to tool server")
+        for result in results:
+            active_observations.extend(result['observations'])
+            active_dones.extend([int(x) for x in result['dones']])
+            active_valid_actions.extend([int(x) for x in result['valids']])
+        
+        # with tqdm(total=len(active_uids), desc="Sending batch requests to tool server") as pbar:
+        #     for i in range(0, len(active_uids), batch_size):
+        #         batch_data = {
+        #             "trajectory_ids": active_uids[i:i + batch_size],
+        #             "actions": responses[i:i + batch_size],
+        #             "finish": finishs[i:i + batch_size], # if do_action is False, then it is a finish action, finishing the trajectory,
+        #         }
+        #         response = requests.post(self.config.tool_server_url, json=batch_data)
+        #         if response.status_code != 200:
+        #             print(f"Error: {response.status_code}, {response.text}")
+        #             raise ValueError(f"Error: {response.status_code}, {response.text}")
+        #         response = response.json()
+        #         active_observations.extend(response['observations'])
+        #         active_dones.extend([int(x) for x in response['dones']])
+        #         active_valid_actions.extend([int(x) for x in response['valids']])
+        #         pbar.update(len(batch_data['trajectory_ids']))           
+                 
+        print("Received observations from tool server. Samples:", len(active_observations))
+        print(f" - Number of valid actions (exclusing finish action): {len([x for x in active_valid_actions if x])} / {len(active_valid_actions)}")
+        print(f" - Number of dones: {len([x for x in active_dones if x])} / {len(active_dones)}")
+        print("Example observations:")
+        non_empty_observations = [obs for obs in active_observations if obs]
+        if len(non_empty_observations) > 0:
+            print(f"{non_empty_observations[0]}")
+        else:
+            print("No non-empty observations.")
+        
+        next_obs, dones, valid_action = [], [], []
+        for i, active in enumerate(active_mask):
+            if active:
+                next_obs.append(active_observations.pop(0))
+                dones.append(active_dones.pop(0))
+                valid_action.append(active_valid_actions.pop(0))
+            else:
+                next_obs.append('')
+                dones.append(1)
+                valid_action.append(0)
+        
+        assert len(active_observations) == 0
+        return next_obs, dones, valid_action
 
 import subprocess
 from typing import Optional
