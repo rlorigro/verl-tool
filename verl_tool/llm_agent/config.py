@@ -14,7 +14,7 @@ class AgentActorConfig:
     tool_server_url: str = None
     n: int=1
     truncate_obs_side: str='left'
-    truncate_response_side: str='right'
+    truncate_response_side: str='left'
     agent_records_dir: str=None
     valid_actions: list=None
     no_action_as_stop: bool=True
