@@ -4,9 +4,9 @@ val_data=[data/math_torl/test.parquet,\
 data/math_torl/math500_test.parquet,\
 data/math_torl/aime24_test.parquet,\
 data/math_torl/aime25_test.parquet]
-model_name=Qwen/Qwen2.5-Math-7B
+model_name=Qwen/Qwen2.5-Math-1.5B
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
-n_gpus_per_node=8
+n_gpus_per_node=4
 n_nodes=1
 n=16
 batch_size=128
@@ -27,8 +27,13 @@ lr=1e-6
 reward_manager=torl
 ppo_micro_batch_size_per_gpu=1
 log_prob_micro_batch_size_per_gpu=2
+tensor_model_parallel_size=2
+gpu_memory_utilization=0.4 # higher gpu_memory_utilization will likely cause the vllm to OOM and get stuck, so set it to a lower value like 0.4 or 0.5
+do_offload=True # control actor's fsdp.[param|optimizer]_offload and actor_rollout_ref.rollout.fsdp.[param|optimizer]_offload; if gpu_memory_utilization is set to > 0.6, then do_offload should be set to True otherwise it will cause OOM
+use_dynamic_bsz=True # faster
 
-model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
+model_pretty_name=$(echo $model_name | trzqq
+ '/' '_' | tr '[:upper:]' '[:lower:]')
 run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}-$(date +%Y%m%d-%H%M%S)"
 export VERL_RUN_ID=$run_name
 
@@ -40,12 +45,11 @@ echo "action_stop_tokens_file=$action_stop_tokens_file"
 host=0.0.0.0
 port=$(shuf -i 30000-31000 -n 1)
 tool_server_url=http://$host:$port/get_observation
-python -m verl_tool.servers.serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 32 &
+python -m verl_tool.servers.serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 32 2>&1 > /dev/null &
 server_pid=$!
 echo "Server (pid=$server_pid) started at $tool_server_url"
 
-# actor_rollout_ref.rollout.enforce_eager=False \
-# actor_rollout_ref.rollout.free_cache_engine=False \
+
 
 # export VLLM_USE_V1=1
 PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
@@ -53,20 +57,26 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     data.train_files=$train_data \
     data.val_files=$val_data \
     data.train_batch_size=$batch_size \
+    data.val_batch_size=$batch_size \
     data.max_prompt_length=$max_prompt_length \
     data.max_response_length=$max_response_length \
     data.truncation='right' \
     reward_model.reward_manager=$reward_manager \
     actor_rollout_ref.model.path=$model_name \
+    actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.actor.optim.lr=$lr \
+    actor_rollout_ref.model.use_remove_padding=True \
+    actor_rollout_ref.actor.checkpoint.contents=['model','optimizer','extra','hf_model'] \
     actor_rollout_ref.actor.ppo_mini_batch_size=$ppo_mini_batch_size \
     actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=$ppo_micro_batch_size_per_gpu \
-    actor_rollout_ref.actor.use_dynamic_bsz=False \
+    actor_rollout_ref.actor.use_dynamic_bsz=$use_dynamic_bsz \
     actor_rollout_ref.actor.use_kl_loss=True \
     actor_rollout_ref.actor.strategy=$strategy \
     actor_rollout_ref.actor.kl_loss_coef=$kl_loss_coef \
     actor_rollout_ref.actor.kl_loss_type=$kl_loss_type \
     actor_rollout_ref.actor.entropy_coeff=$entropy_coeff \
+    actor_rollout_ref.actor.fsdp_config.param_offload=$do_offload \
+    actor_rollout_ref.actor.fsdp_config.optimizer_offload=$do_offload \
     +actor_rollout_ref.agent.tool_server_url=$tool_server_url \
     +actor_rollout_ref.agent.max_prompt_length=$max_prompt_length \
     +actor_rollout_ref.agent.max_response_length=$max_response_length \
@@ -75,14 +85,20 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     +actor_rollout_ref.agent.max_turns=$max_turns \
     +actor_rollout_ref.agent.num_gpus=$n_gpus_per_node \
     +actor_rollout_ref.agent.action_stop_tokens=$action_stop_tokens_file \
+    actor_rollout_ref.rollout.enforce_eager=False \
+    actor_rollout_ref.rollout.free_cache_engine=False \
+    actor_rollout_ref.rollout.tensor_model_parallel_size=$tensor_model_parallel_size \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=$log_prob_micro_batch_size_per_gpu \
-    actor_rollout_ref.rollout.tensor_model_parallel_size=2 \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
+    actor_rollout_ref.rollout.name=vllm \
+    actor_rollout_ref.rollout.gpu_memory_utilization=$gpu_memory_utilization \
     actor_rollout_ref.rollout.temperature=$temperature \
+    actor_rollout_ref.rollout.top_p=$top_p \
     actor_rollout_ref.rollout.top_k=-1 \
     actor_rollout_ref.rollout.n=$n \
-    actor_rollout_ref.rollout.top_p=$top_p \
-    actor_rollout_ref.ref.log_prob_use_dynamic_bsz=False \
+    actor_rollout_ref.rollout.log_prob_use_dynamic_bsz=$use_dynamic_bsz \
+    actor_rollout_ref.rollout.max_num_seqs=1024 \
+    actor_rollout_ref.ref.log_prob_use_dynamic_bsz=$use_dynamic_bsz \
+    actor_rollout_ref.ref.fsdp_config.param_offload=$do_offload \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=$log_prob_micro_batch_size_per_gpu \
     critic.optim.lr=1e-5 \
     critic.strategy=$strategy \
@@ -92,7 +108,7 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     trainer.logger=['console','wandb'] \
     trainer.project_name='torl' \
     trainer.experiment_name=$run_name \
-    trainer.val_before_train=False \
+    trainer.val_before_train=True \
     trainer.default_hdfs_dir=null \
     trainer.n_gpus_per_node=$n_gpus_per_node \
     trainer.nnodes=$n_nodes \

@@ -3,9 +3,7 @@
 ## Preparation Steps
 ### Requirements
 ```python
-git clone https://github.com/TIGER-AI-Lab/AceCoder.git
-pip install ./AceCoder
-pip install "evalplus[vllm]" --upgrade
+uv pip install git+https://github.com/TIGER-AI-Lab/AceCoder.git@dev
 ```
 ### 1. Dataset Preparation
 Download and process the dataset using the following command:

@@ -257,7 +257,7 @@ class AceCoderRewardManager:
 
         if return_dict: 
             return {
-                "rewad_tensor": reward_tensor,
+                "reward_tensor": reward_tensor,
                 "reward_extra_info": reward_extra_info,
             }
         else:
