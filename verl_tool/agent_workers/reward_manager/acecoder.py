@@ -32,8 +32,6 @@ import subprocess
 import time
 from pathlib import Path
 
-import wandb
-
 def hash_string(s):
     return hashlib.sha256(s.encode()).hexdigest()
 
@@ -95,8 +93,7 @@ class AceCoderRewardManager:
     The Reward Manager used in https://github.com/TIGER-AI-Lab/AceCoder
     """
 
-    def __init__(self, tokenizer, num_examine, compute_score=None, config=None) -> None:
-        self.rm_config = config
+    def __init__(self, tokenizer, num_examine, compute_score=None) -> None:
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
         self.compute_score = compute_score or _default_compute_score
@@ -156,8 +153,7 @@ class AceCoderRewardManager:
                 'output': answer,
                 'original_response': response,
                 'tests': list(test_case),
-                '_identifier': f"{question_hash}_{i}",
-                "number_of_tool_calls": tool_call_counts[i],
+                '_identifier': f"{question_hash}_{i}"
             }
             for i, (question_hash, question, answer, test_case, response) in enumerate(zip(question_hashes, prompt_str, extracted_answers, ground_truth, response_str))
         ]
@@ -183,13 +179,7 @@ class AceCoderRewardManager:
         
         # remove the temp_file and output_file after finish code pass rate computation and result extraction
         try:
-            # os.remove(temp_file)
-            pass
-        except:
-            pass
-        try:
-            os.remove(output_file)
-            # pass
+            os.remove(temp_file)
         except:
             pass
         
