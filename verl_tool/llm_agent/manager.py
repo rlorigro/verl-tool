@@ -504,7 +504,7 @@ class AgentActorManager:
         ]
         from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=32) as executor:
-            results = list(tqdm(executor.map(self.send_batch_requests, all_batch_data), total=len(all_batch_data)), desc="Sending batch requests to tool server")
+            results = list(tqdm(executor.map(self.send_batch_requests, all_batch_data), total=len(all_batch_data), desc="Sending batch requests to tool server"))
         for result in results:
             active_observations.extend(result['observations'])
             active_dones.extend([int(x) for x in result['dones']])
