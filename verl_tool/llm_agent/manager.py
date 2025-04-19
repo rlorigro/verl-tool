@@ -5,6 +5,8 @@ import uuid
 import json
 import numpy as np
 import requests
+import sys
+import pickle
 from collections import defaultdict
 from typing import List, Dict, Any, Tuple
 from dataclasses import dataclass
@@ -18,8 +20,6 @@ from .config import AgentActorConfig
 from .tensor_helper import TensorHelper, TensorConfig
 
 def make_json_serializable(obj):
-    print(type(obj))
-    print("")
     if isinstance(obj, np.ndarray):
         obj = obj.tolist()
     if isinstance(obj, dict):
@@ -108,9 +108,7 @@ class AgentActorManager:
         responses = self._batch_tokenize(responses_str).to(torch.int64)
         # apply self.config.max_action_length
         if self.config.max_action_length > 0:
-            for i in range(len(responses)):
-                if responses[i].shape[1] > self.config.max_action_length:
-                    responses[i] = responses[i][:, :self.config.max_action_length]
+            responses = responses[:, :self.config.max_action_length]
 
         return responses, responses_str, do_actions
 
@@ -156,7 +154,7 @@ class AgentActorManager:
         max_len = min(self.config.max_prompt_length, effective_len)
 
         if getattr(self.config, "rolling_with_prompt", False):
-            # Added Zhiheng, if rolling_with_prompt is True, then we need to keep the prompt
+            # Added Zhiheng, if rolling_with_prompt is True, then we need to keep the system prompt
             if isinstance(left_side, dict):
                 left_ids = left_side["input_ids"]
             else:
@@ -183,7 +181,7 @@ class AgentActorManager:
                     "attention_mask": final_attention_mask,
                 }
             )
-        else:
+        else: # By default keep the right side
             new_rollings = DataProto.from_dict(
                 {
                     "input_ids": new_input_ids[:, -max_len:],
@@ -370,8 +368,8 @@ class AgentActorManager:
             print(f"Number of active trajectories: {active_mask.sum().item()}")
             print(f"Length of responses: {responses_ids.shape[1]}")
 
-            print("responses_str", responses_str)
-            print("turns_stats_extra",turns_stats_extra)
+            # print("responses_str", responses_str)
+            # print("turns_stats_extra",turns_stats_extra)
             idx = 0
             for i, active in enumerate(active_mask):
                 if active:
@@ -466,20 +464,18 @@ class AgentActorManager:
                 responses_ids,
             )
 
-        # meta_info['turns_stats'] = turns_stats.tolist()
-        # meta_info['active_mask'] = active_mask.tolist()
-        # meta_info['valid_action_stats'] = valid_action_stats.tolist()
         non_tensors = {
             'traj_ids': traj_ids.tolist(),
             'turns_stats': turns_stats.tolist(),
             'valid_action_stats': valid_action_stats.tolist(),
             'active_mask': active_mask.tolist(),
-            'turns_stats_extra': turns_stats_extra,
+            'action_lengths': turns_stats_extra["action_lengths"],
+            'obs_lengths': turns_stats_extra["obs_lengths"],
         }
 
         print("ACTIVE_TRAJ_NUM:", active_num_list)
 
-        results = self._compose_final_output(original_left_side, original_right_side, non_tensors, meta_info)
+        results = self._compose_final_output(original_left_side, original_right_side, non_tensors, ori_meta_info)
         return results
 
     def _compose_final_output(self, left_side: Dict,
@@ -554,9 +550,6 @@ class AgentActorManager:
             "actions": responses,
             "finish": [not do_action for do_action in do_actions], # if do_action is False, then it is a finish action, finishing the trajectory,
         }
-        # print("#"*100)
-        # print("#### extra_fields ####", extra_fields)
-        # TODO Convert to JSON serializable format
         if extra_fields is not None:
             data['extra_fields'] = make_json_serializable(extra_fields)
 
@@ -573,14 +566,6 @@ class AgentActorManager:
         print("Received observations from tool server. Samples:", len(active_observations))
         print(f" - Number of valid actions (exclusing finish action): {len([x for x in active_valid_actions if x])} / {len(active_valid_actions)}")
         print(f" - Number of dones: {len([x for x in active_dones if x])} / {len(active_dones)}")
-        # print("Example observations:")
-        # non_empty_observations = [obs for obs in active_observations if obs]
-        # if len(non_empty_observations) > 0:
-        #     print(f"{non_empty_observations[0]}")
-        # else:
-        #     print("No non-empty observations.")
-        # print("#"*100)
-        # exit(1)
 
         next_obs, dones, valid_action = [], [], []
         for i, active in enumerate(active_mask):
