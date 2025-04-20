@@ -19,4 +19,4 @@ class AgentActorConfig:
     min_action_num: int=0
     action_stop_tokens: list=None
     tool_batch_size: int=32
-    tool_num_proc: int=2
+    tool_num_proc: int=4
