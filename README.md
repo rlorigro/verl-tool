@@ -8,7 +8,7 @@ uv sync
 git submodule update --init --recursive
 source .venv/bin/activate
 uv pip install -e verl[vllm]
-uv pip install vllm==0.8.1 # we found some memory leaking bugs for vllm==0.8.2, so choose to use 0.8.1 instead
+uv pip install vllm==0.8.3 # we found some memory leaking bugs for vllm==0.8.2, so choose to use 0.8.3 instead
 uv pip install flash-attn --no-build-isolation
 ```
 

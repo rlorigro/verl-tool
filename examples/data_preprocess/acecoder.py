@@ -20,7 +20,12 @@ import datasets
 from pathlib import Path
 
 execution_prompt = """\
-Answer the given coding question. You must conduct reasoning inside <think> and </think> first before you can finally output the final program. During the thinking, you can test your program by writing it inside ```python and ``` tags following with "```output". The code will be executed, and the terminal output (standard output and standard error) will be returned between <output> and </output>. Each program between ```python and ``` tags are independent program. You can test Python codes as many times as you want. If you find no further code execution needed, you can then give the final program in a markdown code block like this: ```python\nyour code here\n``` without appending anything,. The final program will be evaluated against the hidden test cases. If the final program passes all the test cases, you will get a reward. If the final program fails any of the test cases, you will get a penalty.
+Answer the given coding question. You must conduct reasoning about the problem and then provide the final program as answer. 
+During the thinking process, you can write test cases or test your current solutions using a testing tool. if you want to test any python code, writing it inside ```python and ``` tags following with "```output". 
+The code between "```python" and "``````output" will then be executed, and the terminal output (standard output and standard error) will be provided to you. 
+Each program between ```python and ``` tags are independent program. You can test Python codes as many times as you want. 
+If you find no further code execution needed, you can then give your final solution in a markdown code block like this: ```python\nyour code here\n``` without appending anything. 
+The final program will be evaluated against the hidden test cases. If the final program passes all the test cases, you will get a reward. If the final program fails any of the test cases, you will get a penalty.
 """
 
 naive_instruction = "Let's think step by step and generate the final program in a markdown code block like this: ```python\nyour code here\n```."

@@ -141,7 +141,8 @@ class PythonCodeTool(BaseTool):
         parsed_action, is_valid = self.parse_action(action)
         
         if not is_valid:
-            observation = "No valid Python code found. Please provide code in either <python>...</python> tags or ```python...``` code blocks."
+            # observation = "No valid Python code found. Please provide code in either <python>...</python> tags or ```python...``` code blocks."
+            observation = "No valid Python code found. Please provide code in ```python...``` code blocks."
             return observation, True, False
         
         # Extract stdin if provided in extra_field
