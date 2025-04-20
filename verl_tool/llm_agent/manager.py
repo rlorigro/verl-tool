@@ -394,73 +394,73 @@ class AgentActorManager:
         
         return final_output
     
-    # def dummy_tool(self, trajectory_id, action, finish):
-    #     """
-    #     Dummy tool for testing purposes.
-    #     """
-    #     if finish:
-    #         observation = ""
-    #         done = True
-    #         is_valid = False
-    #     parsed_action, is_valid = parse_action(action)
-    #     if not is_valid:
-    #         observation = "No valid action found."
-    #         done = False
-    #         is_valid = False
-    #         return observation, done, is_valid
+#     def dummy_tool(self, trajectory_id, action, finish):
+#         """
+#         Dummy tool for testing purposes.
+#         """
+#         if finish:
+#             observation = ""
+#             done = True
+#             is_valid = False
+#         parsed_action, is_valid = parse_action(action)
+#         if not is_valid:
+#             observation = "No valid action found."
+#             done = False
+#             is_valid = False
+#             return observation, done, is_valid
         
-    #     result = execute_python_in_firejail(parsed_action)
-    #     done = False
-    #     is_valid = True
-    #     return result, done, is_valid
+#         result = execute_python_in_firejail(parsed_action)
+#         done = False
+#         is_valid = True
+#         return result, done, is_valid
 
-    # def interact_with_tool_server(self, active_uids:List[str], responses: List[str], do_actions:List[bool], active_mask=None) -> List[str]:
-    #     """
-    #     Call tool server for queries.
-    #     Args:
-    #         batch: batch of data
-    #         resposnes: responses from the model
-    #         pad_token: pad token
-    #         active_mask: active mask
-    #     Returns:
-    #         observations: observations from the tool server. None if the the query do not need to do any action.
-    #         dones: dones
-    #         valid_actions: valid actions
-    #     """
-    #     finishs = [not do_action for do_action in do_actions]
-    #     print(f" - Number of non-finished actions: {len([x for x in do_actions if not x])} / {len(do_actions)}")
+#     def interact_with_tool_server(self, active_uids:List[str], responses: List[str], do_actions:List[bool], active_mask=None) -> List[str]:
+#         """
+#         Call tool server for queries.
+#         Args:
+#             batch: batch of data
+#             resposnes: responses from the model
+#             pad_token: pad token
+#             active_mask: active mask
+#         Returns:
+#             observations: observations from the tool server. None if the the query do not need to do any action.
+#             dones: dones
+#             valid_actions: valid actions
+#         """
+#         finishs = [not do_action for do_action in do_actions]
+#         print(f" - Number of non-finished actions: {len([x for x in do_actions if not x])} / {len(do_actions)}")
         
-    #     from concurrent.futures import ThreadPoolExecutor
-    #     with ThreadPoolExecutor(max_workers=32) as executor:
-    #         results = list(tqdm(executor.map(self.dummy_tool, active_uids, responses, finishs), total=len(active_uids)))
-    #     active_observations = [result[0] for result in results]
-    #     active_dones = [result[1] for result in results]
-    #     active_valid_actions = [result[2] for result in results]
+#         from concurrent.futures import ThreadPoolExecutor
+#         with ThreadPoolExecutor(max_workers=32) as executor: # TODO: check
+#             results = list(tqdm(executor.map(self.dummy_tool, active_uids, responses, finishs), total=len(active_uids)))
+#         active_observations = [result[0] for result in results]
+#         active_dones = [result[1] for result in results]
+#         active_valid_actions = [result[2] for result in results]
         
-    #     print("Received observations from tool server. Samples:", len(active_observations))
-    #     print(f" - Number of valid actions (exclusing finish action): {len([x for x in active_valid_actions if x])} / {len(active_valid_actions)}")
-    #     print(f" - Number of dones: {len([x for x in active_dones if x])} / {len(active_dones)}")
-    #     print("Example observations:")
-    #     non_empty_observations = [obs for obs in active_observations if obs]
-    #     if len(non_empty_observations) > 0:
-    #         print(f"{non_empty_observations[0]}")
-    #     else:
-    #         print("No non-empty observations.")
+#         print("Received observations from tool server. Samples:", len(active_observations))
+#         print(f" - Number of valid actions (exclusing finish action): {len([x for x in active_valid_actions if x])} / {len(active_valid_actions)}")
+#         print(f" - Number of dones: {len([x for x in active_dones if x])} / {len(active_dones)}")
+#         print("Example observations:")
+#         non_empty_observations = [obs for obs in active_observations if obs]
+#         if len(non_empty_observations) > 0:
+#             print(f"{non_empty_observations[0]}")
+#         else:
+#             print("No non-empty observations.")
         
-    #     next_obs, dones, valid_action = [], [], []
-    #     for i, active in enumerate(active_mask):
-    #         if active:
-    #             next_obs.append(active_observations.pop(0))
-    #             dones.append(active_dones.pop(0))
-    #             valid_action.append(active_valid_actions.pop(0))
-    #         else:
-    #             next_obs.append('')
-    #             dones.append(1)
-    #             valid_action.append(0)
+#         next_obs, dones, valid_action = [], [], []
+#         for i, active in enumerate(active_mask):
+#             if active:
+#                 next_obs.append(active_observations.pop(0))
+#                 dones.append(active_dones.pop(0))
+#                 valid_action.append(active_valid_actions.pop(0))
+#             else:
+#                 next_obs.append('')
+#                 dones.append(1)
+#                 valid_action.append(0)
         
-    #     assert len(active_observations) == 0
-    #     return next_obs, dones, valid_action
-    
+#         assert len(active_observations) == 0
+#         return next_obs, dones, valid_action
+
     def send_batch_requests(self, batch_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Send batch requests to the tool server.

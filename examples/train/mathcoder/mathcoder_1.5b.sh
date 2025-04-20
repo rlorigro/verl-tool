@@ -1,8 +1,13 @@
+export CUDA_VISIBLE_DEVICES=0,1,2,3
+export WANDB_API_KEY="31800be459915fc29628b8c03920c3b526d64109"
+
 n_gpus_per_node=4
 n_nodes=1
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
-train_data=data/math_torl/train.parquet
-val_data=[data/math_torl/test.parquet,\
+train_data=[data/mathcoder/code_train.parquet,\
+data/mathcoder/math_train.parquet]
+val_data=[data/mathcoder/code_test.parquet,\
+data/mathcoder/math_test.parquet,\
 data/math_torl/math500_test.parquet,\
 data/math_torl/aime24_test.parquet,\
 data/math_torl/aime25_test.parquet]
@@ -12,7 +17,7 @@ model_name=Qwen/Qwen2.5-Math-1.5B
 batch_size=128
 max_prompt_length=1024
 max_response_length=3072
-reward_manager=torl
+reward_manager=mathcoder
 lr=1e-6
 ppo_mini_batch_size=$batch_size
 strategy="fsdp_agent" # remove _agent for normal verl behavior
@@ -38,7 +43,7 @@ top_p=1.0
 n_samples_per_prompts=16
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
-run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n_samples_per_prompts}-b${batch_size}-t${temperature}-lr${lr}"
+run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n_samples_per_prompts}-b${batch_size}-t${temperature}-lr${lr}-debug"
 export VERL_RUN_ID=$run_name
 
 # temp file for action tokens as verl cannot pass special strs as params
@@ -78,9 +83,9 @@ python3 -m verl_tool.trainer.main_ppo \
     +actor_rollout_ref.agent.action_stop_tokens=$action_stop_tokens_file \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=vllm \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.85 \
     actor_rollout_ref.rollout.temperature=$temperature \
     actor_rollout_ref.rollout.top_p=$top_p \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
     actor_rollout_ref.rollout.n=$n_samples_per_prompts \
     actor_rollout_ref.rollout.log_prob_use_dynamic_bsz=True \
     actor_rollout_ref.rollout.max_num_seqs=1024 \

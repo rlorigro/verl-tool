@@ -3,7 +3,7 @@
 ## Preparation Steps
 ### Requirements
 ```python
-uv pip install git+https://github.com/TIGER-AI-Lab/AceCoder.git@dev
+uv pip install .[acecoder]
 ```
 ### 1. Dataset Preparation
 Before downloading, contact Dongfu for dataset access and set your huggingface token as the environment variable:

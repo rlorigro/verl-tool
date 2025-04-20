@@ -1,5 +1,3 @@
-export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
-
 n_gpus_per_node=8
 n_nodes=1
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
@@ -105,6 +103,5 @@ python3 -m verl_tool.trainer.main_ppo \
     trainer.test_freq=10 \
     +trainer.remove_previous_ckpt_in_save=False \
     trainer.default_local_dir=verl_checkpoints/${run_name} \
-    trainer.resume_mode=disable \
-    trainer.resume_from_path=null \
+    trainer.resume_mode=auto \
     trainer.total_epochs=10

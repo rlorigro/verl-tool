@@ -1,5 +1,3 @@
-export CUDA_VISIBLE_DEVICES=6
-
 set -x
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
 train_data=data/math_hard/train.parquet
