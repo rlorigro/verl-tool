@@ -1,3 +1,4 @@
+set -x
 n_gpus_per_node=8
 n_nodes=1
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
@@ -8,7 +9,7 @@ data/mathcoder/math_test.parquet,\
 data/math_torl/math500_test.parquet,\
 data/math_torl/aime24_test.parquet,\
 data/math_torl/aime25_test.parquet]
-model_name=Qwen/Qwen2.5-Math-1.5B
+model_name=Qwen/Qwen2.5-Math-7B
 # model_name=GAIR/ToRL-1.5B
 # model_name=/home/user/.cache/huggingface/hub/models--Qwen--Qwen2.5-Math-1.5B/snapshots/4a83ca6e4526a4f2da3aa259ec36c259f66b2ab2
 batch_size=128
@@ -23,13 +24,10 @@ kl_loss_type=low_var_kl
 kl_coef=0
 entropy_coeff=0
 
-# host=0.0.0.0
-# port=$(shuf -i 30000-31000 -n 1)
-# tool_server_url=http://$host:$port/get_observation
-# python -m verl_tool.servers.serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 32 &
 host=0.0.0.0
-port=30207
+port=$(shuf -i 30000-31000 -n 1)
 tool_server_url=http://$host:$port/get_observation
+python -m verl_tool.servers.serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 8 2>&1 > /dev/null &
 server_pid=$!
 echo "Server (pid=$server_pid) started at $tool_server_url"
 max_obs_length=256
