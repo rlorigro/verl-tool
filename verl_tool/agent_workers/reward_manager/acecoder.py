@@ -206,33 +206,33 @@ class AceCoderRewardManager:
         tool_call_reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32)
         
         
-        keywords = ["ERROR:\nTraceback", "Execution timed out"]
-        for i, response in enumerate(response_str):
-            if any(keyword in response for keyword in keywords):
-                # time_out_reward_tensor[i, valid_response_length[i].item() - 1] -= 0.5
-                samples[i]['add_exec_penalty'] = True
-            else:
-                samples[i]['add_exec_penalty'] = False
+        # keywords = ["ERROR:\nTraceback", "Execution timed out"]
+        # for i, response in enumerate(response_str):
+        #     if any(keyword in response for keyword in keywords):
+        #         # time_out_reward_tensor[i, valid_response_length[i].item() - 1] -= 0.5
+        #         samples[i]['add_exec_penalty'] = True
+        #     else:
+        #         samples[i]['add_exec_penalty'] = False
         
-        # 1. compute penalty of errored or timed-out execution for each code response sample
-        for i, data_item in enumerate(data):
-            if "turns_stats" in data_item.non_tensor_batch:
-                num_turn = data_item.non_tensor_batch["turns_stats"]
-                num_valid_action = data_item.non_tensor_batch["valid_action_stats"]
-                is_active = data_item.non_tensor_batch["active_mask"]
-                is_done = not is_active
-                samples[i]['num_turn'] = num_turn
-                samples[i]['num_valid_action'] = num_valid_action
-                samples[i]['is_done'] = is_done
+        # # 1. compute penalty of errored or timed-out execution for each code response sample
+        # for i, data_item in enumerate(data):
+        #     if "turns_stats" in data_item.non_tensor_batch:
+        #         num_turn = data_item.non_tensor_batch["turns_stats"]
+        #         num_valid_action = data_item.non_tensor_batch["valid_action_stats"]
+        #         is_active = data_item.non_tensor_batch["active_mask"]
+        #         is_done = not is_active
+        #         samples[i]['num_turn'] = num_turn
+        #         samples[i]['num_valid_action'] = num_valid_action
+        #         samples[i]['is_done'] = is_done
 
-            MIN_TOOL_CALL_CNT = 0
-            MAX_TOOL_CALL_CNT = 10
+        #     MIN_TOOL_CALL_CNT = 0
+        #     MAX_TOOL_CALL_CNT = 10
             
-            if num_valid_action < MIN_TOOL_CALL_CNT or num_valid_action > MAX_TOOL_CALL_CNT:
-                # tool_call_reward_tensor[i, valid_response_length[i].item() - 1] -= 0.5
-                samples[i]['add_tool_use_penalty'] = True
-            else:
-                samples[i]['add_tool_use_penalty'] = False
+        #     if num_valid_action < MIN_TOOL_CALL_CNT or num_valid_action > MAX_TOOL_CALL_CNT:
+        #         # tool_call_reward_tensor[i, valid_response_length[i].item() - 1] -= 0.5
+        #         samples[i]['add_tool_use_penalty'] = True
+        #     else:
+        #         samples[i]['add_tool_use_penalty'] = False
         
         # 3. save the records for each code response sample, which will be reported to wandb
         for i in range(len(data)):
@@ -241,12 +241,12 @@ class AceCoderRewardManager:
             reward_tensor[i, valid_response_length[i].item() - 1] = coding_scores[i]
             samples[i]['pass_rate'] = coding_scores[i]
 
-            # add execution penalty to the reward tensor
-            if samples[i]['add_exec_penalty']:
-                reward_tensor[i, valid_response_length[i].item() - 1] -= 0.5
-            # add tool call penalty to the reward tensor
-            if samples[i]['add_tool_use_penalty']:
-                reward_tensor[i, valid_response_length[i].item() - 1] -= 0.5
+            # # add execution penalty to the reward tensor
+            # if samples[i]['add_exec_penalty']:
+            #     reward_tensor[i, valid_response_length[i].item() - 1] -= 0.5
+            # # add tool call penalty to the reward tensor
+            # if samples[i]['add_tool_use_penalty']:
+            #     reward_tensor[i, valid_response_length[i].item() - 1] -= 0.5
             
             if data_source not in already_print_data_sources:
                 already_print_data_sources[data_source] = 0
