@@ -469,12 +469,66 @@ class AgentActorManager:
         Returns:
             response: Response from the tool server
         """
-        response = requests.post(self.config.tool_server_url, json=batch_data)
+        # Filter out null bytes from all string values in the dict
+        def clean_nulls(item):
+            if isinstance(item, str):
+                return item.replace('\0', '')
+            elif isinstance(item, list):
+                return [clean_nulls(i) for i in item]
+            elif isinstance(item, dict):
+                return {k: clean_nulls(v) for k, v in item.items()}
+            else:
+                return item
+        
+        # Clean the data before sending
+        cleaned_batch_data = clean_nulls(batch_data)
+        
+        # Log what we're sending (optional, for debugging)
+        try:
+            # Test if the data is serializable
+            import json
+            json.dumps(cleaned_batch_data)
+        except Exception as e:
+            print(f"Warning: Data still has serialization issues after cleaning: {e}")
+            # Additional fallback cleaning - convert problematic items to strings
+            def ensure_serializable(item):
+                if isinstance(item, list):
+                    return [ensure_serializable(i) for i in item]
+                elif isinstance(item, dict):
+                    return {k: ensure_serializable(v) for k, v in item.items()}
+                try:
+                    json.dumps(item)
+                    return item
+                except:
+                    return str(item)
+            
+            cleaned_batch_data = ensure_serializable(cleaned_batch_data)
+        
+        # Send the request
+        response = requests.post(self.config.tool_server_url, json=cleaned_batch_data)
+        
+        # Handle errors
         if response.status_code != 200:
-            print(f"Error: {response.status_code}, {response.text}")
-            raise ValueError(f"Error: {response.status_code}, {response.text}")
+            error_msg = f"Error: {response.status_code}, {response.text}"
+            print(error_msg)
+            
+            # Try to handle specific errors
+            if "embedded null byte" in response.text.lower():
+                print("Null byte detected in response. Attempting more aggressive cleaning...")
+                # Try again with more aggressive cleaning if this is the specific error
+                for key, value in batch_data.items():
+                    if isinstance(value, list) and all(isinstance(x, str) for x in value):
+                        batch_data[key] = [x.encode('ascii', 'ignore').decode('ascii') for x in value]
+                
+                # Try the request again
+                response = requests.post(self.config.tool_server_url, json=batch_data)
+                if response.status_code != 200:
+                    raise ValueError(f"Error persists after cleaning: {response.status_code}, {response.text}")
+            else:
+                raise ValueError(error_msg)
+        
         return response.json()
-    
+        
     def interact_with_tool_server(self, active_uids:List[str], responses: List[str], do_actions:List[bool], active_mask=None) -> List[str]:
         """
         Call tool server for queries.
@@ -496,28 +550,14 @@ class AgentActorManager:
         print(f" - Number of non-finished actions: {len([x for x in do_actions if not x])} / {len(do_actions)}")
         assert len(active_uids) == len(responses) == len(do_actions), f"Length mismatch: {len(active_uids)}, {len(responses)}, {len(do_actions)}"
         
-        # all_batch_data = [
-        #     {
-        #         "trajectory_ids": active_uids[i:i + batch_size],
-        #         "actions": responses[i:i + batch_size],
-        #         "finish": finishs[i:i + batch_size], # if do_action is False, then it is a finish action, finishing the trajectory,
-        #     }
-        #     for i in range(0, len(active_uids), batch_size)
-        # ]
-        
-        # keep english, number, space and punctuation
-        # pattern = re.compile(r'[^a-zA-Z0-9\s.,!?;:\'\"()\[\]{}<>/\-=_+`~@#$%^&*|\\]')
-        all_batch_data = []
-        for i in range(0, len(active_uids), batch_size):
-            batch_data = {
+        all_batch_data = [
+            {
                 "trajectory_ids": active_uids[i:i + batch_size],
                 "actions": responses[i:i + batch_size],
                 "finish": finishs[i:i + batch_size], # if do_action is False, then it is a finish action, finishing the trajectory,
             }
-            # filter out invalid actions; Commented by Dongfu: I don't think we need filtering here
-            # batch_data['actions'] = [pattern.sub('', action) for action in batch_data['actions']]
-            all_batch_data.append(batch_data)
-            
+            for i in range(0, len(active_uids), batch_size)
+        ]
         
         with ThreadPoolExecutor(max_workers=self.config.tool_num_proc) as executor:
             results = list(tqdm(executor.map(self.send_batch_requests, all_batch_data), total=len(all_batch_data), desc="Sending batch requests to tool server"))
