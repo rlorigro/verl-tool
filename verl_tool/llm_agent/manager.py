@@ -506,7 +506,7 @@ class AgentActorManager:
         # ]
         
         # keep english, number, space and punctuation
-        pattern = re.compile(r'[^a-zA-Z0-9\s.,!?;:\'\"()\[\]{}<>/\-=_+`~@#$%^&*|\\]')
+        # pattern = re.compile(r'[^a-zA-Z0-9\s.,!?;:\'\"()\[\]{}<>/\-=_+`~@#$%^&*|\\]')
         all_batch_data = []
         for i in range(0, len(active_uids), batch_size):
             batch_data = {
@@ -514,8 +514,8 @@ class AgentActorManager:
                 "actions": responses[i:i + batch_size],
                 "finish": finishs[i:i + batch_size], # if do_action is False, then it is a finish action, finishing the trajectory,
             }
-            # filter out invalid actions
-            batch_data['actions'] = [pattern.sub('', action) for action in batch_data['actions']]
+            # filter out invalid actions; Commented by Dongfu: I don't think we need filtering here
+            # batch_data['actions'] = [pattern.sub('', action) for action in batch_data['actions']]
             all_batch_data.append(batch_data)
             
         
