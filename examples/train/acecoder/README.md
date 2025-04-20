@@ -6,6 +6,12 @@
 uv pip install git+https://github.com/TIGER-AI-Lab/AceCoder.git@dev
 ```
 ### 1. Dataset Preparation
+Before downloading, contact Dongfu for dataset access and set your huggingface token as the environment variable:
+
+```bash
+export HF_TOKEN="<your huggingface token>"
+```
+
 Download and process the dataset using the following command:
 ```bash
 python examples/data_preprocess/acecoder.py \
