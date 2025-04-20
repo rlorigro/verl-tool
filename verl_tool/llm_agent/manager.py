@@ -17,6 +17,8 @@ from typing import List
 from .config import AgentActorConfig
 from .tensor_helper import TensorHelper, TensorConfig
 
+from concurrent.futures import ThreadPoolExecutor
+
 class AgentActorManager:
     def __init__(
         self,
@@ -494,15 +496,29 @@ class AgentActorManager:
         print(f" - Number of non-finished actions: {len([x for x in do_actions if not x])} / {len(do_actions)}")
         assert len(active_uids) == len(responses) == len(do_actions), f"Length mismatch: {len(active_uids)}, {len(responses)}, {len(do_actions)}"
         
-        all_batch_data = [
-            {
+        # all_batch_data = [
+        #     {
+        #         "trajectory_ids": active_uids[i:i + batch_size],
+        #         "actions": responses[i:i + batch_size],
+        #         "finish": finishs[i:i + batch_size], # if do_action is False, then it is a finish action, finishing the trajectory,
+        #     }
+        #     for i in range(0, len(active_uids), batch_size)
+        # ]
+        
+        # keep english, number, space and punctuation
+        # pattern = re.compile(r'[^a-zA-Z0-9\s.,!?;:\'\"()\[\]{}<>/\-=_+`~@#$%^&*|\\]')
+        all_batch_data = []
+        for i in range(0, len(active_uids), batch_size):
+            batch_data = {
                 "trajectory_ids": active_uids[i:i + batch_size],
                 "actions": responses[i:i + batch_size],
                 "finish": finishs[i:i + batch_size], # if do_action is False, then it is a finish action, finishing the trajectory,
             }
-            for i in range(0, len(active_uids), batch_size)
-        ]
-        from concurrent.futures import ThreadPoolExecutor
+            # filter out invalid actions; Commented by Dongfu: I don't think we need filtering here
+            # batch_data['actions'] = [pattern.sub('', action) for action in batch_data['actions']]
+            all_batch_data.append(batch_data)
+            
+        
         with ThreadPoolExecutor(max_workers=self.config.tool_num_proc) as executor:
             results = list(tqdm(executor.map(self.send_batch_requests, all_batch_data), total=len(all_batch_data), desc="Sending batch requests to tool server"))
         for result in results:
