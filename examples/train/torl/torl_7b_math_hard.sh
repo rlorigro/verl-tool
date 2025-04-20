@@ -1,4 +1,5 @@
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export WANDB_API_KEY="31800be459915fc29628b8c03920c3b526d64109"
 
 n_gpus_per_node=8
 n_nodes=1
@@ -105,6 +106,5 @@ python3 -m verl_tool.trainer.main_ppo \
     trainer.test_freq=10 \
     +trainer.remove_previous_ckpt_in_save=False \
     trainer.default_local_dir=verl_checkpoints/${run_name} \
-    trainer.resume_mode=disable \
-    trainer.resume_from_path=null \
+    trainer.resume_mode=auto \
     trainer.total_epochs=10

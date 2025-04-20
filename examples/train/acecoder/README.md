@@ -3,9 +3,7 @@
 ## Preparation Steps
 ### Requirements
 ```python
-git clone https://github.com/TIGER-AI-Lab/AceCoder.git
-pip install ./AceCoder
-pip install "evalplus[vllm]" --upgrade
+uv pip install .[acecoder]
 ```
 ### 1. Dataset Preparation
 Download and process the dataset using the following command:
@@ -26,7 +24,7 @@ git submodule update
 ### 3. Logging Configuration
 You **MUST** set the Weights & Biases (wandb) key:
 ```bash
-export WANDB_API_KEY="<your_key>"
+export WANDB_KEY="<your_key>"
 ```
 Alternatively, modify line 65 in `verl-tool/examples/train/train_acecoder.sh`:
 - Change:
