@@ -1,5 +1,3 @@
-export CUDA_VISIBLE_DEVICES=0,1,2,3
-
 n_gpus_per_node=4
 n_nodes=1
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective

@@ -1,17 +1,23 @@
-n_gpus_per_node=8
+export CUDA_VISIBLE_DEVICES=0,1,2,3
+export WANDB_API_KEY="31800be459915fc29628b8c03920c3b526d64109"
+
+n_gpus_per_node=4
 n_nodes=1
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
-train_data=data/math_torl/train.parquet
-val_data=[data/math_torl/test.parquet,\
+train_data=[data/mathcoder/code_train.parquet,\
+data/mathcoder/math_train.parquet]
+val_data=[data/mathcoder/code_test.parquet,\
+data/mathcoder/math_test.parquet,\
 data/math_torl/math500_test.parquet,\
 data/math_torl/aime24_test.parquet,\
 data/math_torl/aime25_test.parquet]
-model_name=Qwen/Qwen2.5-Math-7B
+model_name=Qwen/Qwen2.5-Math-1.5B
+# model_name=GAIR/ToRL-1.5B
 # model_name=/home/user/.cache/huggingface/hub/models--Qwen--Qwen2.5-Math-1.5B/snapshots/4a83ca6e4526a4f2da3aa259ec36c259f66b2ab2
 batch_size=128
 max_prompt_length=1024
-max_response_length=2048
-reward_manager=torl
+max_response_length=3072
+reward_manager=mathcoder
 lr=1e-6
 ppo_mini_batch_size=$batch_size
 strategy="fsdp_agent" # remove _agent for normal verl behavior
@@ -37,7 +43,7 @@ top_p=1.0
 n_samples_per_prompts=16
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
-run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n_samples_per_prompts}-b${batch_size}-t${temperature}-lr${lr}"
+run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n_samples_per_prompts}-b${batch_size}-t${temperature}-lr${lr}-debug"
 export VERL_RUN_ID=$run_name
 
 # temp file for action tokens as verl cannot pass special strs as params
@@ -57,9 +63,9 @@ python3 -m verl_tool.trainer.main_ppo \
     data.truncation='right' \
     reward_model.reward_manager=$reward_manager \
     actor_rollout_ref.model.path=$model_name \
-    actor_rollout_ref.actor.checkpoint.contents=['model','optimizer','extra','hf_model'] \
     actor_rollout_ref.actor.optim.lr=$lr \
     actor_rollout_ref.model.use_remove_padding=True \
+    actor_rollout_ref.actor.checkpoint.contents=['model','optimizer','extra','hf_model'] \
     actor_rollout_ref.actor.ppo_mini_batch_size=$ppo_mini_batch_size \
     actor_rollout_ref.actor.use_dynamic_bsz=True \
     actor_rollout_ref.actor.use_kl_loss=True \
@@ -67,8 +73,6 @@ python3 -m verl_tool.trainer.main_ppo \
     actor_rollout_ref.actor.kl_loss_coef=$kl_loss_coef \
     actor_rollout_ref.actor.kl_loss_type=$kl_loss_type \
     actor_rollout_ref.actor.entropy_coeff=$entropy_coeff \
-    actor_rollout_ref.actor.fsdp_config.param_offload=True \
-    actor_rollout_ref.actor.fsdp_config.optimizer_offload=True \
     +actor_rollout_ref.agent.tool_server_url=$tool_server_url \
     +actor_rollout_ref.agent.max_prompt_length=$max_prompt_length \
     +actor_rollout_ref.agent.max_response_length=$max_response_length \
@@ -81,7 +85,7 @@ python3 -m verl_tool.trainer.main_ppo \
     actor_rollout_ref.rollout.name=vllm \
     actor_rollout_ref.rollout.temperature=$temperature \
     actor_rollout_ref.rollout.top_p=$top_p \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.85 \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
     actor_rollout_ref.rollout.n=$n_samples_per_prompts \
     actor_rollout_ref.rollout.log_prob_use_dynamic_bsz=True \
     actor_rollout_ref.rollout.max_num_seqs=1024 \
@@ -95,7 +99,7 @@ python3 -m verl_tool.trainer.main_ppo \
     trainer.logger=['console','wandb'] \
     trainer.project_name='torl' \
     trainer.experiment_name=$run_name \
-    trainer.val_before_train=False \
+    trainer.val_before_train=True \
     trainer.default_hdfs_dir=null \
     trainer.n_gpus_per_node=$n_gpus_per_node \
     trainer.nnodes=$n_nodes \
@@ -103,5 +107,6 @@ python3 -m verl_tool.trainer.main_ppo \
     trainer.test_freq=10 \
     +trainer.remove_previous_ckpt_in_save=False \
     trainer.default_local_dir=verl_checkpoints/${run_name} \
-    trainer.resume_mode=auto \
+    trainer.resume_mode=disable \
+    trainer.resume_from_path=null \
     trainer.total_epochs=10

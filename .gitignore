@@ -304,3 +304,6 @@ outputs
 verl_checkpoints/
 verl_step_records/
 **/tmp.*
+state.json
+output.txt
+data.json
