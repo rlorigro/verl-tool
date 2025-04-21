@@ -35,8 +35,7 @@ use_dynamic_bsz=True # faster
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
 run_name_postfix=""
-run_name="${reward_manager}-${strategy}--${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
-export VERL_RUN_ID=$run_name
+run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 
 # temp file for action tokens as verl cannot pass special strs as params
 action_stop_tokens_file=$(mktemp)
@@ -49,8 +48,6 @@ tool_server_url=http://$host:$port/get_observation
 python -m verl_tool.servers.serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 64 2>&1 > /dev/null &
 server_pid=$!
 echo "Server (pid=$server_pid) started at $tool_server_url"
-
-
 
 # export VLLM_USE_V1=1
 PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \

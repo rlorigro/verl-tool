@@ -283,7 +283,7 @@ class AsyncToolServer:
         host: str = "0.0.0.0",
         port: int = 5000,
         workers_per_tool: int = 4,
-        max_concurrent_requests: int = 128,
+        max_concurrent_requests: int = 64,
         use_tqdm: bool = False,
     ):
         """

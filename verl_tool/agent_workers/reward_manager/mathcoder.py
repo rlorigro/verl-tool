@@ -38,10 +38,16 @@ def hash_string(s):
 
 from .torl import ToRLRewardManager
 from .acecoder import AceCoderRewardManager
+
 class MathCoderRewardManager:
     def __init__(
-        self, tokenizer, num_examine, compute_score=None, reward_fn_key="data_source"
-    ) -> None:
+        self, tokenizer, num_examine, compute_score=None, reward_fn_key="data_source") -> None:
+        self.tokenizer = tokenizer
+        self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
+        self.compute_score = compute_score if compute_score else _default_compute_score
+        self.reward_fn_key = reward_fn_key
+        
+        self.step = 0
         self.ToRLRewardManager = ToRLRewardManager(
             tokenizer, num_examine, compute_score, reward_fn_key
         )
@@ -50,6 +56,16 @@ class MathCoderRewardManager:
         )
 
     def __call__(self, data: DataProto, return_dict=False):
+        
+        if not hasattr(self, 'record_dir'):
+            if hasattr(self, 'run_id'):
+                self.record_dir = Path(__file__).parent.parent.parent.parent / "verl_step_records" / self.run_id
+                self.record_dir.mkdir(parents=True, exist_ok=True)
+            else:
+                self.record_dir = Path(__file__).parent.parent.parent.parent / "verl_step_records" / f"mathcoder-{time.strftime('%Y-%m-%d-%H-%M-%S')}"
+                self.record_dir.mkdir(parents=True, exist_ok=True)
+                
+        to_save_records = []
         reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32)
         # reward extra info every key of it is a default len(data) list filled with None
         reward_extra_info = defaultdict(
@@ -82,6 +98,53 @@ class MathCoderRewardManager:
                 for i in range(len(v)):
                     reward_extra_info[f"math_{k}"][math_data_idxs[i]] = v[i]
         
+        # Save the records
+        prompts = self.tokenizer.batch_decode(
+            data.batch['prompts'], skip_special_tokens=True
+        )
+        responses = self.tokenizer.batch_decode(
+            data.batch['responses'], skip_special_tokens=True
+        )
+        ground_truths = [
+            data_item.non_tensor_batch["reward_model"]["ground_truth"]
+            for data_item in data
+        ]
+        if "turns_stats" in data.non_tensor_batch:
+            num_turn = data.non_tensor_batch["turns_stats"]
+            num_valid_action = data.non_tensor_batch["valid_action_stats"]
+            is_active = data.non_tensor_batch["active_mask"]
+            is_done = [not is_active[i] for i in range(len(is_active))]
+
+        data_source = data.non_tensor_batch[self.reward_fn_key]
+        raw_score = [reward_extra_info['accuracy'][i] if data[i].non_tensor_batch['ability'] == 'math' else \
+            reward_extra_info['pass_rate'][i] for i in range(len(data))]
+        to_save_records = [
+            {
+                "prompt": prompts[i],
+                "response": responses[i],
+                "ground_truth": ground_truths[i],
+                "score": raw_score[i],
+                "num_turn": num_turn[i],
+                "num_valid_action": num_valid_action[i],
+                "data_source": data_source[i],
+                "is_done": is_done[i],
+                'extra_info': data[i].non_tensor_batch.get('extra_info', None),
+            }
+            for i in range(len(data))
+        ]
+        
+        # Save the records to a file
+        if self.num_examine == 1:
+            temp_file = self.record_dir / f"step-mathcoder-val-{self.step}.json"
+        else:
+            temp_file = self.record_dir / f"step-mathcoder-{self.step}.json"
+        self.step += 1
+        with open(temp_file, "w") as f:
+            json.dump(to_save_records, f, indent=4)
+            
+        if self.num_examine == 1:
+            # for validation, empty the reward_extra_info
+            reward_extra_info = defaultdict(list)
         if return_dict:
             return {
                 "reward_tensor": reward_tensor,

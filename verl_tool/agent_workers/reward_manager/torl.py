@@ -32,14 +32,19 @@ class ToRLRewardManager:
         self.compute_score = compute_score if compute_score else _default_compute_score
         self.torl_compute_score = torl_compute_score
         self.reward_fn_key = reward_fn_key
-        self.run_id = os.getenv("VERL_RUN_ID", f"acecoder_{time.strftime('%Y-%m-%d-%H-%M-%S')}")
-        self.record_dir = Path(__file__).parent.parent.parent.parent / "verl_step_records" / self.run_id
-        self.record_dir.mkdir(parents=True, exist_ok=True)
         self.step = 0
 
     def __call__(self, data: DataProto, return_dict=False):
         """We will expand this function gradually based on the available datasets"""
 
+        if not hasattr(self, 'record_dir'):
+            if hasattr(self, 'run_id'):
+                self.record_dir = Path(__file__).parent.parent.parent.parent / "verl_step_records" / self.run_id
+                self.record_dir.mkdir(parents=True, exist_ok=True)
+            else:
+                self.record_dir = Path(__file__).parent.parent.parent.parent / "verl_step_records" / f"torl-{time.strftime('%Y-%m-%d-%H-%M-%S')}"
+                self.record_dir.mkdir(parents=True, exist_ok=True)
+                
         # If there is rm score, we directly return rm score. Otherwise, we compute via rm_score_fn
         if 'rm_scores' in data.batch.keys():
             if return_dict:

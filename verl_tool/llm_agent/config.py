@@ -15,7 +15,6 @@ class AgentActorConfig:
     truncate_obs_side: str='left'
     agent_records_dir: str=None
     valid_actions: list=None
-    no_action_as_stop: bool=True
     min_action_num: int=0
     action_stop_tokens: list=None
     tool_batch_size: int=1

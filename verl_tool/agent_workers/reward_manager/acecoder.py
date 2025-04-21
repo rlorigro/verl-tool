@@ -121,25 +121,29 @@ class AceCoderRewardManager:
     The Reward Manager used in https://github.com/TIGER-AI-Lab/AceCoder
     """
 
-    def __init__(self, tokenizer, num_examine, compute_score=None) -> None:
+    def __init__(self, tokenizer, num_examine, compute_score=None, run_id=None) -> None:
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
         self.compute_score = compute_score or _default_compute_score
         self.step_idx = 0
         self.n_workers = 64
         self.binary = False
-        self.run_id = os.getenv("VERL_RUN_ID", f"acecoder_{time.strftime('%Y-%m-%d-%H-%M-%S')}")
-        self.record_dir = Path(__file__).parent.parent.parent.parent / "verl_step_records" / self.run_id
-        self.record_dir.mkdir(parents=True, exist_ok=True)
         try:
             from acecoder import evaluate_test_cases
         except ImportError:
             raise ImportError("`from acecoder import evaluate_test_cases` failed, please install acecoder to use test_case rule")
-        
 
     def __call__(self, data: DataProto, return_dict=False):
         """We will expand this function gradually based on the available datasets"""
 
+        if not hasattr(self, 'record_dir'):
+            if hasattr(self, 'run_id'):
+                self.record_dir = Path(__file__).parent.parent.parent.parent / "verl_step_records" / self.run_id
+                self.record_dir.mkdir(parents=True, exist_ok=True)
+            else:
+                self.record_dir = Path(__file__).parent.parent.parent.parent / "verl_step_records" / f"acecoder-{time.strftime('%Y-%m-%d-%H-%M-%S')}"
+                self.record_dir.mkdir(parents=True, exist_ok=True)
+                
         # If there is rm score, we directly return rm score. Otherwise, we compute via rm_score_fn
         if 'rm_scores' in data.batch.keys():
             return data.batch['rm_scores']

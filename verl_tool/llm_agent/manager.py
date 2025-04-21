@@ -109,7 +109,7 @@ class AgentActorManager:
         do_actions = []
         for i, resp in enumerate(responses_str):
             resp = resp.strip(' \n')
-            if self.config.no_action_as_stop and action_step >= self.config.min_action_num:
+            if action_step >= self.config.min_action_num:
                 has_action = False
                 for j in range(len(self.action_stop_tokens)):
                     if resp.endswith(self.action_stop_tokens[j]):
@@ -516,12 +516,12 @@ class AgentActorManager:
             valid_actions: valid actions
         """
         finishs = [not do_action for do_action in do_actions]
-        
         batch_data = {
             "trajectory_ids": active_uids,
             "actions": responses,
             "finish": finishs, # if do_action is False, then it is a finish action, finishing the trajectory,
         }
+        print(f" - Number of non-finished actions: {len([x for x in do_actions if not x])} / {len(do_actions)}")
         response = self.send_batch_requests(batch_data)
         active_observations = response['observations']
         active_dones = [int(x) for x in response['dones']]
