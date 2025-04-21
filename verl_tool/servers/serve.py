@@ -208,7 +208,7 @@ class AsyncToolManager:
         # tool_types = await self.identify_tool_types(actions, extra_fields)
         # just use a tqdm for loop
         tool_types = []
-        for i in tqdm(range(len(actions)), desc="Identifying tool types", unit="action", disable=not self.use_tqdm):
+        for i in tqdm(range(len(actions)), desc="Identifying tool types", unit="action", disable=True):
             tool_type = self.identify_tool_for_action(actions[i], extra_fields[i])
             tool_types.append(tool_type)
         
@@ -283,7 +283,7 @@ class AsyncToolServer:
         host: str = "0.0.0.0",
         port: int = 5000,
         workers_per_tool: int = 4,
-        max_concurrent_requests: int = 50,
+        max_concurrent_requests: int = 128,
         use_tqdm: bool = False,
     ):
         """
@@ -385,9 +385,9 @@ def main(
     tool_type: Union[str, Tuple[str]] = "base",
     host: str = "0.0.0.0",
     port: int = 5000,
-    workers_per_tool: int = 8,
-    max_concurrent_requests: int = 50,
-    use_tqdm: bool = False,
+    workers_per_tool: int = None,
+    max_concurrent_requests: int = 128,
+    use_tqdm: bool = True,
     log_level: str = "info",
 ):
     """
@@ -401,6 +401,8 @@ def main(
         tool_type: Tool type(s) to use (comma-separated string or tuple)
         log_level: Logging level (debug, info, warning, error)
     """
+    if workers_per_tool is None:
+        workers_per_tool = max_concurrent_requests
     # Configure logging
     numeric_level = getattr(logging, log_level.upper(), None)
     if isinstance(numeric_level, int):

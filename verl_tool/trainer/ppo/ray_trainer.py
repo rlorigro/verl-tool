@@ -184,6 +184,12 @@ class AgentRayPPOTrainer(RayPPOTrainer):
                             reward_result = self.reward_fn(batch, return_dict=True)
                             reward_tensor = reward_result['reward_tensor']
                             reward_extra_infos_dict = reward_result['reward_extra_info']
+                            # update metrics of reward extra info
+                            for k, v in reward_extra_infos_dict.items():
+                                mean_v = np.mean([x for x in v if x is not None])
+                                metrics[f'reward_extra_info/{k}'] = mean_v
+                                if None in v:
+                                    del reward_extra_infos_dict[k]
                         except Exception as e:
                             print(f'Error in reward_fn: {e}')
                             reward_tensor = self.reward_fn(batch)

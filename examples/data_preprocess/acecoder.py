@@ -29,6 +29,9 @@ The final program will be evaluated against the hidden test cases. If the final 
 """
 
 naive_instruction = "Let's think step by step and generate the final program in a markdown code block like this: ```python\nyour code here\n```."
+naive_execution_prompt = """\
+Let's think step by step and generate the correct program for this coding question. You are able to run the python code in the markdown code block and the output will be provided to you in the ````output` block. Put your final program in a markdown code block like this: ```python\nyour code here\n```.
+"""
 
 coder_instruction = """\
 Let's think step by step and generate the correct program for this coding question. You should attempt multiple times before give the final program.
@@ -85,7 +88,7 @@ def main(
                 "prompt": [
                     {
                         "role": "system",
-                        "content": execution_prompt if add_execution_prompt else coder_instruction,
+                        "content": naive_execution_prompt if add_execution_prompt else coder_instruction,
                     },
                     {
                         "role": "user",

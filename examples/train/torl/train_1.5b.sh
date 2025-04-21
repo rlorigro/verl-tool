@@ -1,11 +1,10 @@
 set -x
-train_data=[data/mathcoder/code_train.parquet,\
-data/mathcoder/math_train.parquet]
-val_data=[data/mathcoder/code_test.parquet,\
+train_data=data/math_torl/train.parquet
+val_data=[data/math_torl/test.parquet,\
 data/math_torl/math500_test.parquet,\
 data/math_torl/aime24_test.parquet,\
 data/math_torl/aime25_test.parquet]
-model_name=Qwen/Qwen2.5-Math-7B
+model_name=Qwen/Qwen2.5-Math-1.5B
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
 n_gpus_per_node=8
 n_nodes=1
@@ -25,10 +24,10 @@ kl_coef=0
 entropy_coeff=0
 kl_loss_type=low_var_kl
 lr=1e-6
-reward_manager=mathcoder
+reward_manager=torl
 ppo_micro_batch_size_per_gpu=1
 log_prob_micro_batch_size_per_gpu=2
-tensor_model_parallel_size=4
+tensor_model_parallel_size=2
 gpu_memory_utilization=0.6 # higher gpu_memory_utilization will likely cause the vllm to OOM and get stuck, so set it to a lower value like 0.4 or 0.5
 do_offload=True # control actor's fsdp.[param|optimizer]_offload and actor_rollout_ref.rollout.fsdp.[param|optimizer]_offload; if gpu_memory_utilization is set to > 0.6, then do_offload should be set to True otherwise it will cause OOM
 use_dynamic_bsz=True # faster

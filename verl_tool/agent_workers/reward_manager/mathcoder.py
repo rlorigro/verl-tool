@@ -50,26 +50,42 @@ class MathCoderRewardManager:
         )
 
     def __call__(self, data: DataProto, return_dict=False):
-        data.batch['reward_id'] = torch.arange(len(data), device=data.batch.device) # TODO: check here
-        code_data = collate_fn(
-            [x for x in data if x.non_tensor_batch["ability"] == "code"]
-        ) 
-        math_data = collate_fn(
-            [x for x in data if x.non_tensor_batch["ability"] == "math"]
+        reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32)
+        # reward extra info every key of it is a default len(data) list filled with None
+        reward_extra_info = defaultdict(
+            lambda: [None] * len(data)
         )
-        code_reward = self.AceCoderRewardManager(code_data, return_dict=True)  
+        
+        code_data_idxs = [
+            i for i in range(len(data)) if data[i].non_tensor_batch["ability"] == "code"
+        ]
+        math_data_idxs = [
+            i for i in range(len(data)) if data[i].non_tensor_batch["ability"] == "math"
+        ]
+        code_data = data[code_data_idxs]
+        math_data = data[math_data_idxs]
+        code_reward = self.AceCoderRewardManager(code_data, return_dict=True)
         math_reward = self.ToRLRewardManager(math_data, return_dict=True)
-        # TODO: delete
         print("len code_reward", len(code_reward['reward_tensor']))
         print("len math_reward", len(math_reward['reward_tensor']))
-        reward_tensor = torch.cat([code_reward['reward_tensor'], math_reward['reward_tensor']])
-        reward_id = torch.cat([code_reward['reward_id'], math_reward['reward_id']])
-        _, indices = torch.sort(reward_id)
-        sorted_reward = reward_tensor[indices]
+        # put the code and math reward together in the original order
+        reward_tensor[code_data_idxs] = code_reward['reward_tensor']
+        reward_tensor[math_data_idxs] = math_reward['reward_tensor']
+        
+        for k, v in code_reward['reward_extra_info'].items():
+            if k not in reward_extra_info:
+                for i in range(len(v)):
+                    reward_extra_info[f"code_{k}"][code_data_idxs[i]] = v[i]
+            re
+        for k, v in math_reward['reward_extra_info'].items():
+            if k not in reward_extra_info:
+                for i in range(len(v)):
+                    reward_extra_info[f"math_{k}"][math_data_idxs[i]] = v[i]
         
         if return_dict:
             return {
-                "reward_tensor": sorted_reward,
+                "reward_tensor": reward_tensor,
+                "reward_extra_info": reward_extra_info,
             }
         else:
-            return sorted_reward 
+            return reward_tensor

@@ -163,7 +163,10 @@ class AceCoderRewardManager:
         prompt_str = self.tokenizer.batch_decode(prompt_ids, skip_special_tokens=True)
         
         # retrieve the list of ground truths
-        ground_truth = [data_item.non_tensor_batch['reward_model']['ground_truth'] for data_item in data]
+        if isinstance(data[0].non_tensor_batch['reward_model']['ground_truth'], list):
+            ground_truth = [data_item.non_tensor_batch['reward_model']['ground_truth'] for data_item in data]
+        else:
+            ground_truth = [data_item.non_tensor_batch['extra_info']['ground_truth'] for data_item in data]
         data_sources = data.non_tensor_batch['data_source']
         
         # extract the answer for the list of responses
@@ -235,13 +238,14 @@ class AceCoderRewardManager:
         tool_call_reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32)
         
         
-        # keywords = ["ERROR:\nTraceback", "Execution timed out"]
-        # for i, response in enumerate(response_str):
-        #     if any(keyword in response for keyword in keywords):
-        #         # time_out_reward_tensor[i, valid_response_length[i].item() - 1] -= 0.5
-        #         samples[i]['add_exec_penalty'] = True
-        #     else:
-        #         samples[i]['add_exec_penalty'] = False
+        keywords = ["ERROR:\nTraceback", "Execution timed out"]
+        for i, response in enumerate(response_str):
+            if any(keyword in response for keyword in keywords):
+                # time_out_reward_tensor[i, valid_response_length[i].item() - 1] -= 0.5
+                samples[i]['add_exec_penalty'] = True
+            else:
+                samples[i]['add_exec_penalty'] = False
+            reward_extra_info['exec_error'].append(1 if samples[i]['add_exec_penalty'] else 0)
         
         # # 1. compute penalty of errored or timed-out execution for each code response sample
         # for i, data_item in enumerate(data):
@@ -284,6 +288,8 @@ class AceCoderRewardManager:
                 already_print_data_sources[data_source] += 1
                 print("[response]", response_str[i])
 
+        reward_extra_info['pass_rate'] = pass_rates
+        reward_extra_info['binary_pass_rate'] = [1.0 if x == 1.0 else 0.0 for x in pass_rates]
         if return_dict: 
             return {
                 "reward_tensor": reward_tensor,

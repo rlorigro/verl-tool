@@ -12,8 +12,10 @@ uv pip install vllm==0.8.3 # we found some memory leaking bugs for vllm==0.8.2, 
 uv pip install flash-attn --no-build-isolation
 ```
 
+
 ## Training
 ```bash
+ray start --head 
 python examples/data_preprocess/gsm8k.py # Preprocess the data
 bash examples/train/train_gsm8k.sh
 ```

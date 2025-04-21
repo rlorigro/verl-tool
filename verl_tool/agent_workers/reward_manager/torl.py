@@ -83,6 +83,7 @@ class ToRLRewardManager:
                 ground_truth=ground_truth,
                 # extra_info=extra_info,
             )
+            reward_extra_info['accuracy'].append(max(0, score))
         
             # if data_source == 'torl_math':
             #     score = self.torl_compute_score(
@@ -105,6 +106,7 @@ class ToRLRewardManager:
                 add_exec_penalty = True
             else:
                 add_exec_penalty = False
+            reward_extra_info['exec_error'].append(1 if add_exec_penalty else 0)
 
             if isinstance(score, dict):
                 reward = score["score"]

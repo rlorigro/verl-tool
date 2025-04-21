@@ -29,6 +29,9 @@ Answer the given coding question. You must conduct reasoning inside <think> and 
 """
 
 naive_instruction = "Let's think step by step and generate the final program in a markdown code block like this: ```python\nyour code here\n```."
+naive_execution_prompt = """\
+Let's think step by step and generate the correct program for this coding question. You are able to run the python code in the markdown code block and the output will be provided to you in the ````output` block. Put your final program in a markdown code block like this: ```python\nyour code here\n```.
+"""
 
 coder_instruction = """\
 Let's think step by step and generate the correct program for this coding question. You should attempt multiple times before give the final program.
@@ -44,9 +47,11 @@ You are also allowed to analyze the problem with any other domain-specific knowl
 Now start thinking and generate the final program in a markdown code block like this: ```python\nyour code here\n```.
 """
 
-math_system_prompt = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem above, and put your final answer within \\boxed{}.:
+math_system_prompt = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem above, and put your final answer within \\boxed{}.
 '''
 
+mathcoder_system_prompt = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem above. For math problems, please put your final answer within \\boxed{}. For code problems, please put your final answer in a markdown code block like this: ```python\nyour code here\n```.
+'''
 
 ### Utils ###
 def extract_solution(solution_str):
@@ -100,7 +105,7 @@ def _process_acecoder(dataset_path, local_dir, add_execution_prompt, detaield_in
                 "prompt": [
                     {
                         "role": "system",
-                        "content": execution_prompt if add_execution_prompt else coder_instruction,
+                        "content": mathcoder_system_prompt,
                     },
                     {
                         "role": "user",
@@ -169,7 +174,7 @@ def _process_math(data_source, local_dir, hdfs_dir, level):
                 "prompt": [
                 {
                     "role": "system",
-                    "content": math_system_prompt
+                    "content": mathcoder_system_prompt
                 },
                 {
                     "role": "user",
@@ -216,7 +221,7 @@ def _process_math(data_source, local_dir, hdfs_dir, level):
                 "prompt": [
                 {
                     "role": "system",
-                    "content": math_system_prompt
+                    "content": mathcoder_system_prompt
                 },
                 {
                     "role": "user",
@@ -259,7 +264,7 @@ def _process_math(data_source, local_dir, hdfs_dir, level):
                 "prompt": [
                 {
                     "role": "system",
-                    "content": math_system_prompt
+                    "content": mathcoder_system_prompt
                 },
                 {
                     "role": "user",
