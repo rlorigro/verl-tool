@@ -3,6 +3,7 @@ import os
 import re
 import uuid
 import json
+import regex as re
 import numpy as np
 import requests
 from collections import defaultdict
@@ -18,6 +19,31 @@ from .config import AgentActorConfig
 from .tensor_helper import TensorHelper, TensorConfig
 
 from concurrent.futures import ThreadPoolExecutor
+
+# 1) A sanitizer that strips all embedded NULs (and, optionally, any
+#    other C0 control characters except common whitespace).
+CONTROL_CHAR_RE = re.compile(
+    # this matches U+0000 through U+001F, excluding tab(09), LF(0A), CR(0D)
+    r'[\x00-\x08\x0B\x0C\x0E-\x1F]'
+)
+
+def sanitize_request(obj: Any) -> Any:
+    """
+    Recursively walk through obj and:
+      - For dicts: sanitize each value
+      - For lists/tuples: sanitize each element
+      - For strings: remove embedded nulls (and other control chars)
+      - Leave other types untouched
+    """
+    if isinstance(obj, dict):
+        return {sanitize(key): sanitize(val) for key, val in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return type(obj)(sanitize(item) for item in obj)
+    elif isinstance(obj, str):
+        # strip NUL (\x00) and other C0 control chars
+        return CONTROL_CHAR_RE.sub('', obj)
+    else:
+        return obj
 
 class AgentActorManager:
     def __init__(
@@ -469,64 +495,11 @@ class AgentActorManager:
         Returns:
             response: Response from the tool server
         """
-        # Filter out null bytes from all string values in the dict
-        def clean_nulls(item):
-            if isinstance(item, str):
-                return item.replace('\0', '')
-            elif isinstance(item, list):
-                return [clean_nulls(i) for i in item]
-            elif isinstance(item, dict):
-                return {k: clean_nulls(v) for k, v in item.items()}
-            else:
-                return item
-        
-        # Clean the data before sending
-        cleaned_batch_data = clean_nulls(batch_data)
-        
-        # Log what we're sending (optional, for debugging)
-        try:
-            # Test if the data is serializable
-            import json
-            json.dumps(cleaned_batch_data)
-        except Exception as e:
-            print(f"Warning: Data still has serialization issues after cleaning: {e}")
-            # Additional fallback cleaning - convert problematic items to strings
-            def ensure_serializable(item):
-                if isinstance(item, list):
-                    return [ensure_serializable(i) for i in item]
-                elif isinstance(item, dict):
-                    return {k: ensure_serializable(v) for k, v in item.items()}
-                try:
-                    json.dumps(item)
-                    return item
-                except:
-                    return str(item)
-            
-            cleaned_batch_data = ensure_serializable(cleaned_batch_data)
-        
-        # Send the request
-        response = requests.post(self.config.tool_server_url, json=cleaned_batch_data)
-        
-        # Handle errors
+        safe_payload = sanitize_request(batch_data)
+        response = requests.post(self.tool_server_url, json=safe_payload)
         if response.status_code != 200:
-            error_msg = f"Error: {response.status_code}, {response.text}"
-            print(error_msg)
-            
-            # Try to handle specific errors
-            if "embedded null byte" in response.text.lower():
-                print("Null byte detected in response. Attempting more aggressive cleaning...")
-                # Try again with more aggressive cleaning if this is the specific error
-                for key, value in batch_data.items():
-                    if isinstance(value, list) and all(isinstance(x, str) for x in value):
-                        batch_data[key] = [x.encode('ascii', 'ignore').decode('ascii') for x in value]
-                
-                # Try the request again
-                response = requests.post(self.config.tool_server_url, json=batch_data)
-                if response.status_code != 200:
-                    raise ValueError(f"Error persists after cleaning: {response.status_code}, {response.text}")
-            else:
-                raise ValueError(error_msg)
-        
+            print(f"Error: {response.status_code}, {response.text}")
+            raise ValueError(f"Error: {response.status_code}, {response.text}")
         return response.json()
         
     def interact_with_tool_server(self, active_uids:List[str], responses: List[str], do_actions:List[bool], active_mask=None) -> List[str]:
