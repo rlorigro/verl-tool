@@ -36,9 +36,9 @@ def sanitize_request(obj: Any) -> Any:
       - Leave other types untouched
     """
     if isinstance(obj, dict):
-        return {sanitize(key): sanitize(val) for key, val in obj.items()}
+        return {sanitize_request(key): sanitize_request(val) for key, val in obj.items()}
     elif isinstance(obj, (list, tuple)):
-        return type(obj)(sanitize(item) for item in obj)
+        return type(obj)(sanitize_request(item) for item in obj)
     elif isinstance(obj, str):
         # strip NUL (\x00) and other C0 control chars
         return CONTROL_CHAR_RE.sub('', obj)
@@ -496,7 +496,7 @@ class AgentActorManager:
             response: Response from the tool server
         """
         safe_payload = sanitize_request(batch_data)
-        response = requests.post(self.tool_server_url, json=safe_payload)
+        response = requests.post(self.config.tool_server_url, json=safe_payload)
         if response.status_code != 200:
             print(f"Error: {response.status_code}, {response.text}")
             raise ValueError(f"Error: {response.status_code}, {response.text}")

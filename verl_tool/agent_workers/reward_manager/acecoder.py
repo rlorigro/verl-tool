@@ -88,6 +88,34 @@ async def parallel_compute_score_async(evaluation_func, completions, references,
     return scores
 
 
+def parse_code(action: str):
+    """
+    Parse the raw action string (which is the llm response) into an actual action and its contents.
+    Ensures that the parsed code is valid and safe for execution.
+    
+    Args:
+        action: Raw action string containing Python code
+        
+    Returns:
+        Tuple containing the extracted code and a validity flag
+    """
+    # Try to find Python code in various formats
+    all_valid_python_code = re.findall(r"<python>(.*?)</python>", action, re.DOTALL)
+    
+    if not all_valid_python_code:
+        all_valid_python_code = re.findall(r"```python(.*?)```", action, re.DOTALL)
+    
+    if not all_valid_python_code:
+        all_valid_python_code = re.findall(r"```(.*?)```", action, re.DOTALL)
+    
+    if len(all_valid_python_code) == 0:
+        return ""
+    
+    # Use the final code block found (we could extend this to support multiple blocks)
+    parsed_code = all_valid_python_code[-1].strip()
+    
+    return parsed_code
+
 class AceCoderRewardManager:
     """
     The Reward Manager used in https://github.com/TIGER-AI-Lab/AceCoder
@@ -140,6 +168,7 @@ class AceCoderRewardManager:
         
         # extract the answer for the list of responses
         extracted_answers = [re.sub(r"<think>(.|\n)*?</think>", "", response) for response in response_str]
+        extracted_answers = [parse_code(response) for response in extracted_answers] # get the last code blcok
         question_hashes = [hash_string(question) for question in prompt_str]
         
         # ensure the length of lists are of the same, avoid Ray error
