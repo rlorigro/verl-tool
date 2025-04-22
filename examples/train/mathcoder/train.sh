@@ -5,7 +5,7 @@ val_data=[data/mathcoder/code_test.parquet,\
 data/math_torl/math500_test.parquet,\
 data/math_torl/aime24_test.parquet,\
 data/math_torl/aime25_test.parquet]
-model_name=Qwen/Qwen2.5-Math-7B
+model_name=Qwen/Qwen2.5-7B
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
 n_gpus_per_node=8
 n_nodes=1
@@ -46,7 +46,7 @@ echo "action_stop_tokens_file=$action_stop_tokens_file"
 host=0.0.0.0
 port=$(shuf -i 30000-31000 -n 1)
 tool_server_url=http://$host:$port/get_observation
-python -m verl_tool.servers.serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 64 2>&1 > /dev/null &
+python -m verl_tool.servers.serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 8 2>&1 > /dev/null &
 server_pid=$!
 echo "Server (pid=$server_pid) started at $tool_server_url"
 
