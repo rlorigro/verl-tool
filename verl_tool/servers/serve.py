@@ -11,7 +11,7 @@ import fire
 import uvicorn
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, field_validator, validator
+from pydantic import BaseModel
 
 from .tools import get_tool_cls, ALL_TOOLS
 
@@ -22,35 +22,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ---- Data Models ----
-
-class ExtraField(BaseModel):
-    """A model for extra fields in requests"""
-    finish: bool = False
-    # Add other fields as needed
-
-class AgentRequest(BaseModel):
-    """Model for incoming agent requests"""
-    trajectory_ids: List[Union[str, int]]  # Allow both string and integer IDs
-    actions: List[str]
-    extra_fields: Optional[List[Dict[str, Any]]] = None
-    
-    @validator('trajectory_ids', each_item=True)
-    def convert_trajectory_ids_to_string(cls, v):
-        # Convert any non-string IDs to strings
-        return str(v)
-    
-    @validator('extra_fields', pre=True, always=True)
-    def set_extra_fields(cls, v, values):
-        if v is None and 'actions' in values:
-            return [{}] * len(values['actions'])
-        return v
-    
-    @validator('extra_fields')
-    def validate_length(cls, v, values):
-        if 'actions' in values and len(v) != len(values['actions']):
-            raise ValueError(f"Number of extra_fields ({len(v)}) does not match number of actions ({len(values['actions'])})")
-        return v
 
 class AgentResponse(BaseModel):
     """Model for outgoing agent responses"""
@@ -334,14 +305,19 @@ class AsyncToolServer:
                         data["trajectory_ids"] = [str(tid) if not isinstance(tid, str) else tid 
                                                  for tid in data.get("trajectory_ids", [])]
                     
-                    # Validate request with pydantic model
-                    agent_request = AgentRequest.model_validate(data)
+                    # Validate and process request
+                    trajectory_ids = data.get("trajectory_ids", [])
+                    actions = data.get("actions", [])
+                    extra_keys = [k for k in data.keys() if k not in ["trajectory_ids", "actions"]]
+                    extra_fields = [
+                        {key: data[key][i] for key in extra_keys} 
+                        for i in range(len(trajectory_ids))
+                    ]
                     
-                    # Process the request asynchronously
                     observations, dones, valids = await self.tool_manager.process_actions(
-                        agent_request.trajectory_ids,
-                        agent_request.actions,
-                        agent_request.extra_fields
+                        trajectory_ids,
+                        actions,
+                        extra_fields
                     )
                     
                     # Create response
@@ -432,5 +408,5 @@ if __name__ == "__main__":
     
     
 """
-python -m verl_tool.servers.serve --tool_type "firejail_python_code" --workers_per_tool 8
+python -m verl_tool.servers.ray_serve --tool_type "firejail_python_code" --workers_per_tool 8
 """

@@ -143,24 +143,11 @@ class BaseTool:
         """
         # results = [
         #     self.conduct_action(trajectory_id, action, extra_field)
-        #     for trajectory_id, action, extra_field in zip(trajectory_ids, actions, extra_fields)
+        #     for trajectory_id, action, extra_field in tqdm(zip(trajectory_ids, actions, extra_fields),
         # ]
         results = list(tqdm(self.executor.map(self.conduct_action, trajectory_ids, actions, extra_fields),
                                         total=len(trajectory_ids), desc=f"Getting observations using tool {self.tool_type}", 
                                         disable=False))
-    
-        # # submit instead of map
-        # futures = []
-        # for trajectory_id, action, extra_field in zip(trajectory_ids, actions, extra_fields):
-        #     future = self.executor.submit(self.conduct_action, trajectory_id, action, extra_field)
-        #     futures.append(future)
-        # results = []
-        # for future in tqdm(futures, desc=f"Getting observations using tool {self.tool_type}", disable=False):
-        #     try:
-        #         result = future.result()
-        #         results.append(result)
-        #     except Exception as e:
-        #         print(f"Error occurred: {e}")
             
         observations, dones, valids = zip(*results)
         return observations, dones, valids

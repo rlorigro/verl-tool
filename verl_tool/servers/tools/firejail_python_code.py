@@ -97,7 +97,7 @@ def execute_python_in_firejail(code: str, timeout: int=TIMEOUT, stdin: Optional[
         "--rlimit-nproc=32",
         "--rlimit-nofile=32",
         "--rlimit-fsize=2m",  # Limit file size
-        "--rlimit-as=4096m",
+        "--rlimit-as=1096m",
     ]
     command.extend(["python3", "-c", code])
     

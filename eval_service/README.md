@@ -12,7 +12,7 @@ Start the Python code execution tool server:
 host=0.0.0.0
 port=$(shuf -i 30000-31000 -n 1)  # Randomly select a port
 tool_server_url=http://$host:$port/get_observation
-python -m verl_tool.servers.serve --host $host --port $port --tool_type "python_code" &
+python -m verl_tool.servers.ray_serve --host $host --port $port --tool_type "python_code" &
 server_pid=$!
 echo "Server (pid=$server_pid) started at $tool_server_url"
 ```
@@ -41,7 +41,7 @@ export CUDA_VISIBLE_DEVICES=7
 host=0.0.0.0
 port=$(shuf -i 30000-31000 -n 1)
 tool_server_url=http://$host:$port/get_observation
-python -m verl_tool.servers.serve --host $host --port $port --tool_type "python_code" &
+python -m verl_tool.servers.ray_serve --host $host --port $port --tool_type "python_code" &
 server_pid=$!
 echo "Server (pid=$server_pid) started at $tool_server_url"
 

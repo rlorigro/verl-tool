@@ -45,7 +45,7 @@ echo "action_stop_tokens_file=$action_stop_tokens_file"
 host=0.0.0.0
 port=$(shuf -i 30000-31000 -n 1)
 tool_server_url=http://$host:$port/get_observation
-python -m verl_tool.servers.serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 8 2>&1 > /dev/null &
+python -m verl_tool.servers.ray_serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 8 2>&1 > /dev/null &
 server_pid=$!
 echo "Server (pid=$server_pid) started at $tool_server_url"
 

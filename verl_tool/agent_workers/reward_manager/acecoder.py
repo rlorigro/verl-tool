@@ -17,7 +17,7 @@ import regex as re
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from collections import defaultdict
-
+import time
 import torch
 
 from verl import DataProto
@@ -212,7 +212,10 @@ class AceCoderRewardManager:
         command = f"python -m acecoder.eval_test_cases --samples {temp_file} --n_workers {self.n_workers} \
             --extract_solution True --output_file {output_file} --test_details {not self.binary} \
             --i_just_wanna_run True --min_time_limit 1 --gt_time_limit_factor 1"
-        subprocess.run(command, shell=True)
+        start = time.time()
+        subprocess.run(command, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+        end = time.time()
+        print(f"Step {self.step_idx}: acecoder evaluation script took {end - start:.2f} seconds for {len(samples)} samples.")
         
         # the script will dump the results into the output_file, read it and parse it as a list
         with open(output_file, "r") as f:
