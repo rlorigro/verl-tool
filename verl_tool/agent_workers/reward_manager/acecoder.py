@@ -152,6 +152,12 @@ class AceCoderRewardManager:
         reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32)
         reward_extra_info = defaultdict(list)
         
+        if "turns_stats" in data.non_tensor_batch:
+            num_turn = data.non_tensor_batch["turns_stats"]
+            num_valid_action = data.non_tensor_batch["valid_action_stats"]
+            is_active = data.non_tensor_batch["active_mask"]
+            is_done = [not is_active[i] for i in range(len(is_active))]
+            
         already_print_data_sources = {}
         
         # retrieve the list of prompt_token_ids and their length
@@ -205,7 +211,7 @@ class AceCoderRewardManager:
         output_file = Path(temp_file).with_suffix(f".eval_results{'_binary' if self.binary else ''}.jsonl").absolute()
         command = f"python -m acecoder.eval_test_cases --samples {temp_file} --n_workers {self.n_workers} \
             --extract_solution True --output_file {output_file} --test_details {not self.binary} \
-            --i_just_wanna_run True"
+            --i_just_wanna_run True --min_time_limit 1 --gt_time_limit_factor 1"
         subprocess.run(command, shell=True)
         
         # the script will dump the results into the output_file, read it and parse it as a list
@@ -216,6 +222,7 @@ class AceCoderRewardManager:
         # remove the temp_file and output_file after finish code pass rate computation and result extraction
         try:
             os.remove(temp_file)
+            os.remove(output_file)
         except:
             pass
         
@@ -225,6 +232,12 @@ class AceCoderRewardManager:
             sample_result['original_response'] = samples[i]['original_response']
             sample_result['question'] = samples[i]['prompt']
             sample_result['id'] = data[i].non_tensor_batch['extra_info']['id']
+            sample_result['data_source'] = data[i].non_tensor_batch['data_source']
+            if "turns_stats" in data[i].non_tensor_batch:
+                sample_result['is_done'] = is_done[i]
+                sample_result['num_turn'] = num_turn[i]
+                sample_result['num_valid_action'] = num_valid_action[i]
+            
         num_samples = min(100, len(all_samples_results))
         sampled_results = random.sample(all_samples_results, num_samples)
         sampled_output_file = Path(temp_file).with_suffix(f".{num_samples}_samples.json").absolute()

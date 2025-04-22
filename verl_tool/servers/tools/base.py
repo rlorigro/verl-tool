@@ -37,7 +37,7 @@ class BaseTool:
         self.num_workers = num_workers
         registered_tools[self.tool_type] = self.__class__
         self.env_cache = {}
-        # self.executor = ThreadPoolExecutor(max_workers=num_workers)
+        self.executor = ThreadPoolExecutor(max_workers=num_workers)
     
     def get_usage_inst(self):
         """
@@ -145,10 +145,22 @@ class BaseTool:
         #     self.conduct_action(trajectory_id, action, extra_field)
         #     for trajectory_id, action, extra_field in zip(trajectory_ids, actions, extra_fields)
         # ]
-        with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
-            results = list(tqdm(executor.map(self.conduct_action, trajectory_ids, actions, extra_fields),
-                                            total=len(trajectory_ids), desc=f"Getting observations using tool {self.tool_type}", 
-                                            disable=False))
+        results = list(tqdm(self.executor.map(self.conduct_action, trajectory_ids, actions, extra_fields),
+                                        total=len(trajectory_ids), desc=f"Getting observations using tool {self.tool_type}", 
+                                        disable=False))
+    
+        # # submit instead of map
+        # futures = []
+        # for trajectory_id, action, extra_field in zip(trajectory_ids, actions, extra_fields):
+        #     future = self.executor.submit(self.conduct_action, trajectory_id, action, extra_field)
+        #     futures.append(future)
+        # results = []
+        # for future in tqdm(futures, desc=f"Getting observations using tool {self.tool_type}", disable=False):
+        #     try:
+        #         result = future.result()
+        #         results.append(result)
+        #     except Exception as e:
+        #         print(f"Error occurred: {e}")
             
         observations, dones, valids = zip(*results)
         return observations, dones, valids
