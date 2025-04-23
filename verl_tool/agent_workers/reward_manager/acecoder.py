@@ -226,7 +226,6 @@ class AceCoderRewardManager:
             os.remove(output_file)
         except:
             pass
-        coding_scores = pass_rates # initialize the coding scores with the pass rates
         for i in range(len(scores)):
             scores[i]['pass_rate'] = pass_rates[i]
             scores[i]['binary_pass_rate'] = 1.0 if pass_rates[i] == 1.0 else 0.0
@@ -276,7 +275,7 @@ class AceCoderRewardManager:
                     "response": samples[i]['original_response'],
                     "extracted_code": samples[i]['output'],
                     "ground_truth": samples[i]['tests'],
-                    "score": scores[i]['score'],
+                    "score": scores[i],
                     'extra_info': data[i].non_tensor_batch.get('extra_info', None),
                 }
                 for i in range(len(data))
@@ -288,10 +287,10 @@ class AceCoderRewardManager:
                     to_save_records[i]['is_done'] = not data[i].non_tensor_batch["active_mask"]
             # Save the records to a file
             if self.num_examine == 1:
-                temp_file = self.record_dir / f"acecoder-step-val-{self.step}.json"
+                temp_file = self.record_dir / f"acecoder-step-val-{self.step_idx}.json"
             else:
-                temp_file = self.record_dir / f"acecoder-step-{self.step}.json"
-            self.step += 1
+                temp_file = self.record_dir / f"acecoder-step-{self.step_idx}.json"
+            self.step_idx += 1
             with open(temp_file, "w") as f:
                 json.dump(to_save_records, f, indent=4)
         

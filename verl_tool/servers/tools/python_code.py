@@ -158,6 +158,6 @@ class PythonCodeTool(BaseTool):
             observation = f"Execution completed with errors:\n{execution_result}"
         else:
             observation = f"Execution result:\n{execution_result}"
-            
+        observation = "\n" + observation
         return observation, False, True
         
