@@ -29,8 +29,8 @@ The final program will be evaluated against the hidden test cases. If the final 
 """
 
 naive_instruction = "Let's think step by step and generate the final program in a markdown code block like this: ```python\nyour code here\n```."
-naive_execution_prompt = """\
-Let's think step by step and generate the correct program for this coding question. You are able to run the python code in the markdown code block and the output will be provided to you in the ````output` block. Put your final program in a markdown code block like this: ```python\nyour code here\n```.
+naive_execution_prompt = """
+A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. The Assistant can reason with the help of Python code. If the Assistant wants to test any Python code, it writes it inside ```python and ``` tags, and makes sure to follow it with "```output", meaning that it is requesting the code to be executed. Then the result of execution will be provided to the Assistant between "```output" and "```" for the python code block that it follows. The Assistant can test Python codes as many times as it wants. If the Assistant finds no further code execution needed, it can then give the final solution in a markdown code block like this: ```python\nyour code here\n``` without appending anything.
 """
 
 coder_instruction = """\

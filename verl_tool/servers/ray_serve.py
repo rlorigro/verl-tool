@@ -205,7 +205,7 @@ class RayToolManager:
         
         @ray.remote
         def non_tool_action(trajectory_id: str, action: str, extra_field: Dict[str, Any]):
-            return self.get_tool_usage_instructions(), False, False
+            return "", False, False # no observation if no tool matched
         
         pending_refs = []
         tool_worker_idx = defaultdict(int)

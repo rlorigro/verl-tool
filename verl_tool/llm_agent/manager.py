@@ -274,7 +274,7 @@ class AgentActorManager:
             if not active_mask.sum():
                 print("All trajectories are done.")
                 break
-            print(f"Action step {step+1}/{self.config.max_turns}")
+            print(f"Action step {step}/{self.config.max_turns}")
             rollings.batch = self.tensor_fn.cut_to_effective_len(
                 rollings.batch,
                 keys=['input_ids', 'attention_mask', 'position_ids']
@@ -497,7 +497,7 @@ class AgentActorManager:
             "actions": responses,
             "finish": finishs, # if do_action is False, then it is a finish action, finishing the trajectory,
         }
-        print(f" - Number of non-finished actions: {len([x for x in do_actions if not x])} / {len(do_actions)}")
+        print(f" - Number of finished responses: {len([x for x in do_actions if not x])} / {len(do_actions)}")
         response = self.send_batch_requests(batch_data)
         active_observations = response['observations']
         active_dones = [int(x) for x in response['dones']]

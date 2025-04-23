@@ -225,7 +225,8 @@ class AsyncToolManager:
             usage_instructions = self.get_tool_usage_instructions()
             indices = indices_by_tool[None]
             for idx in indices:
-                all_observations[idx] = usage_instructions
+                # all_observations[idx] = usage_instructions
+                all_observations[idx] = "" # no observation
                 all_dones[idx] = False
                 all_valids[idx] = False
         

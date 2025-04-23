@@ -2,7 +2,7 @@ set -x
 dataset_name=AceCoderV2-mini-processed-with-execution-prompt
 train_data=data/acecoder/$dataset_name/train.parquet
 val_data=data/acecoder/$dataset_name/test.parquet
-model_name=Qwen/Qwen2.5-Coder-1.5B
+model_name=Qwen/Qwen2.5-1.5B-Instruct
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
 n_gpus_per_node=8
 n_nodes=1
