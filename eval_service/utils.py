@@ -12,16 +12,12 @@ def extract_python_tags(text: str) -> Tuple[Optional[str], bool]:
     else:
         return None, False
     
-def call_tool_server(server_url: str, trajectory_id: str, python_code: str, finish: bool = False) -> Dict:
+def call_tool_server(server_url: str, trajectory_id: str, action: str) -> Dict:
     """querying the tool server for the observation and done flag"""
-    # reformat the action: wrap the code with <python> and </python>
-    action = f"<python>{python_code}</python>"
-    
     # perpare payload
     data = {
         "trajectory_ids": [trajectory_id],
         "actions": [action],
-        "extra_fields": [{}]
     }
     
     try:
