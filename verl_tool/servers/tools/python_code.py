@@ -143,6 +143,10 @@ class PythonCodeTool(BaseTool):
         if not is_valid:
             # observation = "No valid Python code found. Please provide code in either <python>...</python> tags or ```python...``` code blocks."
             observation = "No valid Python code found. Please provide code in ```python...``` code blocks."
+            if action.endswith("```output"):
+                observation = observation + "```"
+            elif action.endswith("<output>"):
+                observation = observation + "</output>"
             return observation, True, False
         
         # Extract stdin if provided in extra_field
@@ -158,6 +162,13 @@ class PythonCodeTool(BaseTool):
             observation = f"Execution completed with errors:\n{execution_result}"
         else:
             observation = f"Execution result:\n{execution_result}"
+        
+        if "```python" in action:
+            observation = observation + "```"
+        
+        if "<python>" in action:
+            observation = observation + "</python>"
+
             
         return observation, False, True
         
