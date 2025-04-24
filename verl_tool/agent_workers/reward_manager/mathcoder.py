@@ -56,6 +56,7 @@ class MathCoderRewardManager:
         )
 
     def __call__(self, data: DataProto, return_dict=False):
+        save_record = data.meta_info.get('save_record', True)
         
         if not hasattr(self, 'record_dir'):
             if hasattr(self, 'run_id'):
@@ -92,7 +93,6 @@ class MathCoderRewardManager:
             if k not in reward_extra_info:
                 for i in range(len(v)):
                     reward_extra_info[f"code_{k}"][code_data_idxs[i]] = v[i]
-            re
         for k, v in math_reward['reward_extra_info'].items():
             if k not in reward_extra_info:
                 for i in range(len(v)):
@@ -116,34 +116,37 @@ class MathCoderRewardManager:
             is_done = [not is_active[i] for i in range(len(is_active))]
 
         data_source = data.non_tensor_batch[self.reward_fn_key]
-        raw_score = [reward_extra_info['accuracy'][i] if data[i].non_tensor_batch['ability'] == 'math' else \
-            reward_extra_info['pass_rate'][i] for i in range(len(data))]
-        to_save_records = [
-            {
-                "prompt": prompts[i],
-                "response": responses[i],
-                "ground_truth": ground_truths[i],
-                "score": raw_score[i],
-                "num_turn": num_turn[i],
-                "num_valid_action": num_valid_action[i],
-                "data_source": data_source[i],
-                "is_done": is_done[i],
-                'extra_info': data[i].non_tensor_batch.get('extra_info', None),
-            }
-            for i in range(len(data))
-        ]
         
-        # Save the records to a file
-        if self.num_examine == 1:
-            temp_file = self.record_dir / f"step-mathcoder-val-{self.step}.json"
-        else:
-            temp_file = self.record_dir / f"step-mathcoder-{self.step}.json"
-        self.step += 1
-        with open(temp_file, "w") as f:
-            json.dump(to_save_records, f, indent=4)
+        if save_record:
+            raw_score = [reward_extra_info['math_accuracy'][i] if data[i].non_tensor_batch['ability'] == 'math' else \
+                reward_extra_info['code_binary_pass_rate'][i] for i in range(len(data))]
+            to_save_records = [
+                {
+                    "id": data[i].non_tensor_batch['extra_info']['id'] if 'id' in data[i].non_tensor_batch['extra_info'] else None,
+                    "data_source": data_source[i],
+                    "prompt": prompts[i],
+                    "response": responses[i],
+                    "ground_truth": ground_truths[i],
+                    "score": raw_score[i],
+                    "num_turn": num_turn[i],
+                    "num_valid_action": num_valid_action[i],
+                    "is_done": is_done[i],
+                    'extra_info': data[i].non_tensor_batch.get('extra_info', None),
+                }
+                for i in range(len(data))
+            ]
+            
+            # Save the records to a file
+            if self.num_examine == 1:
+                temp_file = self.record_dir / f"mathcoder-step-val-{self.step}.json"
+            else:
+                temp_file = self.record_dir / f"mathcoder-step-{self.step}.json"
+            self.step += 1
+            with open(temp_file, "w") as f:
+                json.dump(to_save_records, f, indent=4)
             
         if self.num_examine == 1:
-            # for validation, empty the reward_extra_info
+            # for validation, empty the reward_extra_info, becuase there are None items and cannot be mean
             reward_extra_info = defaultdict(list)
         if return_dict:
             return {

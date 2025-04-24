@@ -49,6 +49,81 @@ def compute_response_mask(data: DataProto):
     return attention_mask[:, -response_length:]
 class AgentRayPPOTrainer(RayPPOTrainer):
     
+    def index_select(self, batch: DataProto, indices: list):
+        """
+        Select a subset of the DataProto based on the given indices.
+        
+        Args:
+            batch (DataProto): The DataProto object to select from.
+            indices (list): A list of indices to select.
+            
+        Returns:
+            DataProto: A new DataProto object containing the selected data.
+        """
+        if batch.batch is not None:
+            selected_batch = batch.batch[indices]
+        else:
+            selected_batch = None
+        
+        selected_non_tensor = {}
+        for key, val in batch.non_tensor_batch.items():
+            selected_non_tensor[key] = val[indices]
+        selected_meta_info = batch.meta_info.copy()
+        # Create a new DataProto object with the selected data
+        selected_data = DataProto(batch=selected_batch, non_tensor_batch=selected_non_tensor, meta_info=selected_meta_info)
+        return selected_data
+        
+    def dynamic_filter(self, batch: DataProto, metrics: dict):
+        """
+        Dynamic filter for the batch based on the reward scores
+        """
+        # we combine with rule-based rm
+        reward_extra_infos_dict: dict[str, list]
+        batch.meta_info['save_record'] = False
+        try:
+            reward_result = self.reward_fn(batch, return_dict=True)
+            reward_tensor = reward_result['reward_tensor']
+            reward_extra_infos_dict = reward_result['reward_extra_info']
+            for key, value in reward_extra_infos_dict.items():
+                metrics[f'dynamic_filter_reward/{key}'] = np.mean([x for x in value if x is not None])
+        except Exception as e:
+            print(f'Error in reward_fn: {e}')
+            reward_tensor = self.reward_fn(batch)
+            reward_extra_infos_dict = {}
+            raise e
+
+        response_acc = reward_extra_infos_dict['acc_score']
+        question_uids = batch.non_tensor_batch['uid']
+        question_acc = {}
+        for i in range(len(question_uids)):
+            uid = question_uids[i]
+            if uid not in question_acc:
+                question_acc[uid] = []
+            question_acc[uid].append(response_acc[i])
+        question_acc_std = {k: np.std(v) for k, v in question_acc.items()}
+        # filter out samples with std == 0, which means all the responses are the same reward
+        kept_uids = []
+        for uid, std in question_acc_std.items():
+            if std > 0:
+                kept_uids.append(uid)
+        kept_uids = set(kept_uids)
+        kept_indices = [i for i in range(len(question_uids)) if question_uids[i] in kept_uids]
+        batch = self.index_select(batch, kept_indices)
+        print(f"Dynamic filter kept {len(kept_indices)} samples out of {len(question_uids)}")
+        print(f"Average accuracy after filtering: {np.mean([question_acc[uid] for uid in kept_uids])}")
+        metrics.update({
+            'dynamic_filter/actural_filter_ratio': len(kept_indices) / len(question_uids),
+            'dynamic_filter/before_filtering/avg_acc': np.mean(list(question_acc.values())),
+            'dynamic_filter/after_filtering/avg_acc': np.mean([question_acc[uid] for uid in kept_uids]),
+            'dynamic_filter/before_filtering/num_samples': len(question_acc),
+            'dynamic_filter/after_filtering/num_samples': len(kept_uids),
+            'dynamic_filter/before_filtering/full_pass_ratio': len([uid for uid in question_uids if question_acc[uid] >= 1]) / len(question_uids),
+            'dynamic_filter/after_filtering/full_pass_ratio': len([uid for uid in kept_uids if question_acc[uid] >= 1]) / len(kept_uids),
+            'dynamic_filter/before_filtering/zero_pass_ratio': len([uid for uid in question_uids if question_acc[uid] <= 0]) / len(question_uids),
+            'dynamic_filter/after_filtering/zero_pass_ratio': len([uid for uid in kept_uids if question_acc[uid] <= 0]) / len(kept_uids),
+        })
+        return batch
+    
     def fit(self):
         """
         The training loop of PPO.
@@ -132,6 +207,9 @@ class AgentRayPPOTrainer(RayPPOTrainer):
                     # repeat to align with repeated responses in rollout
                     batch = batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
                     batch = batch.union(gen_batch_output)
+                    
+                    if getattr(self.config.trainer, 'dynamic_filter', False):
+                        batch = self.dynamic_filter(batch, metrics)
 
                     batch.batch['response_mask'] = compute_response_mask(batch)
                     # balance the number of valid tokens on each dp rank.

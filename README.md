@@ -1,5 +1,21 @@
 # Verl-Tool
-An unified and easy-to-extend tool-agent training framework based on verl.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/imgs/logo.png">
+    <img alt="VerlTool" src="assets/imgs/logo.png" width=20%>
+  </picture>
+</p>
+
+<h3 align="center">
+VerlTool: An unified and easy-to-extend tool-agent training framework based on verl.
+</h3>
+
+---
+
+<!-- <p align="center">
+| <a href="https://docs.vllm.ai"><b>Documentation</b></a> | <a href="https://blog.vllm.ai/"><b>Blog</b></a> | <a href="https://arxiv.org/abs/2309.06180"><b>Paper</b></a> | <a href="https://x.com/vllm_project"><b>Twitter/X</b></a> | <a href="https://discuss.vllm.ai"><b>User Forum</b></a> | <a href="https://slack.vllm.ai"><b>Developer Slack</b></a> |
+</p> -->
 
 ## Installation
 ```bash
