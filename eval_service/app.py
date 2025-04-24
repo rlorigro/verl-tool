@@ -1,10 +1,11 @@
 import os
+import json
+import argparse
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 import uvicorn
-import json
 
 from config import ServerConfig, ModelConfig, ToolConfig
 from model_service import ModelService
@@ -59,7 +60,7 @@ def create_app(config: ServerConfig):
         print(f"Model loaded: {config.llm_config.model_path}")
     
     @app.post("/chat/completions")
-    async def chat_completions(request: ChatCompletionRequest, req: Request):
+    async def chat_completions(request: Request):
         """
         Chat completion API endpoint compatible with OpenAI
         
@@ -67,11 +68,8 @@ def create_app(config: ServerConfig):
         with tool calling capabilities
         """
         try:
-            # Convert Pydantic model to dictionary
-            messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
-            
-            # Generate response using the model service
-            response = app.state.model_service.generate_response(messages)
+            request_body = await request.json()
+            response = app.state.model_service.generate_response(request_body)
             
             return response
         except Exception as e:
@@ -84,21 +82,40 @@ def create_app(config: ServerConfig):
     
     return app
 
-if __name__ == "__main__":
-    # Load configuration from environment variables
+def parse_args():
+    parser = argparse.ArgumentParser(description='Verl-tool server configuration')
+    parser.add_argument('--model-path', type=str, default='Qwen/Qwen2.5-1.5B-Instruct',
+                      help='Path to the model')
+    parser.add_argument('--tool-server-url', type=str, default='http://localhost:30245/get_observation',
+                      help='URL for tool server')
+    parser.add_argument('--max-turns', type=int, default=5,
+                      help='Maximum number of tool interaction turns')
+    parser.add_argument('--host', type=str, default='0.0.0.0',
+                      help='Host to bind the server')
+    parser.add_argument('--port', type=int, default=8000,
+                      help='Port to bind the server')
+    return parser.parse_args()
+
+def main():
+    args = parse_args()
+    
+    # Load configuration from command line arguments
     config = ServerConfig(
         llm_config=ModelConfig(
-            model_path=os.environ.get("MODEL_PATH", "yi-34b-chat"),  # Path to the model
+            model_path=args.model_path,  # Path to the model
         ),
         tool_config=ToolConfig(
-            tool_server_url=os.environ.get("TOOL_SERVER_URL", "http://localhost:30150/get_observation"),  # URL for tool server
-            valid_actions=json.loads(os.environ.get("VALID_ACTIONS", '["python"]')),  # List of valid tool actions
-            max_turns=int(os.environ.get("MAX_TURNS", "5")),  # Maximum number of tool interaction turns
+            tool_server_url=args.tool_server_url,  # URL for tool server
+            # valid_actions=json.loads(args.valid_actions),  # List of valid tool actions
+            max_turns=args.max_turns,  # Maximum number of tool interaction turns
         ),
-        host=os.environ.get("HOST", "0.0.0.0"),  # Host to bind the server
-        port=int(os.environ.get("PORT", "8000")),  # Port to bind the server
+        host=args.host,  # Host to bind the server
+        port=args.port,  # Port to bind the server
     )
     
     # Create and run the application
     app = create_app(config)
     uvicorn.run(app, host=config.host, port=config.port)
+
+if __name__ == "__main__":
+    main()
