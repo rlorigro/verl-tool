@@ -94,6 +94,7 @@ def execute_python(code: str, timeout: int=TIMEOUT, stdin: Optional[str] = None)
 class PythonCodeTool(BaseTool):
     tool_type = "python_code"
     timeout = TIMEOUT
+    stop_tokens = ["```output", "<output>"]
     
     def get_usage_inst(self):
         return "You are able to write and execute Python code"
@@ -143,30 +144,33 @@ class PythonCodeTool(BaseTool):
         if not is_valid:
             # observation = "No valid Python code found. Please provide code in either <python>...</python> tags or ```python...``` code blocks."
             observation = "No valid Python code found. Please provide code in ```python...``` code blocks."
-            if action.endswith("```output"):
-                observation = observation + "```"
-            elif action.endswith("<output>"):
-                observation = observation + "</output>"
-            return observation, True, False
-        
-        # Extract stdin if provided in extra_field
-        stdin = extra_field.get("stdin", None) if extra_field else None
-        
-        # Execute the code
-        execution_result = execute_python(parsed_action, self.timeout, stdin)
-        
-        # Format the result
-        if "Execution timed out" in execution_result:
-            observation = execution_result
-        elif "ERROR:" in execution_result:
-            observation = f"Execution completed with errors:\n{execution_result}"
+            done = True
+            valid = False
         else:
-            observation = f"Execution result:\n{execution_result}"
-
-        if "```python" in action:
-            observation = observation + "```"
-        if "<python>" in action:
-            observation = observation + "</python>"
-        observation = "\n" + observation
-        return observation, False, True
+            
+            # Extract stdin if provided in extra_field
+            stdin = extra_field.get("stdin", None) if extra_field else None
+            
+            # Execute the code
+            execution_result = execute_python(parsed_action, self.timeout, stdin)
+            
+            # Format the result
+            if "Execution timed out" in execution_result:
+                observation = execution_result
+            elif "ERROR:" in execution_result:
+                observation = f"Execution completed with errors:\n{execution_result}"
+            else:
+                observation = f"Execution result:\n{execution_result}"
+            done = False
+            valid = True
+        
+        if action.endswith("```output"):
+            observation = observation + "\n```"
+        if action.endswith("<output>"):
+            observation = observation + "\n</output>"
+        
+        print(f"action: {action}")
+        print(f"observation: {observation}")
+        observation = "\n" + observation + "\n"
+        return observation, done, valid
         

@@ -1,28 +1,18 @@
 import os
 import json
 import argparse
+import inspect
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
+from transformers import HfArgumentParser
 import uvicorn
 
 from config import ServerConfig, ModelConfig, ToolConfig
 from model_service import ModelService
 
-# Define API request models
-class ChatMessage(BaseModel):
-    role: str  # Role of the message (system, user, assistant)
-    content: str  # Content of the message
-
-class ChatCompletionRequest(BaseModel):
-    model: str  # Model identifier
-    messages: List[ChatMessage]  # List of conversation messages
-    temperature: Optional[float] = 0.7  # Controls randomness in generation
-    top_p: Optional[float] = 0.9  # Nucleus sampling parameter
-    max_tokens: Optional[int] = 1024  # Maximum number of tokens to generate
-
-def create_app(config: ServerConfig):
+def create_app(server_config: ServerConfig, model_config: ModelConfig, tool_config: ToolConfig) -> FastAPI:
     """
     Create and configure the FastAPI application
     
@@ -48,16 +38,11 @@ def create_app(config: ServerConfig):
     )
     
     # Initialize the model service
-    model_service = ModelService(config.llm_config, config.tool_config)
+    model_service = ModelService(model_config, tool_config)
+    model_service.load_model()
     
     # Store service in application state
     app.state.model_service = model_service
-    
-    @app.on_event("startup")
-    async def startup_event():
-        """Load model when application starts"""
-        app.state.model_service.load_model()
-        print(f"Model loaded: {config.llm_config.model_path}")
     
     @app.post("/chat/completions")
     async def chat_completions(request: Request):
@@ -69,7 +54,7 @@ def create_app(config: ServerConfig):
         """
         try:
             request_body = await request.json()
-            response = app.state.model_service.generate_response(request_body)
+            response = await app.state.model_service.generate_response_async(request_body)
             
             return response
         except Exception as e:
@@ -82,40 +67,20 @@ def create_app(config: ServerConfig):
     
     return app
 
-def parse_args():
-    parser = argparse.ArgumentParser(description='Verl-tool server configuration')
-    parser.add_argument('--model-path', type=str, default='Qwen/Qwen2.5-1.5B-Instruct',
-                      help='Path to the model')
-    parser.add_argument('--tool-server-url', type=str, default='http://localhost:30245/get_observation',
-                      help='URL for tool server')
-    parser.add_argument('--max-turns', type=int, default=5,
-                      help='Maximum number of tool interaction turns')
-    parser.add_argument('--host', type=str, default='0.0.0.0',
-                      help='Host to bind the server')
-    parser.add_argument('--port', type=int, default=8000,
-                      help='Port to bind the server')
-    return parser.parse_args()
+async def main_async():
+    hf_parser = HfArgumentParser((ServerConfig, ModelConfig, ToolConfig))
+    server_config, model_config, tool_config = hf_parser.parse_args_into_dataclasses()
+    tool_config.post_init()
+    # Create and run the application
+    app = create_app(server_config, model_config, tool_config)
+    
+    config = uvicorn.Config(app, host=server_config.host, port=server_config.port, log_level="info")
+    server = uvicorn.Server(config)
+    await server.serve()
 
 def main():
-    args = parse_args()
-    
-    # Load configuration from command line arguments
-    config = ServerConfig(
-        llm_config=ModelConfig(
-            model_path=args.model_path,  # Path to the model
-        ),
-        tool_config=ToolConfig(
-            tool_server_url=args.tool_server_url,  # URL for tool server
-            # valid_actions=json.loads(args.valid_actions),  # List of valid tool actions
-            max_turns=args.max_turns,  # Maximum number of tool interaction turns
-        ),
-        host=args.host,  # Host to bind the server
-        port=args.port,  # Port to bind the server
-    )
-    
-    # Create and run the application
-    app = create_app(config)
-    uvicorn.run(app, host=config.host, port=config.port)
+    import asyncio
+    asyncio.run(main_async())
 
 if __name__ == "__main__":
     main()

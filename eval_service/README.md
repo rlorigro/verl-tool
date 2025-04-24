@@ -22,7 +22,7 @@ bash eval_service/scripts/start_api_service.sh
 
 **Please Replace with your local server address**
 
-```python
+```bash
 python eval_service/test/test_api.py
 ```
 

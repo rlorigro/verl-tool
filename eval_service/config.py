@@ -1,29 +1,40 @@
-from pydantic import BaseModel
+import os
 from typing import Optional, List, Dict, Any, Union
+from dataclasses import dataclass
 
-class ModelConfig(BaseModel):
-    model_path: str
-    # max_model_len: int = 8192
-    # gpu_memory_utilization: float = 0.9
-
-class ToolConfig(BaseModel):
+@dataclass
+class ModelConfig:
+    model: str
+    gpu_memory_utilization: float = 0.9
+    tensor_parallel_size: int = 1
+    trust_remote_code: bool = True
+    num_models: int = 2
+@dataclass
+class ToolConfig:
     tool_server_url: str = "http://localhost:30150/get_observation"
-    # valid_actions: List[str] = ["python"]  # list of valid tool actions, will automatically add "```"
-    # min_turns: int = 2  # least generation turns
     max_turns: int = 5  # max generation turns
-    # no_action_as_stop: bool = True  # if no action, stop generation
-    # min_action_num: int = 2  # minimun number of tool-calling actions required
-    # truncate_obs_side: str = "left"  # "left" or "right", which side to truncate when the observation is too long
-    # max_prompt_length: int = 4096  # maximum length of prompt
-    # max_obs_length: int = 1024  # maximum length of observation
-    # max_start_length: int = 4096  
-    # max_response_length: int = 4096
+    truncate_obs_side: str = "left"  # "left" or "right", which side to truncate when the observation is too long
+    action_stop_tokens: str = None
+    max_obs_length: int = None  # maximum length of observation
+    
+    def post_init(self):
+        """
+        Post-initialization processing for ToolConfig (will not call automatically)
+        """
+        # action_stop_tokens can be a string or a file path
+        if isinstance(self.action_stop_tokens, str):
+            if os.path.exists(self.action_stop_tokens):
+                with open(self.action_stop_tokens, "r") as f:
+                    self.action_stop_tokens = f.read().split(',')
+            else:
+                self.action_stop_tokens = self.action_stop_tokens.split(',')
+            self.action_stop_tokens = [token.strip('\n ') for token in self.action_stop_tokens]
+            self.action_stop_tokens = [token for token in self.action_stop_tokens if token]
+        else:
+            self.action_stop_tokens = None
+        print(f"using action_stop_tokens: {self.action_stop_tokens}")
 
-class ServerConfig(BaseModel):
+@dataclass
+class ServerConfig:
     host: str = "0.0.0.0"
     port: int = 8000
-    llm_config: ModelConfig
-    tool_config: ToolConfig
-#     execution_prompt: str = """\
-# Answer the given coding question. You must conduct reasoning inside <think> and </think> first before you can finally output the final program. During the thinking, you can test your program by writing it inside <python> and </python> tags. The code will be executed, and the terminal output (standard output and standard error) will be returned between <output> and </output>. Each program between <python> and </python> tags are independent program. You can run Python code as many times as you want. If you find no further code execution needed, you can then give the final program in a markdown code block like this: ```python\\nyour code here\\n```. The final program will be evaluated against the test cases.
-# """
