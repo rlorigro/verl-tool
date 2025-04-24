@@ -167,6 +167,9 @@ class TaskRunner:
         elif reward_manager_name == 'mathcoder':
             from verl_tool.agent_workers.reward_manager.mathcoder import MathCoderRewardManager
             reward_manager_cls = MathCoderRewardManager
+        elif reward_manager_name == 'wikiRL':
+            from verl_tool.agent_workers.reward_manager.wikiRL import WikiRLRewardManager
+            reward_manager_cls = WikiRLRewardManager
         else:
             raise NotImplementedError
 
