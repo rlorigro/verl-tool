@@ -8,7 +8,7 @@ class ModelConfig:
     gpu_memory_utilization: float = 0.9
     tensor_parallel_size: int = 1
     trust_remote_code: bool = True
-    num_models: int = 2
+    num_models: int = 1
 @dataclass
 class ToolConfig:
     tool_server_url: str = "http://localhost:30150/get_observation"

@@ -103,6 +103,30 @@ class ModelService:
                 "dones": [True for _ in range(len(trajectory_ids))],
                 "valids": [False for _ in range(len(trajectory_ids))]
             }
+    
+    def post_process_observations(self, observations: List[str]):
+        next_obs_ids = self.tokenizer(
+            observations,
+            padding='longest',
+            return_tensors='pt',
+            add_special_tokens=False,  # Prevents adding special tokens
+        )['input_ids'].to(torch.int64)
+
+        if isinstance(self.tool_config.max_obs_length, int) and next_obs_ids.shape[1] > self.tool_config.max_obs_length:
+            print(f"[WARNING] OBSERVATION TOO LONG, CONSIDER CHANGING YOUR CONFIG, {next_obs_ids.shape[1]} & {self.config.max_obs_length}")            
+            if self.config.truncate_obs_side == 'left':
+                next_obs_ids = next_obs_ids[:, -self.config.max_obs_length:]
+            elif self.config.truncate_obs_side == 'right':
+                next_obs_ids = next_obs_ids[:, :self.config.max_obs_length]
+            else:
+                raise ValueError(f"Invalid truncate_obs_side: {self.config.truncate_obs_side}")
+        
+        # Convert to list of strings
+        next_obs = self.tokenizer.batch_decode(
+            next_obs_ids,
+            skip_special_tokens=True,
+        )
+        return next_obs
         
     def load_model(self):
         """load the model using VLLM backend"""
@@ -140,8 +164,7 @@ class ModelService:
         ]
         
         # Wait for the service to start (poll the health endpoint)
-        time.sleep(30)
-        max_retries = 10
+        max_retries = 30
         retry_interval = 5
         vllm_model_status = [False for _ in range(num_models)]
         for i in range(max_retries):
@@ -235,7 +258,7 @@ class ModelService:
                 active_responses,
                 finishes
             )
-            observations = tool_responses["observations"]
+            observations = self.post_process_observations(tool_responses["observations"])
             dones = tool_responses["dones"]
             valids = tool_responses["valids"]
             
