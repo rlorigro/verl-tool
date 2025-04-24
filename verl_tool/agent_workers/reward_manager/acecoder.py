@@ -17,7 +17,7 @@ import regex as re
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from collections import defaultdict
-
+import time
 import torch
 
 from verl import DataProto
@@ -88,38 +88,78 @@ async def parallel_compute_score_async(evaluation_func, completions, references,
     return scores
 
 
+def parse_code(action: str):
+    """
+    Parse the raw action string (which is the llm response) into an actual action and its contents.
+    Ensures that the parsed code is valid and safe for execution.
+    
+    Args:
+        action: Raw action string containing Python code
+        
+    Returns:
+        Tuple containing the extracted code and a validity flag
+    """
+    # Try to find Python code in various formats
+    all_valid_python_code = re.findall(r"<python>(.*?)</python>", action, re.DOTALL)
+    
+    if not all_valid_python_code:
+        all_valid_python_code = re.findall(r"```python(.*?)```", action, re.DOTALL)
+    
+    if not all_valid_python_code:
+        all_valid_python_code = re.findall(r"```(.*?)```", action, re.DOTALL)
+    
+    if len(all_valid_python_code) == 0:
+        return ""
+    
+    # Use the final code block found (we could extend this to support multiple blocks)
+    parsed_code = all_valid_python_code[-1].strip()
+    
+    return parsed_code
+
 class AceCoderRewardManager:
     """
     The Reward Manager used in https://github.com/TIGER-AI-Lab/AceCoder
     """
 
-    def __init__(self, tokenizer, num_examine, compute_score=None) -> None:
+    def __init__(self, tokenizer, num_examine, compute_score=None, run_id=None) -> None:
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
         self.compute_score = compute_score or _default_compute_score
         self.step_idx = 0
         self.n_workers = 64
         self.binary = False
-        self.run_id = os.getenv("VERL_RUN_ID", f"acecoder_{time.strftime('%Y-%m-%d-%H-%M-%S')}")
-        self.record_dir = Path(__file__).parent.parent.parent.parent / "verl_step_records" / self.run_id
-        self.record_dir.mkdir(parents=True, exist_ok=True)
         try:
             from acecoder import evaluate_test_cases
         except ImportError:
             raise ImportError("`from acecoder import evaluate_test_cases` failed, please install acecoder to use test_case rule")
         
-
     def __call__(self, data: DataProto, return_dict=False):
         """We will expand this function gradually based on the available datasets"""
+        save_record = data.meta_info.get('save_record', True)
 
+        if not hasattr(self, 'record_dir'):
+            if hasattr(self, 'run_id'):
+                self.record_dir = Path(__file__).parent.parent.parent.parent / "verl_step_records" / self.run_id
+                self.record_dir.mkdir(parents=True, exist_ok=True)
+            else:
+                self.record_dir = Path(__file__).parent.parent.parent.parent / "verl_step_records" / f"acecoder-{time.strftime('%Y-%m-%d-%H-%M-%S')}"
+                self.record_dir.mkdir(parents=True, exist_ok=True)
+                
         # If there is rm score, we directly return rm score. Otherwise, we compute via rm_score_fn
         if 'rm_scores' in data.batch.keys():
             return data.batch['rm_scores']
 
         # TODO: implement new reward computing & statistic mechanism
+        scores = [{} for _ in range(len(data))]
         reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32)
         reward_extra_info = defaultdict(list)
         
+        if "turns_stats" in data.non_tensor_batch:
+            num_turn = data.non_tensor_batch["turns_stats"]
+            num_valid_action = data.non_tensor_batch["valid_action_stats"]
+            is_active = data.non_tensor_batch["active_mask"]
+            is_done = [not is_active[i] for i in range(len(is_active))]
+            
         already_print_data_sources = {}
         
         # retrieve the list of prompt_token_ids and their length
@@ -134,17 +174,21 @@ class AceCoderRewardManager:
         response_str = self.tokenizer.batch_decode(response_ids, skip_special_tokens=True)
         prompt_str = self.tokenizer.batch_decode(prompt_ids, skip_special_tokens=True)
         
-        # retrieve the list of ground truths
-        ground_truth = [data_item.non_tensor_batch['reward_model']['ground_truth'] for data_item in data]
+        # retrieve the list of ground truths/test cases
+        if isinstance(data[0].non_tensor_batch['reward_model']['ground_truth'], list):
+            ground_truth = [data_item.non_tensor_batch['reward_model']['ground_truth'] for data_item in data]
+        else:
+            ground_truth = [data_item.non_tensor_batch['extra_info']['ground_truth'] for data_item in data]
         data_sources = data.non_tensor_batch['data_source']
         
+        
+        # 1. Testing code on the test cases
         # extract the answer for the list of responses
         extracted_answers = [re.sub(r"<think>(.|\n)*?</think>", "", response) for response in response_str]
+        extracted_answers = [parse_code(response) for response in extracted_answers] # get the last code blcok
         question_hashes = [hash_string(question) for question in prompt_str]
-        
         # ensure the length of lists are of the same, avoid Ray error
         assert len(response_str) == len(ground_truth) == len(data_sources)
-        
         # before perform batched scoring: dump the statistics of the list of responses
         samples = [
             {
@@ -157,111 +201,102 @@ class AceCoderRewardManager:
             }
             for i, (question_hash, question, answer, test_case, response) in enumerate(zip(question_hashes, prompt_str, extracted_answers, ground_truth, response_str))
         ]
-        
         # save the dumped samples to a file
         temp_file = self.record_dir / f"step-{self.step_idx}_{hash_string(''.join(question_hashes))}.jsonl"
         self.step_idx += 1
         with open(temp_file, "w") as f:
             for sample in samples:
                 f.write(json.dumps(sample) + "\n")
-        
         # perform batched scoring for coding score: call the acecoder evaluation script to retrieve the coder part scores
         output_file = Path(temp_file).with_suffix(f".eval_results{'_binary' if self.binary else ''}.jsonl").absolute()
         command = f"python -m acecoder.eval_test_cases --samples {temp_file} --n_workers {self.n_workers} \
             --extract_solution True --output_file {output_file} --test_details {not self.binary} \
-            --i_just_wanna_run True"
-        subprocess.run(command, shell=True)
-        
+            --i_just_wanna_run True --min_time_limit 1 --gt_time_limit_factor 1"
+        start = time.time()
+        subprocess.run(command, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+        end = time.time()
+        print(f"Step {self.step_idx}: acecoder evaluation script took {end - start:.2f} seconds for {len(samples)} samples.")
         # the script will dump the results into the output_file, read it and parse it as a list
         with open(output_file, "r") as f:
             all_samples_results = [json.loads(x) for x in f]
         pass_rates = [x['eval_results']['pass_rate'] for x in all_samples_results]
-        
         # remove the temp_file and output_file after finish code pass rate computation and result extraction
         try:
             os.remove(temp_file)
-        except:
-            pass
-        try:
             os.remove(output_file)
         except:
             pass
+        for i in range(len(scores)):
+            scores[i]['pass_rate'] = pass_rates[i]
+            scores[i]['binary_pass_rate'] = 1.0 if pass_rates[i] == 1.0 else 0.0
+            scores[i]['score'] = 1.0 if pass_rates[i] == 1.0 else -1.0
         
-        
-        # debugging only: save random 100 samples into a sample file
-        for i, sample_result in enumerate(all_samples_results):
-            sample_result['original_response'] = samples[i]['original_response']
-            sample_result['question'] = samples[i]['prompt']
-            sample_result['id'] = data[i].non_tensor_batch['extra_info']['id']
-        num_samples = min(100, len(all_samples_results))
-        sampled_results = random.sample(all_samples_results, num_samples)
-        sampled_output_file = Path(temp_file).with_suffix(f".{num_samples}_samples.json").absolute()
-        with open(sampled_output_file, "w") as f:
-            json.dump(sampled_results, f, indent=4)
-        
-        coding_scores = pass_rates
-        print(f"Step {self.step_idx}: {len(coding_scores)} scores computed.")
-        print(f"Step {self.step_idx}: {len([x for x in coding_scores if x == 1.0])} perfect scores.")
-        print(f"Step {self.step_idx}: {len([x for x in coding_scores if x == 0.0])} zero scores.")
-        print(f"Step {self.step_idx}: average score: {sum(coding_scores) / len(coding_scores)}")
-        
-        # TODO: compute time-out score tensors
-        time_out_reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32)
-        tool_call_reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32)
-        
-        
+        # 2. Adding additional penalty for errored or timed out
         keywords = ["ERROR:\nTraceback", "Execution timed out"]
         for i, response in enumerate(response_str):
             if any(keyword in response for keyword in keywords):
                 # time_out_reward_tensor[i, valid_response_length[i].item() - 1] -= 0.5
-                samples[i]['add_exec_penalty'] = True
+                scores[i]['exec_error'] = 1
             else:
-                samples[i]['add_exec_penalty'] = False
-        
-        # 1. compute penalty of errored or timed-out execution for each code response sample
-        for i, data_item in enumerate(data):
-            if "turns_stats" in data_item.non_tensor_batch:
-                num_turn = data_item.non_tensor_batch["turns_stats"]
-                num_valid_action = data_item.non_tensor_batch["valid_action_stats"]
-                is_active = data_item.non_tensor_batch["active_mask"]
+                scores[i]['exec_error'] = 0
+            
+            # 2.1.
+            # if scores[i]['exec_error'] == 1:
+            #     scores[i]['score'] -= 0.5 # minus 0.5 for execution error
+            
+            if "turns_stats" in data[i].non_tensor_batch:
+                num_turn = data[i].non_tensor_batch["turns_stats"]
+                num_valid_action = data[i].non_tensor_batch["valid_action_stats"]
+                is_active = data[i].non_tensor_batch["active_mask"]
                 is_done = not is_active
-                samples[i]['num_turn'] = num_turn
-                samples[i]['num_valid_action'] = num_valid_action
-                samples[i]['is_done'] = is_done
-
-            MIN_TOOL_CALL_CNT = 0
-            MAX_TOOL_CALL_CNT = 10
+                # 2.2. add additional penalty for the number of turns and valid actions
+                if scores[i]['binary_pass_rate'] == 0.0 and num_valid_action < 1:
+                    scores[i]['score'] -= 0.5
+                    scores[i]['tool_use_penalty'] = 1
+                else:
+                    scores[i]['tool_use_penalty'] = 0
+                    
             
-            if num_valid_action < MIN_TOOL_CALL_CNT or num_valid_action > MAX_TOOL_CALL_CNT:
-                # tool_call_reward_tensor[i, valid_response_length[i].item() - 1] -= 0.5
-                samples[i]['add_tool_use_penalty'] = True
+        for i, score in enumerate(scores):
+            if isinstance(score, dict):
+                reward_tensor[i, valid_response_length[i].item() - 1] = score['score']
+                for k, v in score.items():
+                    reward_extra_info[k].append(v)
             else:
-                samples[i]['add_tool_use_penalty'] = False
+                reward_tensor[i, valid_response_length[i].item() - 1] = score
         
-        # 3. save the records for each code response sample, which will be reported to wandb
-        for i in range(len(data)):
-            data_source = data_sources[i]
-            
-            reward_tensor[i, valid_response_length[i].item() - 1] = coding_scores[i]
-            samples[i]['pass_rate'] = coding_scores[i]
-
-            # add execution penalty to the reward tensor
-            if samples[i]['add_exec_penalty']:
-                reward_tensor[i, valid_response_length[i].item() - 1] -= 0.5
-            # add tool call penalty to the reward tensor
-            if samples[i]['add_tool_use_penalty']:
-                reward_tensor[i, valid_response_length[i].item() - 1] -= 0.5
-            
-            if data_source not in already_print_data_sources:
-                already_print_data_sources[data_source] = 0
-
-            if already_print_data_sources[data_source] < self.num_examine:
-                already_print_data_sources[data_source] += 1
-                print("[response]", response_str[i])
-
+        if save_record:
+            # Save the records for each code response sample, which will be reported to wandb
+            to_save_records = [
+                {
+                    "id": data[i].non_tensor_batch['extra_info']['id'] if 'id' in data[i].non_tensor_batch['extra_info'] else None,
+                    "data_source": data[i].non_tensor_batch['data_source'],
+                    "prompt": samples[i]['prompt'],
+                    "response": samples[i]['original_response'],
+                    "extracted_code": samples[i]['output'],
+                    "ground_truth": samples[i]['tests'],
+                    "score": scores[i],
+                    'extra_info': data[i].non_tensor_batch.get('extra_info', None),
+                }
+                for i in range(len(data))
+            ]
+            if "turns_stats" in data.non_tensor_batch:
+                for i in range(len(data)):
+                    to_save_records[i]['num_turn'] = data[i].non_tensor_batch["turns_stats"]
+                    to_save_records[i]['num_valid_action'] = data[i].non_tensor_batch["valid_action_stats"]
+                    to_save_records[i]['is_done'] = not data[i].non_tensor_batch["active_mask"]
+            # Save the records to a file
+            if self.num_examine == 1:
+                temp_file = self.record_dir / f"acecoder-step-val-{self.step_idx}.json"
+            else:
+                temp_file = self.record_dir / f"acecoder-step-{self.step_idx}.json"
+            self.step_idx += 1
+            with open(temp_file, "w") as f:
+                json.dump(to_save_records, f, indent=4)
+        
         if return_dict: 
             return {
-                "rewad_tensor": reward_tensor,
+                "reward_tensor": reward_tensor,
                 "reward_extra_info": reward_extra_info,
             }
         else:

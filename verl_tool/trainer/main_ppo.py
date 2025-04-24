@@ -62,7 +62,7 @@ def main(config):
                 'NCCL_DEBUG': 'WARN',
                 'VLLM_LOGGING_LEVEL': 'WARN',
             }
-        }, num_cpus=32)
+        })
 
     runner = TaskRunner.remote()
     ray.get(runner.run.remote(config))
@@ -164,6 +164,9 @@ class TaskRunner:
         elif reward_manager_name == 'torl':
             from verl_tool.agent_workers.reward_manager.torl import ToRLRewardManager
             reward_manager_cls = ToRLRewardManager
+        elif reward_manager_name == 'mathcoder':
+            from verl_tool.agent_workers.reward_manager.mathcoder import MathCoderRewardManager
+            reward_manager_cls = MathCoderRewardManager
         else:
             raise NotImplementedError
 
@@ -172,6 +175,9 @@ class TaskRunner:
 
         # Note that we always use function-based RM for validation
         val_reward_fn = reward_manager_cls(tokenizer=tokenizer, num_examine=1, compute_score=compute_score)
+        
+        reward_fn.run_id = config.trainer.experiment_name
+        val_reward_fn.run_id = config.trainer.experiment_name
 
         resource_pool_manager = ResourcePoolManager(resource_pool_spec=resource_pool_spec, mapping=mapping)
 

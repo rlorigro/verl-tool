@@ -37,12 +37,19 @@ class BaseTool:
         self.num_workers = num_workers
         registered_tools[self.tool_type] = self.__class__
         self.env_cache = {}
+        self.executor = ThreadPoolExecutor(max_workers=num_workers)
     
     def get_usage_inst(self):
         """
         Get the usage instructions for the tool
         """
         return "Base usage instructions"
+    
+    def has_env(self, trajectory_id):
+        """
+        Check if the environment for the given trajectory_id exists
+        """
+        return trajectory_id in self.env_cache
     
     def load_env(self, trajectory_id):
         """
@@ -134,9 +141,13 @@ class BaseTool:
             dones: The list of done flags
             valids: The list of valid flags
         """
-        with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
-            results = list(tqdm(executor.map(self.conduct_action, trajectory_ids, actions, extra_fields),
-                                             total=len(trajectory_ids), desc=f"Getting observations using tool {self.tool_type}"))
+        # results = [
+        #     self.conduct_action(trajectory_id, action, extra_field)
+        #     for trajectory_id, action, extra_field in tqdm(zip(trajectory_ids, actions, extra_fields),
+        # ]
+        results = list(tqdm(self.executor.map(self.conduct_action, trajectory_ids, actions, extra_fields),
+                                        total=len(trajectory_ids), desc=f"Getting observations using tool {self.tool_type}", 
+                                        disable=False))
             
         observations, dones, valids = zip(*results)
         return observations, dones, valids

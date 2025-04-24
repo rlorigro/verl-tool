@@ -9,15 +9,12 @@ class AgentActorConfig:
     max_response_length: int=None
     max_obs_length: int=None
     max_action_length: int=None
-    # logging: dict
     num_gpus: int=1
     tool_server_url: str = None
     n: int=1
     truncate_obs_side: str='left'
     truncate_response_side: str='left'
     agent_records_dir: str=None
-    valid_actions: list=None
-    no_action_as_stop: bool=True
     rolling_with_prompt: bool=False
     call_tool_first: bool=False
     min_action_num: int=0

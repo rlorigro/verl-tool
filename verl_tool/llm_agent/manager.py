@@ -1,8 +1,10 @@
 import torch
 import os
 import re
+import ray
 import uuid
 import json
+import regex as re
 import numpy as np
 import requests
 import sys
@@ -18,6 +20,7 @@ from tqdm import tqdm
 from typing import List
 from .config import AgentActorConfig
 from .tensor_helper import TensorHelper, TensorConfig
+from concurrent.futures import ThreadPoolExecutor
 
 def make_json_serializable(obj):
     if isinstance(obj, np.ndarray):
@@ -26,6 +29,29 @@ def make_json_serializable(obj):
         return {k: make_json_serializable(v) for k, v in obj.items()}
     if isinstance(obj, list):
         return [make_json_serializable(v) for v in obj]
+
+# 1) A sanitizer that strips all embedded NULs (and, optionally, any
+#    other C0 control characters except common whitespace).
+CONTROL_CHAR_RE = re.compile(
+    # this matches U+0000 through U+001F, excluding tab(09), LF(0A), CR(0D)
+    r'[\x00-\x08\x0B\x0C\x0E-\x1F]'
+)
+
+def sanitize_request(obj: Any) -> Any:
+    """
+    Recursively walk through obj and:
+      - For dicts: sanitize each value
+      - For lists/tuples: sanitize each element
+      - For strings: remove embedded nulls (and other control chars)
+      - Leave other types untouched
+    """
+    if isinstance(obj, dict):
+        return {sanitize_request(key): sanitize_request(val) for key, val in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return type(obj)(sanitize_request(item) for item in obj)
+    elif isinstance(obj, str):
+        # strip NUL (\x00) and other C0 control chars
+        return CONTROL_CHAR_RE.sub('', obj)
     else:
         return obj
 
@@ -84,8 +110,8 @@ class AgentActorManager:
         else:
             n = self.config.n
             inputs = inputs.repeat(n)
-        inputs.non_tensor_batch['traj_ids'] = np.array([str(uuid.uuid4()) for _ in range(len(inputs.batch))],
-                                                       dtype=object)
+
+        inputs.non_tensor_batch['traj_ids'] = np.array([str(uuid.uuid4()) for _ in range(len(inputs.batch))], dtype=object) # [bs*n]
         return inputs
 
     def _postprocess_responses(self, responses: torch.Tensor, action_step: int) -> torch.Tensor:
@@ -97,7 +123,7 @@ class AgentActorManager:
         do_actions = []
         for i, resp in enumerate(responses_str):
             resp = resp.strip(' \n')
-            if self.config.no_action_as_stop and action_step >= self.config.min_action_num:
+            if action_step >= self.config.min_action_num:
                 has_action = False
                 for j in range(len(self.action_stop_tokens)):
                     if resp.endswith(self.action_stop_tokens[j]):
@@ -254,26 +280,31 @@ class AgentActorManager:
         else:
             # no observation, only concatenate the response with generated response
             responses, responses_with_info_mask = self._info_masked_concatenate_with_padding(
-                right_side['responses'],
-                right_side['responses_with_info_mask'],
-                cur_responses,
-                pad_to_left=False
-            )
-
-        effective_len = self.tensor_fn.create_attention_mask(responses).sum(dim=1).max()
+                    right_side['responses'],
+                    right_side['responses_with_info_mask'],
+                    cur_responses,
+                    pad_to_left=False
+                )
+            
+        effective_lens = self.tensor_fn.create_attention_mask(responses).sum(dim=1)
+        effective_len = effective_lens.max()
+        
         max_len = min(self.config.max_response_length, effective_len)
-
+        
+        overlong_dones = effective_lens > self.config.max_response_length
+        
         # return the updated responses along with its masked version
         if self.config.truncate_response_side == 'left':
             # it should be left most of the time.
             return {'responses': responses[:, :max_len],
-                    'responses_with_info_mask': responses_with_info_mask[:, :max_len]}
+                    'responses_with_info_mask': responses_with_info_mask[:, :max_len]}, overlong_dones
         elif self.config.truncate_response_side == 'right':
             return {'responses': responses[:, -max_len:],
-                    'responses_with_info_mask': responses_with_info_mask[:, -max_len:]}
+                    'responses_with_info_mask': responses_with_info_mask[:, -max_len:]}, overlong_dones
         else:
             raise ValueError(
                 f"Invalid truncate_response_side: {self.config.truncate_response_side}. Allowed options are 'left' or 'right'.")
+
 
     def run_llm_loop(self, gen_batch: DataProto) -> Tuple[Dict, Dict]:
         """Run main LLM generation loop."""
@@ -288,7 +319,7 @@ class AgentActorManager:
 
         turns_stats = torch.zeros(gen_batch.batch['input_ids'].shape[0], dtype=torch.int)
         valid_action_stats = torch.zeros(gen_batch.batch['input_ids'].shape[0], dtype=torch.int)
-        active_mask = torch.ones(gen_batch.batch['input_ids'].shape[0], dtype=torch.bool)
+        active_mask = torch.ones(gen_batch.batch['input_ids'].shape[0], dtype=torch.bool) # [bs*n]
         active_num_list = [active_mask.sum().item()]
         rollings = gen_batch
         traj_ids = gen_batch.non_tensor_batch['traj_ids']
@@ -305,8 +336,6 @@ class AgentActorManager:
             "include_stop_str_in_output": True,
             "detokenize": True
         }
-
-        # TODO Zhiheng, merging logics from https://github.com/TIGER-AI-Lab/verl-tool/blob/c5ab5c538d6c1bd944d39dc44f019461438736c6/verl_tool/llm_agent/manager.py
 
         if self.config.call_tool_first:
             # Added Zhiheng: Add initial observation to the prompt from server, use response=""
@@ -350,26 +379,29 @@ class AgentActorManager:
             # End of Added Zhiheng
 
         # Main generation loop
-        for step in range(self.config.max_turns):
+        for step in range(self.config.max_turns+1):
             if not active_mask.sum():
                 print("All trajectories are done.")
                 break
 
-            print(f"Action step {step + 1}/{self.config.max_turns}")
+            print(f"Action step {step}/{self.config.max_turns}")
             rollings.batch = self.tensor_fn.cut_to_effective_len(
                 rollings.batch,
                 keys=['input_ids', 'attention_mask', 'position_ids']
-            )
+            ) # TODO: delete 
+            
             rollings_active = DataProto.from_dict({
                 k: v[active_mask] for k, v in rollings.batch.items()
             }, meta_info=ori_meta_info)
-
+            if step == self.config.max_turns:
+                agent_sampling_params.pop('stop')
             with self.actor_rollout_wg.rollout.update_sampling_params(**agent_sampling_params):
-                gen_output = self.actor_rollout_wg.rollout.generate_sequences(rollings_active)
+                gen_output = self.actor_rollout_wg.rollout.generate_sequences(rollings_active) # [active_size, response_length]
+            
+            meta_info = gen_output.meta_info            
+            responses_ids, responses_str, do_actions = self._postprocess_responses(gen_output.batch['responses'], step) # [active_size, ...]
+            responses_ids, _ = self.tensor_fn._example_level_pad(responses_ids, responses_str, active_mask) # [bs*n, response_length]
 
-            meta_info = gen_output.meta_info
-            responses_ids, responses_str, do_actions = self._postprocess_responses(gen_output.batch['responses'], step)
-            responses_ids, _ = self.tensor_fn._example_level_pad(responses_ids, responses_str, active_mask)
             print(f"Number of active trajectories: {active_mask.sum().item()}")
             print(f"Length of responses: {responses_ids.shape[1]}")
 
@@ -390,16 +422,25 @@ class AgentActorManager:
                 active_uids, responses_str, do_actions, active_mask,
                 extra_fields=rollings.non_tensor_batch.get('extra_fields', None)
             )
-
+            
+            # for debug
+            # with open(f"temp-{step}.json", 'w') as f:
+            #     json.dump([{
+            #         'response': resp,
+            #         'do_action': do_action,
+            #         'traj_id': traj_id,
+            #         'next_obs': next_obs[i],
+            #         'done': done,
+            #         'valid_action': valid_action[i],
+            #     } for i, (resp, do_action, traj_id, done) in enumerate(zip(responses_str, do_actions, active_uids, dones))], f, indent=4)
+            #     print(f"saved responses to temp-{step}.json")
+            
             curr_active_mask = torch.tensor([not done for done in dones], dtype=torch.bool)
             active_mask = active_mask * curr_active_mask
-            active_num_list.append(active_mask.sum().item())
             turns_stats[curr_active_mask] += 1
             valid_action_stats += torch.tensor(valid_action, dtype=torch.int)
 
-            next_obs_ids = self._process_next_obs(next_obs)
-            # Added Zhiheng: max_action_length, only keep the first max_action_length tokens
-            # next_obs_ids = next_obs_ids[:, :self.config.max_action_length] # Weird, TODO, need to delete and apply another
+            next_obs_ids = self._process_next_obs(next_obs) # [active_size, obs_length]
 
             obs_idx = 0
             for i, active in enumerate(active_mask):
@@ -419,55 +460,15 @@ class AgentActorManager:
                 responses_ids,
                 next_obs_ids
             )
-            original_right_side = self._update_right_side(
+            original_right_side, overlong_dones = self._update_right_side(
                 original_right_side,
                 responses_ids,
                 next_obs_ids
             )
-
-        agent_sampling_params = {
-            "n": 1,  # already repeated by n times in _preprocess_inputs
-        }  # reomve stop related params in the last call
-
-        # final LLM rollout
-        if active_mask.sum():
-            rollings.batch = self.tensor_fn.cut_to_effective_len(
-                rollings.batch,
-                keys=['input_ids', 'attention_mask', 'position_ids']
-            )
-
-            rollings_active = DataProto.from_dict({
-                k: v[active_mask] for k, v in rollings.batch.items()
-            }, meta_info=ori_meta_info)
-            with self.actor_rollout_wg.rollout.update_sampling_params(**agent_sampling_params):
-                gen_output = self.actor_rollout_wg.rollout.generate_sequences(rollings_active)
-
-            meta_info = gen_output.meta_info
-            responses_ids, responses_str, do_actions = self._postprocess_responses(gen_output.batch['responses'], step)
-            responses_ids, _ = self.tensor_fn._example_level_pad(responses_ids, responses_str, active_mask)
-
-            dones = []
-            j = 0
-            for i, active in enumerate(active_mask):
-                if not active:
-                    dones.append(1)
-                else:
-                    if do_actions[j]:
-                        dones.append(0)
-                    else:
-                        dones.append(1)
-                    j += 1
-            assert j == len(do_actions), f"j: {j}, len(do_actions): {len(do_actions)}"
-
-            curr_active_mask = torch.tensor([not done for done in dones], dtype=torch.bool)
-            active_mask = active_mask * curr_active_mask
+            # print("Before overlong dones:", active_mask.sum().item())
+            active_mask = active_mask * (~overlong_dones.to(active_mask.dtype).to(active_mask.device))
+            # print("After overlong dones:", active_mask.sum().item())
             active_num_list.append(active_mask.sum().item())
-            valid_action_stats += torch.tensor(valid_action, dtype=torch.int)
-
-            original_right_side = self._update_right_side(
-                original_right_side,
-                responses_ids,
-            )
 
         non_tensors = {
             'traj_ids': traj_ids.tolist(),
@@ -520,57 +521,144 @@ class AgentActorManager:
 
         # ---------- 2. Build final tensor fields ----------
         final_output = right_side.copy()
-        final_output["prompts"] = left_side["input_ids"]
-
-        # Pad response tensors to max_response_length
-        for key in ("responses", "responses_with_info_mask"):
-            if final_output[key].shape[1] < self.config.max_response_length:
-                final_output[key] = self.tensor_fn.pad_tensor(
-                    final_output[key],
-                    max_length=self.config.max_response_length,
-                    padding_side="right",
-                )
-
-        # Concatenate prompt and response tokens
-        final_output["input_ids"] = torch.cat(
-            [left_side["input_ids"], final_output["responses"]], dim=1
-        )
-
-        # Construct attention mask
-        final_output["attention_mask"] = torch.cat(
-            [
-                self.tensor_fn.create_attention_mask(left_side["input_ids"]),
-                self.tensor_fn.create_attention_mask(final_output["responses"]),
-            ],
-            dim=1,
-        )
-
-        # Construct info mask used to mark observation content
-        final_output["info_mask"] = torch.cat(
-            [
-                self.tensor_fn.create_attention_mask(left_side["input_ids"]),
-                self.tensor_fn.create_attention_mask(
-                    final_output["responses_with_info_mask"]
-                ),
-            ],
-            dim=1,
-        )
-
-        # Construct position ids for model input
-        final_output["position_ids"] = self.tensor_fn.create_position_ids(
-            final_output["attention_mask"]
-        )
-
+        final_output['prompts'] = left_side['input_ids'] # [bs*n, prompt_length]
+        
+        # padding responses length to max_response_length
+        if final_output['responses'].shape[1] < self.config.max_response_length:
+            final_output['responses'] = self.tensor_fn.pad_tensor(
+                final_output['responses'],
+                max_length=self.config.max_response_length,
+                padding_side='right'
+            ) # [bs*n, max_response_length]
+        
+        # padding response_with_info_mask length to max_response_length 
+        if final_output['responses_with_info_mask'].shape[1] < self.config.max_response_length:
+            final_output['responses_with_info_mask'] = self.tensor_fn.pad_tensor(
+                final_output['responses_with_info_mask'],
+                max_length=self.config.max_response_length,
+                padding_side='right'
+            ) # [bs*n, max_response_length]
+        
+        # Combine input IDs
+        final_output['input_ids'] = torch.cat([
+            left_side['input_ids'],
+            final_output['responses']
+        ], dim=1) # [bs*n, prompt_length + max_response_length]
+        
+        # Create attention mask 
+        final_output['attention_mask'] = torch.cat([
+            self.tensor_fn.create_attention_mask(left_side['input_ids']),
+            self.tensor_fn.create_attention_mask(final_output['responses'])
+        ], dim=1) # [bs*n, prompt_length + max_response_length]
+        
+        # Create observation mask 
+        final_output['info_mask'] = torch.cat([
+            self.tensor_fn.create_attention_mask(left_side['input_ids']),
+            self.tensor_fn.create_attention_mask(final_output['responses_with_info_mask'])
+        ], dim=1) # [bs*n, prompt_length + max_response_length]
+        
+        # Create position ids
+        final_output['position_ids'] = self.tensor_fn.create_position_ids(
+            final_output['attention_mask']
+        ) # [bs*n, prompt_length + max_response_length]
+        
         # ---------- 3. Create and return DataProto ----------
         final_output = DataProto.from_dict(final_output, non_tensors=non_tensors)
         final_output.meta_info.update(meta_info)
 
         return final_output
+    
+    # def dummy_tool(self, trajectory_id, action, finish):
+    #     """
+    #     Dummy tool for testing purposes.
+    #     """
+    #     if finish:
+    #         observation = ""
+    #         done = True
+    #         is_valid = False
+    #     parsed_action, is_valid = parse_action(action)
+    #     if not is_valid:
+    #         observation = "No valid action found."
+    #         done = False
+    #         is_valid = False
+    #         return observation, done, is_valid
+        
+    #     result = execute_python_in_firejail(parsed_action)
+    #     done = False
+    #     is_valid = True
+    #     return result, done, is_valid
+
+    # def interact_with_tool_server(self, active_uids:List[str], responses: List[str], do_actions:List[bool], active_mask=None) -> List[str]:
+    #     """
+    #     Call tool server for queries.
+    #     Args:
+    #         batch: batch of data
+    #         resposnes: responses from the model
+    #         pad_token: pad token
+    #         active_mask: active mask
+    #     Returns:
+    #         observations: observations from the tool server. None if the the query do not need to do any action.
+    #         dones: dones
+    #         valid_actions: valid actions
+    #     """
+    #     finishs = [not do_action for do_action in do_actions]
+    #     print(f" - Number of non-finished actions: {len([x for x in do_actions if not x])} / {len(do_actions)}")
+        
+    #     from concurrent.futures import ThreadPoolExecutor
+    #     with ThreadPoolExecutor(max_workers=32) as executor: # TODO: check
+    #         results = list(tqdm(executor.map(self.dummy_tool, active_uids, responses, finishs), total=len(active_uids)))
+    #     active_observations = [result[0] for result in results]
+    #     active_dones = [result[1] for result in results]
+    #     active_valid_actions = [result[2] for result in results]
+        
+    #     print("Received observations from tool server. Samples:", len(active_observations))
+    #     print(f" - Number of valid actions (exclusing finish action): {len([x for x in active_valid_actions if x])} / {len(active_valid_actions)}")
+    #     print(f" - Number of dones: {len([x for x in active_dones if x])} / {len(active_dones)}")
+    #     print("Example observations:")
+    #     non_empty_observations = [obs for obs in active_observations if obs]
+    #     if len(non_empty_observations) > 0:
+    #         print(f"{non_empty_observations[0]}")
+    #     else:
+    #         print("No non-empty observations.")
+        
+    #     next_obs, dones, valid_action = [], [], []
+    #     for i, active in enumerate(active_mask):
+    #         if active:
+    #             next_obs.append(active_observations.pop(0))
+    #             dones.append(active_dones.pop(0))
+    #             valid_action.append(active_valid_actions.pop(0))
+    #         else:
+    #             next_obs.append('')
+    #             dones.append(1)
+    #             valid_action.append(0)
+        
+    #     assert len(active_observations) == 0
+    #     return next_obs, dones, valid_action
 
 
-
-    def interact_with_tool_server(self, active_uids:List[str], responses: List[str], do_actions:List[bool],
-                                  active_mask=None, extra_fields=None) -> List[str]:
+    def send_batch_requests(self, batch_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Send batch requests to the tool server.
+        Args:
+            batch_data: Batch data to send
+        Returns:
+            response: Response from the tool server
+        """
+        safe_payload = sanitize_request(batch_data)
+        response = requests.post(self.config.tool_server_url, json=safe_payload)
+        if response.status_code != 200:
+            print(f"Error: {response.status_code}, {response.text}")
+            raise ValueError(f"Error: {response.status_code}, {response.text}")
+        return response.json()
+        
+    def interact_with_tool_server(
+      self, 
+      active_uids:List[str], 
+      responses: List[str], 
+      do_actions:List[bool], 
+      active_mask=None,
+      extra_fields=None
+    ) -> List[str]:
         """
         Call tool server for queries.
         Args:
@@ -583,28 +671,30 @@ class AgentActorManager:
             dones: dones
             valid_actions: valid actions
         """
-        assert len(active_uids) == len(responses) == len(do_actions), f"Length mismatch: {len(active_uids)}, {len(responses)}, {len(do_actions)}"
-        data = {
+        finishs = [not do_action for do_action in do_actions]
+        batch_data = {
             "trajectory_ids": active_uids,
             "actions": responses,
-            "finish": [not do_action for do_action in do_actions], # if do_action is False, then it is a finish action, finishing the trajectory,
+            "finish": finishs, # if do_action is False, then it is a finish action, finishing the trajectory,
         }
         if extra_fields is not None:
             data['extra_fields'] = make_json_serializable(extra_fields)
 
-        print(f"Sending request to {self.config.tool_server_url}")
-        print(f" - Number of non-finished actions: {len([x for x in do_actions if not x])} / {len(do_actions)}")
-        print("self.config.tool_server_url", self.config.tool_server_url)
-        # print("data", data)
-        # print("#"*100)
-        response = requests.post(self.config.tool_server_url, json=data)
-        # print("$$$$ response", response.json(), "$$$$")
-        active_observations = response.json()['observations']
-        active_dones = [int(x) for x in response.json()['dones']]
-        active_valid_actions = [int(x) for x in response.json()['valids']]
-        print("Received observations from tool server. Samples:", len(active_observations))
-        print(f" - Number of valid actions (exclusing finish action): {len([x for x in active_valid_actions if x])} / {len(active_valid_actions)}")
-        print(f" - Number of dones: {len([x for x in active_dones if x])} / {len(active_dones)}")
+        print(f" - Number of finished responses: {len([x for x in do_actions if not x])} / {len(do_actions)}")
+        response = self.send_batch_requests(batch_data)
+        active_observations = response['observations']
+        active_dones = [int(x) for x in response['dones']]
+        active_valid_actions = [int(x) for x in response['valids']]
+        
+        # print("Received observations from tool server. Samples:", len(active_observations))
+        # print(f" - Number of valid actions (exclusing finish action): {len([x for x in active_valid_actions if x])} / {len(active_valid_actions)}")
+        # print(f" - Number of dones: {len([x for x in active_dones if x])} / {len(active_dones)}")
+        # print("Example observations:")
+        # non_empty_observations = [obs for obs in active_observations if obs]
+        # if len(non_empty_observations) > 0:
+        #     print(f"{non_empty_observations[0]}")
+        # else:
+        #     print("No non-empty observations.")
 
         next_obs, dones, valid_action = [], [], []
         for i, active in enumerate(active_mask):
@@ -619,3 +709,148 @@ class AgentActorManager:
 
         assert len(active_observations) == 0
         return next_obs, dones, valid_action
+
+import subprocess
+from typing import Optional
+# Timeout for code execution in seconds
+TIMEOUT = 10
+
+def check_forbidden_imports(code: str) -> bool:
+    """
+    Checks if the code contains imports of potentially dangerous packages.
+    
+    Args:
+        code: Python code string to analyze
+        
+    Returns:
+        Boolean indicating if the code contains forbidden imports
+    """
+    # List of potentially dangerous modules that could affect the host system
+    forbidden_modules = [
+        'subprocess', 'multiprocessing', 'threading',
+        'socket', 'psutil', 'resource', 'ctypes'
+    ]
+    
+    # Simple string-based check for import statements
+    for module in forbidden_modules:
+        if f"import {module}" in code or f"from {module}" in code:
+            return True
+    
+    # Check for os.system, os.popen, and similar dangerous calls
+    dangerous_patterns = [
+        "os.system", "os.popen", "os.spawn", "os.fork", 
+        "os.exec", "sys.exit", "os._exit", "os.kill"
+    ]
+    
+    for pattern in dangerous_patterns:
+        if pattern in code:
+            return True
+    
+    return False
+    
+def execute_python_in_firejail(code: str, timeout: int=TIMEOUT, stdin: Optional[str] = None) -> str:
+    """
+    Execute Python code in a Firejail sandbox with a timeout.
+    
+    Args:
+        code: Python code string to execute
+        stdin: Optional input to provide to the executed code
+        
+    Returns:
+        String containing execution output or error message
+    """
+    # Check for forbidden imports first
+    if check_forbidden_imports(code):
+        return "Execution blocked: Code contains potentially dangerous operations or imports."
+    
+    # Create a minimal environment instead of copying everything
+    original_env = os.environ.copy()
+    env = {}
+    
+    # Core system variables
+    essential_vars = [
+        "PATH", "HOME", "USER", "SHELL", 
+        "LANG", "LC_ALL", "LC_CTYPE", "TERM",
+        # Python-specific
+        "PYTHONIOENCODING", "PYTHONUNBUFFERED", "PYTHONHASHSEED", "PYTHONDONTWRITEBYTECODE",
+        # Runtime optimization
+        "MKL_NUM_THREADS", "OMP_NUM_THREADS", "NUMEXPR_NUM_THREADS",
+        # Temp directories
+        "TMPDIR", "TEMP", "TMP",
+        # Display if needed
+        "DISPLAY", "XAUTHORITY"
+    ]
+    
+    # Copy only essential variables if they exist
+    for var in essential_vars:
+        if var in original_env:
+            env[var] = original_env[var]
+    
+    # Explicitly set optimization variables
+    env["OPENBLAS_NUM_THREADS"] = "1"
+    
+    if "PYTHONPATH" in env:
+        del env["PYTHONPATH"]
+    
+    # Build the firejail command with resource limits
+    command = [
+        "firejail",
+        "--private",
+        "--quiet",
+        "--seccomp=socket",
+        "--profile=pip",
+        "--rlimit-nproc=32",
+        "--rlimit-nofile=32",
+        "--rlimit-fsize=2m",  # Limit file size
+        "--rlimit-as=4096m",
+    ]
+    command.extend(["python3", "-c", code])
+    
+    try:
+        result = subprocess.run(
+            command,
+            input=stdin if stdin else None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+            text=True,
+            timeout=timeout
+        )
+        
+        stdout = result.stdout
+        stderr = result.stderr.strip()
+        
+        result = f"{stdout}\nError:\n{stderr}" if stderr else stdout
+        if result:
+            result = result.strip()
+    except subprocess.TimeoutExpired:
+        result = f"Execution timed out after {timeout} seconds.\n"
+    return result
+
+def parse_action(action: str) -> Tuple[str, bool]:
+        """
+        Parse the raw action string (which is the llm response) into an actual action and its contents.
+        Ensures that the parsed code is valid and safe for execution.
+        
+        Args:
+            action: Raw action string containing Python code
+            
+        Returns:
+            Tuple containing the extracted code and a validity flag
+        """
+        # Try to find Python code in various formats
+        all_valid_python_code = re.findall(r"<python>(.*?)</python>", action, re.DOTALL)
+        
+        if not all_valid_python_code:
+            all_valid_python_code = re.findall(r"```python(.*?)```", action, re.DOTALL)
+        
+        if not all_valid_python_code:
+            all_valid_python_code = re.findall(r"```(.*?)```", action, re.DOTALL)
+        
+        if len(all_valid_python_code) == 0:
+            return "", False
+        
+        # Use the first code block found (we could extend this to support multiple blocks)
+        parsed_code = all_valid_python_code[0].strip()
+        
+        return parsed_code, True

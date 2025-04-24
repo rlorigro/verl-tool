@@ -20,10 +20,18 @@ import datasets
 from pathlib import Path
 
 execution_prompt = """\
-Answer the given coding question. You must conduct reasoning inside <think> and </think> first before you can finally output the final program. During the thinking, you can test your program by writing it inside ```python and ``` tags following with "```output". The code will be executed, and the terminal output (standard output and standard error) will be returned between <output> and </output>. Each program between ```python and ``` tags are independent program. You can test Python codes as many times as you want. If you find no further code execution needed, you can then give the final program in a markdown code block like this: ```python\nyour code here\n``` without appending anything,. The final program will be evaluated against the hidden test cases. If the final program passes all the test cases, you will get a reward. If the final program fails any of the test cases, you will get a penalty.
+Answer the given coding question. You must conduct reasoning about the problem and then provide the final program as answer. 
+During the thinking process, you can write test cases or test your current solutions using a testing tool. if you want to test any python code, writing it inside ```python and ``` tags following with "```output". 
+The code between "```python" and "``````output" will then be executed, and the terminal output (standard output and standard error) will be provided to you. 
+Each program between ```python and ``` tags are independent program. You can test Python codes as many times as you want. 
+If you find no further code execution needed, you can then give your final solution in a markdown code block like this: ```python\nyour code here\n``` without appending anything. 
+The final program will be evaluated against the hidden test cases. If the final program passes all the test cases, you will get a reward. If the final program fails any of the test cases, you will get a penalty.
 """
 
 naive_instruction = "Let's think step by step and generate the final program in a markdown code block like this: ```python\nyour code here\n```."
+naive_execution_prompt = """
+A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. The Assistant can reason with the help of Python code. If the Assistant wants to test any Python code, it writes it inside ```python and ``` tags, and makes sure to follow it with "```output", meaning that it is requesting the code to be executed. Then the result of execution will be provided to the Assistant between "```output" and "```" for the python code block that it follows. The Assistant can test Python codes as many times as it wants. If the Assistant finds no further code execution needed, it can then give the final solution in a markdown code block like this: ```python\nyour code here\n``` without appending anything.
+"""
 
 coder_instruction = """\
 Let's think step by step and generate the correct program for this coding question. You should attempt multiple times before give the final program.
@@ -80,7 +88,7 @@ def main(
                 "prompt": [
                     {
                         "role": "system",
-                        "content": execution_prompt if add_execution_prompt else coder_instruction,
+                        "content": naive_execution_prompt if add_execution_prompt else coder_instruction,
                     },
                     {
                         "role": "user",

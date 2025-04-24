@@ -42,39 +42,8 @@ def check_forbidden_imports(code: str) -> bool:
             return True
     
     return False
-
-def execute_python_in_firejail(code: str, stdin: Optional[str] = None) -> str:
-    # ... existing code ...
     
-    # Create a minimal environment instead of copying everything
-    original_env = os.environ.copy()
-    env = {}
-    
-    # Core system variables
-    essential_vars = [
-        "PATH", "HOME", "USER", "SHELL", 
-        "LANG", "LC_ALL", "LC_CTYPE", "TERM",
-        # Python-specific
-        "PYTHONIOENCODING", "PYTHONUNBUFFERED", "PYTHONHASHSEED", "PYTHONDONTWRITEBYTECODE",
-        # Runtime optimization
-        "MKL_NUM_THREADS", "OMP_NUM_THREADS", "NUMEXPR_NUM_THREADS",
-        # Temp directories
-        "TMPDIR", "TEMP", "TMP",
-        # Display if needed
-        "DISPLAY", "XAUTHORITY"
-    ]
-    
-    # Copy only essential variables if they exist
-    for var in essential_vars:
-        if var in original_env:
-            env[var] = original_env[var]
-    
-    # Explicitly set optimization variables
-    env["OPENBLAS_NUM_THREADS"] = "1"
-    
-    # ... rest of your existing code ...
-    
-def execute_python_in_firejail(code: str, stdin: Optional[str] = None) -> str:
+def execute_python_in_firejail(code: str, timeout: int=TIMEOUT, stdin: Optional[str] = None) -> str:
     """
     Execute Python code in a Firejail sandbox with a timeout.
     
@@ -128,71 +97,36 @@ def execute_python_in_firejail(code: str, stdin: Optional[str] = None) -> str:
         "--rlimit-nproc=32",
         "--rlimit-nofile=32",
         "--rlimit-fsize=2m",  # Limit file size
-        "--rlimit-as=4096m",
+        "--rlimit-as=1096m",
     ]
     command.extend(["python3", "-c", code])
     
     try:
-        # Start process in its own process group for better control
-        process = subprocess.Popen(
+        result = subprocess.run(
             command,
-            stdin=subprocess.PIPE if stdin else None,
+            input=stdin if stdin else None,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=env,
-            text=False,
-            preexec_fn=os.setsid  # Creates a new process group
+            text=True,
+            timeout=timeout
         )
         
-        # If stdin provided, write it to the process
-        if stdin:
-            process.stdin.write(stdin.encode())
-            process.stdin.close()
+        stdout = result.stdout
+        stderr = result.stderr.strip()
         
-        # Capture output and errors with timeout
-        try:
-            stdout, stderr = process.communicate(timeout=TIMEOUT)
-            stdout_str = stdout.decode()
-            stderr_str = stderr.decode().strip()
-            
-            if process.returncode == 0:
-                return stdout_str
-            
-            return f"{stdout_str}\nERROR:\n{stderr_str}"
-            
-        except subprocess.TimeoutExpired:
-            # Kill the entire process group if timeout occurs
-            os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-            
-            # Try to get any partial output
-            try:
-                stdout, stderr = process.communicate(timeout=0.5)
-                stdout_str = stdout.decode() if stdout else ""
-                stderr_str = stderr.decode().strip() if stderr else ""
-            except:
-                stdout_str = ""
-                stderr_str = ""
-            
-            # Force kill if still running
-            if process.poll() is None:
-                os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-            
-            result = f"Execution timed out after {TIMEOUT} seconds.\n"
-            if stdout_str:
-                result += f"Partial stdout:\n{stdout_str}\n"
-            if stderr_str:
-                result += f"Partial stderr:\n{stderr_str}"
-            
-            return result
-            
-    except Exception as e:
-        return f"Error executing program: {str(e)}"
-
+        result = f"{stdout}\nError:\n{stderr}" if stderr else stdout
+        if result:
+            result = result.strip()
+    except subprocess.TimeoutExpired:
+        result = f"Execution timed out after {timeout} seconds.\n"
+    return result
 
 @register_tool
 class FirejailPythonCodeTool(BaseTool):
     tool_type = "firejail_python_code"
     timeout = TIMEOUT
+    stop_tokens = ["```output", "<output>"]
     
     def get_usage_inst(self):
         return "You are able to write and execute Python code securely inside a Firejail sandbox."
@@ -240,22 +174,33 @@ class FirejailPythonCodeTool(BaseTool):
         parsed_action, is_valid = self.parse_action(action)
         
         if not is_valid:
-            observation = "No valid Python code found. Please provide code in either <python>...</python> tags or ```python...``` code blocks."
-            return observation, True, False
-        
-        # Extract stdin if provided in extra_field
-        stdin = extra_field.get("stdin", None) if extra_field else None
-        
-        # Execute the code using firejail
-        execution_result = execute_python_in_firejail(parsed_action, stdin)
-        
-        # Format the result
-        if "Execution timed out" in execution_result:
-            observation = execution_result
-        elif "ERROR:" in execution_result:
-            observation = f"Execution completed with errors:\n{execution_result}"
+            # observation = "No valid Python code found. Please provide code in either <python>...</python> tags or ```python...``` code blocks."
+            observation = "No valid Python code found. Please provide code in ```python...``` code blocks."
+            done = True
+            valid = False
         else:
-            observation = f"Execution result:\n{execution_result}"
             
-        return observation, False, True
+            # Extract stdin if provided in extra_field
+            stdin = extra_field.get("stdin", None) if extra_field else None
+            
+            # Execute the code
+            execution_result = execute_python_in_firejail(parsed_action, self.timeout, stdin)
+            
+            # Format the result
+            if "Execution timed out" in execution_result:
+                observation = execution_result
+            elif "ERROR:" in execution_result:
+                observation = f"Execution completed with errors:\n{execution_result}"
+            else:
+                observation = f"Execution result:\n{execution_result}"
+            done = False
+            valid = True
+        
+        if action.endswith("```output"):
+            observation = observation + "\n```"
+        if action.endswith("<output>"):
+            observation = observation + "\n</output>"
+        
+        observation = "\n" + observation + "\n"
+        return observation, done, valid
         

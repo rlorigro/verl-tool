@@ -1,5 +1,21 @@
 # Verl-Tool
-An unified and easy-to-extend tool-agent training framework based on verl.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/imgs/logo.png">
+    <img alt="VerlTool" src="assets/imgs/logo.png" width=20%>
+  </picture>
+</p>
+
+<h3 align="center">
+VerlTool: An unified and easy-to-extend tool-agent training framework based on verl.
+</h3>
+
+---
+
+<!-- <p align="center">
+| <a href="https://docs.vllm.ai"><b>Documentation</b></a> | <a href="https://blog.vllm.ai/"><b>Blog</b></a> | <a href="https://arxiv.org/abs/2309.06180"><b>Paper</b></a> | <a href="https://x.com/vllm_project"><b>Twitter/X</b></a> | <a href="https://discuss.vllm.ai"><b>User Forum</b></a> | <a href="https://slack.vllm.ai"><b>Developer Slack</b></a> |
+</p> -->
 
 ## Installation
 ```bash
@@ -7,13 +23,15 @@ pip install uv # if not installed
 uv sync
 git submodule update --init --recursive
 source .venv/bin/activate
-uv pip install -e verl[vllm] # this shall use vllm==0.8.2 which uses the faster v1 engine
-uv pip install vllm==0.8.1 # we found some memory leaking bugs for vllm==0.8.2, so choose to use 0.8.1 instead
+uv pip install -e verl[vllm]
+uv pip install vllm==0.8.3 # we found some memory leaking bugs for vllm==0.8.2, so choose to use 0.8.3 instead
 uv pip install flash-attn --no-build-isolation
 ```
 
+
 ## Training
 ```bash
+ray start --head 
 python examples/data_preprocess/gsm8k.py # Preprocess the data
 bash examples/train/train_gsm8k.sh
 ```

@@ -5,12 +5,13 @@ Using asyncio for concurrent processing.
 import asyncio
 import logging
 from typing import Dict, List, Optional, Tuple, Any, Set, Union
+from tqdm import tqdm
 
 import fire
 import uvicorn
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel
 
 from .tools import get_tool_cls, ALL_TOOLS
 
@@ -21,35 +22,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ---- Data Models ----
-
-class ExtraField(BaseModel):
-    """A model for extra fields in requests"""
-    finish: bool = False
-    # Add other fields as needed
-
-class AgentRequest(BaseModel):
-    """Model for incoming agent requests"""
-    trajectory_ids: List[Union[str, int]]  # Allow both string and integer IDs
-    actions: List[str]
-    extra_fields: Optional[List[Dict[str, Any]]] = None
-    
-    @validator('trajectory_ids', each_item=True)
-    def convert_trajectory_ids_to_string(cls, v):
-        # Convert any non-string IDs to strings
-        return str(v)
-    
-    @validator('extra_fields', pre=True, always=True)
-    def set_extra_fields(cls, v, values):
-        if v is None and 'actions' in values:
-            return [{}] * len(values['actions'])
-        return v
-    
-    @validator('extra_fields')
-    def validate_length(cls, v, values):
-        if 'actions' in values and len(v) != len(values['actions']):
-            raise ValueError(f"Number of extra_fields ({len(v)}) does not match number of actions ({len(values['actions'])})")
-        return v
 
 class AgentResponse(BaseModel):
     """Model for outgoing agent responses"""
@@ -63,7 +35,7 @@ class AgentResponse(BaseModel):
 class AsyncToolManager:
     """Manages all tools and their execution using asyncio"""
     
-    def __init__(self, tool_types: Tuple[str], num_workers_per_tool: int = 4):
+    def __init__(self, tool_types: Tuple[str], num_workers_per_tool: int = 4, use_tqdm: bool = False):
         """
         Initialize the tool manager with specified tools
         
@@ -72,12 +44,14 @@ class AsyncToolManager:
             num_workers_per_tool: Number of workers for each tool
         """
         self.tools: Dict[str, Any] = {}
+        self.use_tqdm = use_tqdm
         self._initialize_tools(tool_types, num_workers_per_tool)
         
     def _initialize_tools(self, tool_types: Tuple[str], num_workers: int) -> None:
         """Initialize all tools based on tool types"""
         # Ensure we have the finish tool
-        if "finish" not in tool_types:
+        if "finish" in tool_types:
+            tool_types = tuple(t for t in tool_types if t != "finish")
             tool_types = tool_types + ("finish",)
             
         logger.info(f"Initializing tools: {tool_types}")
@@ -88,6 +62,10 @@ class AsyncToolManager:
                 logger.info(f"Initialized tool: {tool_type}")
             except Exception as e:
                 logger.error(f"Failed to initialize tool {tool_type}: {e}")
+        
+        # initialize the finish tool
+        finish_tool = get_tool_cls("finish")
+        self.tools["finish"] = finish_tool(num_workers=num_workers, other_tools=list(self.tools.values()))
                 
         # Log available vs. active tools with emoji indicators
         logger.info("Available Tools:")
@@ -200,9 +178,8 @@ class AsyncToolManager:
         # Identify which tool should process each action
         # tool_types = await self.identify_tool_types(actions, extra_fields)
         # just use a tqdm for loop
-        from tqdm import tqdm
         tool_types = []
-        for i in tqdm(range(len(actions)), desc="Identifying tool types", unit="action"):
+        for i in tqdm(range(len(actions)), desc="Identifying tool types", unit="action", disable=True):
             tool_type = self.identify_tool_for_action(actions[i], extra_fields[i])
             tool_types.append(tool_type)
         
@@ -248,7 +225,8 @@ class AsyncToolManager:
             usage_instructions = self.get_tool_usage_instructions()
             indices = indices_by_tool[None]
             for idx in indices:
-                all_observations[idx] = usage_instructions
+                # all_observations[idx] = usage_instructions
+                all_observations[idx] = "" # no observation
                 all_dones[idx] = False
                 all_valids[idx] = False
         
@@ -277,7 +255,8 @@ class AsyncToolServer:
         host: str = "0.0.0.0",
         port: int = 5000,
         workers_per_tool: int = 4,
-        max_concurrent_requests: int = 50,
+        max_concurrent_requests: int = 64,
+        use_tqdm: bool = False,
     ):
         """
         Initialize the tool server
@@ -294,7 +273,7 @@ class AsyncToolServer:
         self.max_concurrent_requests = max_concurrent_requests
         
         # Initialize async tool manager
-        self.tool_manager = AsyncToolManager(tool_types, workers_per_tool)
+        self.tool_manager = AsyncToolManager(tool_types, workers_per_tool, use_tqdm)
         
         # Create FastAPI app
         self.app = FastAPI(
@@ -327,14 +306,19 @@ class AsyncToolServer:
                         data["trajectory_ids"] = [str(tid) if not isinstance(tid, str) else tid 
                                                  for tid in data.get("trajectory_ids", [])]
                     
-                    # Validate request with pydantic model
-                    agent_request = AgentRequest.parse_obj(data)
+                    # Validate and process request
+                    trajectory_ids = data.get("trajectory_ids", [])
+                    actions = data.get("actions", [])
+                    extra_keys = [k for k in data.keys() if k not in ["trajectory_ids", "actions"]]
+                    extra_fields = [
+                        {key: data[key][i] for key in extra_keys} 
+                        for i in range(len(trajectory_ids))
+                    ]
                     
-                    # Process the request asynchronously
                     observations, dones, valids = await self.tool_manager.process_actions(
-                        agent_request.trajectory_ids,
-                        agent_request.actions,
-                        agent_request.extra_fields
+                        trajectory_ids,
+                        actions,
+                        extra_fields
                     )
                     
                     # Create response
@@ -378,8 +362,9 @@ def main(
     tool_type: Union[str, Tuple[str]] = "base",
     host: str = "0.0.0.0",
     port: int = 5000,
-    workers_per_tool: int = 8,
-    max_concurrent_requests: int = 50,
+    workers_per_tool: int = None,
+    max_concurrent_requests: int = 128,
+    use_tqdm: bool = True,
     log_level: str = "info",
 ):
     """
@@ -393,6 +378,8 @@ def main(
         tool_type: Tool type(s) to use (comma-separated string or tuple)
         log_level: Logging level (debug, info, warning, error)
     """
+    if workers_per_tool is None:
+        workers_per_tool = max_concurrent_requests
     # Configure logging
     numeric_level = getattr(logging, log_level.upper(), None)
     if isinstance(numeric_level, int):
@@ -412,6 +399,7 @@ def main(
         port=port,
         workers_per_tool=workers_per_tool,
         max_concurrent_requests=max_concurrent_requests,
+        use_tqdm=use_tqdm,
     )
     server.start()
 
@@ -421,5 +409,5 @@ if __name__ == "__main__":
     
     
 """
-python -m verl_tool.servers.serve --tool_type "firejail_python_code" --workers_per_tool 8
+python -m verl_tool.servers.ray_serve --tool_type "firejail_python_code" --workers_per_tool 8
 """
