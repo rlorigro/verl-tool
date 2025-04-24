@@ -1,161 +1,168 @@
-from .base import BaseTool, register_tool, registered_tools
-
+import ray
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
-import sqlite3
-import os
-import pickle
-from filelock import FileLock
 
+from .base import BaseTool, register_tool, registered_tools
+# 请根据实际路径调整 WikiQAEnv 的导入方式
+from mini_webarena.env_worker import WikiQAEnv
 
-class ObjectStore:
-    def __init__(self, db_path='objects.db'):
-        """
-        :param db_path: Path to the database file used for storage
-        """
-        self.db_path = db_path
-        self._lockfile = self.db_path + ".lock" 
-        self._init_db()
+@ray.remote
+class WikiEnvActor:
+    def __init__(self, question: str, gt: str, url: str = None):
+        self.env = WikiQAEnv(question, gt, url=url, prompt_format="last")
 
-    def _init_db(self):
-        """Initialize the database and create the table if it doesn't exist."""
-        with FileLock(self._lockfile):
-            conn = sqlite3.connect(self.db_path)
-            c = conn.cursor()
-            c.execute('''
-                CREATE TABLE IF NOT EXISTS objects (
-                    uuid TEXT PRIMARY KEY,
-                    data BLOB
-                )
-            ''')
-            conn.commit()
-            conn.close()
+    def start_env(self) -> str:
+        obs = self.env.render()
+        return obs
 
-    def add_object(self, uuid_str, obj):
-        """
-        Store (or update) a Python object in the database.
-        :param uuid_str: UUID string used as the primary key
-        :param obj: Python object to store; it will be serialized using pickle
-        """
-        data_blob = pickle.dumps(obj)
-        with FileLock(self._lockfile):
-            conn = sqlite3.connect(self.db_path)
-            c = conn.cursor()
-            c.execute('''
-                INSERT OR REPLACE INTO objects (uuid, data) VALUES (?, ?)
-            ''', (uuid_str, data_blob))
-            conn.commit()
-            conn.close()
-
-    def get_object(self, uuid_str):
-        """
-        Retrieve a Python object from the database by its UUID.
-        :param uuid_str: UUID string
-        :return: Deserialized Python object if found, otherwise None
-        """
-        with FileLock(self._lockfile):
-            conn = sqlite3.connect(self.db_path)
-            c = conn.cursor()
-            c.execute('SELECT data FROM objects WHERE uuid = ?', (uuid_str,))
-            row = c.fetchone()
-            conn.close()
-            if row:
-                return pickle.loads(row[0])
-            return None
-
-    def delete_object(self, uuid_str):
-        """
-        Delete an object from the database by its UUID.
-        :param uuid_str: UUID string
-        :return: True if the object was deleted, False if not found
-        """
-        with FileLock(self._lockfile):
-            conn = sqlite3.connect(self.db_path)
-            c = conn.cursor()
-            c.execute('DELETE FROM objects WHERE uuid = ?', (uuid_str,))
-            rowcount = c.rowcount
-            conn.commit()
-            conn.close()
-            return rowcount > 0
+    def step_env(self, query: str) -> (str, int):
+        obs, done, valid = self.env.step(query)
+        if done:
+            self.env.close()
+        return obs, done, valid
 
 
 @register_tool
 class TextBrowserTool(BaseTool):
+    """
+    TextBrowserTool uses Ray actors to manage WikiQAEnv sessions.
+    Each trajectory_id has a dedicated actor. It supports initial
+    render (action=None) and step operations.
+    """
     tool_type = "text_browser"
 
-    def get_usage_inst(self):
-        return ("Usage instructions for TextBrowser. This code is based on mini_webarena, using playwright to get "
-                "accessibility tree for LLMs agent easier access. The code is modified from AutoWebGLM. To get start, run `pip install -e .` under the mini_webarena repo.")
+    def __init__(self, num_workers=32):
+        super().__init__(num_workers)
+        # Maps trajectory_id to Ray Actor
+        self.env_actors = {}
+        # Track creation order for cleanup
+        self.actor_creation_order = []
 
-    def __init__(self, num_workers=1, store_path='env_store.db'):
-        self.num_workers = num_workers
-        registered_tools[self.tool_type] = self.__class__
-        self.object_store = ObjectStore(store_path)
-
-    def load_env(self, trajectory_id):
-        """
-        Load the environment for the given trajectory_id from the object store.
-        If not found, create a new environment.
-        """
-        env = self.object_store.get_object(trajectory_id)
-        if env is None:
-            env = {
-                "trajectory_id": trajectory_id,
-                "metadata": {
-                    "turns": 0,
-                },
-                "previous_obs": [],
-            }
-        return env
-
-    def save_env(self, trajectory_id, env):
-        """
-        Save the environment for the given trajectory_id to the object store.
-        """
-        self.object_store.add_object(trajectory_id, env)
+    # -------------------------------------------------------------------------
+    # BaseTool interface methods (some are no-ops here, but we must implement them)
+    # -------------------------------------------------------------------------
+    def get_usage_inst(self) -> str:
+        """Return usage instructions."""
+        return "TextBrowserTool uses Ray actors to manage WikiQAEnv sessions."
 
     def delete_env(self, trajectory_id):
-        """
-        Delete the environment for the given trajectory_id from the object store.
-        """
-        self.object_store.delete_object(trajectory_id)
+        """Kill and remove the actor."""
+        if trajectory_id in self.env_actors:
+            ray.kill(self.env_actors[trajectory_id], no_restart=True)
+            del self.env_actors[trajectory_id]
+        if trajectory_id in self.actor_creation_order:
+            self.actor_creation_order.remove(trajectory_id)
 
-    def conduct_action(self, trajectory_id, action, extra_field):
-        # extra_fields: {question: str or None, gt: str or None, url: str or None}
-        # print(trajectory_id, action, extra_field)
-        from mini_webarena.env_worker import WikiQAEnv
-        import copy
-        env_state = self.load_env(trajectory_id)
-        if env_state.get("trajectory_id") is not None: # New Environment, need start
-            question = extra_field['question'] if extra_field['question'] is not None else "placeholder"
-            gt = extra_field['gt'] if extra_field['gt'] is not None else "placeholder"
-            url = extra_field['url']
-            env = WikiQAEnv(question, gt, url = url)
-            env_state = copy.deepcopy(env.get_state())
-            self.save_env(trajectory_id, env_state)
-            if action is None:
-                observation = env.render()
-                env.close()
-                return observation, False, True
-            env.close()
-            del env
-        env = WikiQAEnv(env_state["question"], env_state["gt"], url=env_state["url"])
-        env.load_state(env_state)
-        observation, _, done, _ = env.step(action)
-        if done:
-            self.delete_env(trajectory_id)
-        else:
-            env_state = copy.deepcopy(env.get_state())
-            self.save_env(trajectory_id, env_state)
-        env.close()
-        return observation, done, True
+    def parse_action(self, action: str):
+        """Parse action (here we return it as-is)."""
+        return action, True
 
+    # -------------------------------------------------------------------------
+    # Core logic that uses Ray actors
+    # -------------------------------------------------------------------------
     def get_observations(self, trajectory_ids, actions, extra_fields):
-        # with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
-        with ProcessPoolExecutor(max_workers=self.num_workers) as executor:
-            results = list(
-                tqdm(executor.map(self.conduct_action, trajectory_ids, actions, extra_fields),
-                     total=len(trajectory_ids), desc=f"Getting observations using tool {self.tool_type}"))
+        import json
+        from pathlib import Path
 
-        observations, dones, valids = zip(*results)
-        return observations, dones, valids
+        futures = []
+
+        # ---------------------------------------------------------------------
+        # 1. Dispatch Ray RPCs -------------------------------------------------
+        # ---------------------------------------------------------------------
+        for i, trajectory_id in enumerate(trajectory_ids):
+            action = actions[i]
+            extra = extra_fields[i].get("extra_fields", extra_fields[i])
+
+            # Lazily create an actor for every new trajectory
+            if trajectory_id not in self.env_actors:
+                question = extra.get("question", "placeholder")
+                gt = extra.get("gt", "placeholder")
+                url = extra.get("url", None)
+                actor = WikiEnvActor.remote(question, gt, url)
+                self.env_actors[trajectory_id] = actor
+                self.actor_creation_order.append(trajectory_id)
+
+            actor = self.env_actors[trajectory_id]
+
+            # Decide whether to render or step
+            fut = actor.start_env.remote() if action is None or action == "" else actor.step_env.remote(action)
+            futures.append((i, trajectory_id, fut))
+
+            self._cleanup_actors_if_needed()
+
+        # ---------------------------------------------------------------------
+        # 2. Gather results ----------------------------------------------------
+        # ---------------------------------------------------------------------
+        observations = [""] * len(trajectory_ids)
+        dones = [False] * len(trajectory_ids)
+        valid_flags = [True] * len(trajectory_ids)
+
+        for i, trajectory_id, fut in futures:
+            try:
+                result = ray.get(fut)
+                if isinstance(result, tuple):           # step_env
+                    obs, done, valid = result
+                else:                                   # start_env
+                    obs, done, valid = result, False, False
+
+                observations[i] = obs
+                dones[i] = done
+                valid_flags[i] = valid
+
+                # refresh LRU list
+                if trajectory_id in self.actor_creation_order:
+                    self.actor_creation_order.remove(trajectory_id)
+                self.actor_creation_order.append(trajectory_id)
+
+                if done:
+                    observations[i] = ""               # clear final obs
+                    self.delete_env(trajectory_id)
+
+            except Exception as e:
+                print(f"Error while processing trajectory_id={trajectory_id}: {e}")
+                observations[i] = ""
+                dones[i] = False
+                valid_flags[i] = False
+
+        # ---------------------------------------------------------------------
+        # 3. Persist one‑line JSON log -----------------------------------------
+        # ---------------------------------------------------------------------
+        try:
+            log_path = Path("browser_server_logs.jsonl")
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "input": {
+                                "trajectory_ids": trajectory_ids,
+                                "actions": actions,
+                                "extra_fields": extra_fields,
+                            },
+                            "output": {
+                                "observations": observations,
+                                "dones": dones,
+                                "valid_flags": valid_flags,
+                            },
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+        except Exception as e:
+            # logging failure should never break main logic
+            print(f"[WARN] Failed to write browser_server_logs.jsonl: {e}")
+
+        # ---------------------------------------------------------------------
+        # 4. Return to caller --------------------------------------------------
+        # ---------------------------------------------------------------------
+        return observations, dones, valid_flags
+
+    # -------------------------------------------------------------------------
+    # Helper method
+    # -------------------------------------------------------------------------
+    def _cleanup_actors_if_needed(self):
+        """Remove oldest actors if count exceeds limit."""
+        while len(self.env_actors) > 128:
+            oldest = self.actor_creation_order.pop(0)
+            self.delete_env(oldest)
