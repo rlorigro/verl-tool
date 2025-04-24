@@ -19,6 +19,6 @@ class AgentActorConfig:
     valid_actions: list=None
     no_action_as_stop: bool=True
     rolling_with_prompt: bool=False
-    action_before_observation: bool=True
+    call_tool_first: bool=False
     min_action_num: int=0
     action_stop_tokens: list=None

@@ -31,11 +31,11 @@ def make_json_serializable(obj):
 
 class AgentActorManager:
     def __init__(
-            self,
-            model_path,
-            actor_rollout_wg,
-            config: AgentActorConfig,
-            is_validation: bool = False,
+        self,
+        model_path,
+        actor_rollout_wg,
+        config: AgentActorConfig,
+        is_validation: bool = False,
     ):
         self.model_path = model_path
         self.tokenizer = hf_tokenizer(self.model_path)
@@ -53,13 +53,15 @@ class AgentActorManager:
             max_start_length=config.max_start_length,
             max_response_length=config.max_response_length,
         ))
-        if self.config.action_stop_tokens is not None and os.path.exists(self.config.action_stop_tokens):
-            with open(self.config.action_stop_tokens, 'r') as f:
-                self.action_stop_tokens = f.read().strip('\n').split(',')
-            print(f"Using action stop tokens: {self.action_stop_tokens}")
+        if self.config.action_stop_tokens is not None:
+            if os.path.exists(self.config.action_stop_tokens):
+                with open(self.config.action_stop_tokens, 'r') as f:
+                    self.action_stop_tokens = f.read().strip('\n').split(',')
+                print(f"Using action stop tokens: {self.action_stop_tokens}")
+            else:
+                raise ValueError(f"action_stop_tokens file not found: {self.config.action_stop_tokens}")
         else:
-            # raise FileNotFoundError(f"Action stop tokens file '{self.config.action_stop_tokens}' not found.")
-            self.action_stop_tokens = [self.tokenizer.eos_token]
+            self.action_stop_tokens = None # none will be enough
 
     def _batch_tokenize(self, responses: List[str]) -> torch.Tensor:
         """Tokenize a batch of responses."""
@@ -107,7 +109,7 @@ class AgentActorManager:
             do_actions.append(has_action)
         responses = self._batch_tokenize(responses_str).to(torch.int64)
         # apply self.config.max_action_length
-        if self.config.max_action_length > 0:
+        if self.config.max_action_length is not None and self.config.max_action_length > 0:
             responses = responses[:, :self.config.max_action_length]
 
         return responses, responses_str, do_actions
@@ -195,12 +197,12 @@ class AgentActorManager:
         return new_rollings
 
     def _info_masked_concatenate_with_padding(self,
-                                              prompt: torch.Tensor,
-                                              prompt_with_mask: torch.Tensor,
-                                              response: torch.Tensor,
-                                              info: torch.Tensor = None,
-                                              pad_to_left: bool = True
-                                              ) -> torch.Tensor:
+        prompt: torch.Tensor,
+        prompt_with_mask: torch.Tensor,
+        response: torch.Tensor,
+        info: torch.Tensor = None,
+        pad_to_left: bool = True
+    ) -> torch.Tensor:
         """Concatenate tensors and handle padding. Additionally, create a mask (info_mask) to cover the information block if it exists."""
 
         # move `response` and `info` tensor to the same device as `prompt`
@@ -233,9 +235,11 @@ class AgentActorManager:
 
         return padded_tensor, padded_tensor_with_info
 
-    def _update_right_side(self, right_side: Dict,
-                           cur_responses: torch.Tensor,
-                           next_obs_ids: torch.Tensor = None) -> Dict:
+    def _update_right_side(self, 
+        right_side: Dict,
+        cur_responses: torch.Tensor,
+        next_obs_ids: torch.Tensor = None
+    ) -> Dict:
         """Update right side state."""
 
         # observation exists, perform concatenation and masked concatenation
@@ -261,6 +265,7 @@ class AgentActorManager:
 
         # return the updated responses along with its masked version
         if self.config.truncate_response_side == 'left':
+            # it should be left most of the time.
             return {'responses': responses[:, :max_len],
                     'responses_with_info_mask': responses_with_info_mask[:, :max_len]}
         elif self.config.truncate_response_side == 'right':
@@ -303,7 +308,7 @@ class AgentActorManager:
 
         # TODO Zhiheng, merging logics from https://github.com/TIGER-AI-Lab/verl-tool/blob/c5ab5c538d6c1bd944d39dc44f019461438736c6/verl_tool/llm_agent/manager.py
 
-        if not self.config.action_before_observation:
+        if self.config.call_tool_first:
             # Added Zhiheng: Add initial observation to the prompt from server, use response=""
             do_actions = [True] * len(traj_ids)
             responses_str = [''] * len(traj_ids)
