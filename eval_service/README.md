@@ -29,7 +29,20 @@ python eval_service/test/test_api.py
 ## Misc
 
 How to convert megatron/vllm model ckpt to huggingface ckpt:
+- `backend` is the training backend, either `fsdp` or `megatron`
+- `hf_model_path` is the backbone model path that training started from
+- `hf_upload_path` is the model path that training started from
+- `local_dir` is the model path that training started from
+- `target_dir` is the local hugging face model that you want to save to
 
-~~~bash
-python3 /data/yi/verl-tool/verl/scripts/model_merger.py --local_dir /data/yi/verl-tool/checkpoints/acecoder/qwen_qwen2.5-7b-instruct-grpo-n8-b4-t0.9/global_step_560/actor
-~~~
+```bash
+backend=fsdp
+checkpoint_path=checkpoints/acecoder/acecoder-fsdp_agent-qwen_qwen2.5-coder-7b-grpo-n16-b128-t1.0-lr1e-6/global_step_340/actor
+hf_model_path=Qwen/Qwen2.5-7B-Instruct
+hf_upload_path=VerlTool/acecoder-fsdp_agent-qwen_qwen2.5-coder-7b-grpo-n16-b128-t1.0-lr1e-6-340-step
+python3 verl/scripts/model_merger.py --backend $backend --hf_model_path $hf_model_path --hf_upload_path $hf_upload_path --local_dir $checkpoint_path --target_dir $checkpoint_path/huggingface
+
+# optional: also upload the step records to the model
+step_records_dir=verl_step_records/acecoder-fsdp_agent-qwen_qwen2.5-coder-7b-grpo-n16-b128-t1.0-lr1e-6
+huggingface-cli upload --repo-type model $hf_upload_path $step_records_dir step_records
+```
