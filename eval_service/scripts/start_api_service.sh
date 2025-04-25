@@ -21,7 +21,7 @@ action_stop_tokens_file=$(mktemp)
 echo "$action_stop_tokens" > $action_stop_tokens_file
 echo "action_stop_tokens_file=$action_stop_tokens_file"
 
-CUDA_VISIBLE_DEVICES=0,1 python eval_service/app.py \
+python eval_service/app.py \
     --host $api_host \
     --port $api_port \
     --tool-server-url $tool_server_url \

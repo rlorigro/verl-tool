@@ -28,6 +28,10 @@ uv pip install vllm==0.8.3 # we found some memory leaking bugs for vllm==0.8.2, 
 uv pip install flash-attn --no-build-isolation
 ```
 
+## Features
+1. Support multiple tool types, see [./verl_tool/servers/tools](./verl_tool/servers/tools) for all the avaiable tools. Each python file is a tool type we support.
+2. Fast Tool Server: We use [ray serve](https://docs.ray.io/en/latest/serve/index.html) to serve the tool servers, which is fully asynchronous and compatible with the verl training.
+3. We make [verl](https://github.com/volcengine/verl) as a submodule of this repo, and only add additional logics by inheriting the `ActorRolloutRefWorker` and `RayPPOTrainer`.
 
 ## Training
 
@@ -56,22 +60,19 @@ ray start --address='head_node_ip:6379' # start ray worker node
 ```
 
 ## Evaluation
-We do all the evaluation by serving the model in an openai compatible api way. See [eval_service/README.md](./eval_service/README.md) for more details.
+We do all the evaluation by serving the model in an openai compatible api way. After launching the eval server, you can evaluate the model just like calling the openai api. See [eval_service/README.md](./eval_service/README.md) for more details. 
 
 ## Test Tool Servers
 
 ```bash
-python -m verl_tool.servers.serve # Start the server
-python -m verl_tool.servers.tests.test_base # Run the tests
+# Start the ray server for the tool
+python -m verl_tool.servers.ray_serve --host 0.0.0.0 --port 5000 --tool_type "python_code" &
+# Run the tests
+python -m verl_tool.servers.tests.test_python_code_tool python --url=http://localhost:5000/get_observation
 ```
 
 ## ToDos
-- [ ] Add python servers and example training scripts
-- [ ] Add browser servers and example training scripts
 - [ ] Add VLM servers and example training scripts
-- [ ] Custom truncation logic for large observations
-- [ ] Add wandb logging statistics
-- [ ] Add saving logic for every step's sampling results and observations for inspection
 
 ## Contribution
 ### Contribution to tool libraries
