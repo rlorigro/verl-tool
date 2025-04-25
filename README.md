@@ -30,11 +30,33 @@ uv pip install flash-attn --no-build-isolation
 
 
 ## Training
+
+First prepare the data for training. You can use the provided script to preprocess the data.
 ```bash
-ray start --head 
-python examples/data_preprocess/gsm8k.py # Preprocess the data
-bash examples/train/train_gsm8k.sh
+python verl-tool/examples/data_preprocess/acecoder.py # preprocess the data and save
 ```
+
+### Single Node Training
+
+```bash
+ray start --head --dashboard-host=0.0.0.0 # start ray head node
+bash examples/train/acecoder/train.sh # train the model
+```
+
+### Multi Node Training
+1. Head Node
+```bash
+ray start --head --dashboard-host=0.0.0.0 # start ray head node
+bash examples/train/acecoder/train.sh # train the model
+```
+2. Worker Node
+```bash
+ray start --address='head_node_ip:6379' # start ray worker node
+# no need to run the training script on worker node
+```
+
+## Evaluation
+We do all the evaluation by serving the model in an openai compatible api way. See [eval_service/README.md](./eval_service/README.md) for more details.
 
 ## Test Tool Servers
 

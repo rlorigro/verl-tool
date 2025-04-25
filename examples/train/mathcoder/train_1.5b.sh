@@ -1,10 +1,10 @@
 set -x
-train_data=[data/mathcoder/code_train.parquet,\
-data/mathcoder/math_train.parquet]
-val_data=[data/mathcoder/code_test.parquet,\
-data/math_torl/math500_test.parquet,\
-data/math_torl/aime24_test.parquet,\
-data/math_torl/aime25_test.parquet]
+train_data=[$(pwd)/data/mathcoder/code_train.parquet,\
+$(pwd)/data/mathcoder/math_train.parquet]
+val_data=[$(pwd)/data/mathcoder/code_test.parquet,\
+$(pwd)/data/math_torl/math500_test.parquet,\
+$(pwd)/data/math_torl/aime24_test.parquet,\
+$(pwd)/data/math_torl/aime25_test.parquet]
 model_name=Qwen/Qwen2.5-1.5B
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
 n_gpus_per_node=8
@@ -38,19 +38,22 @@ run_name_postfix=""
 run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 
 # temp file for action tokens as verl cannot pass special strs as params
-action_stop_tokens_file=$(mktemp)
-echo "$action_stop_tokens" > $action_stop_tokens_file
+mkdir -p $(pwd)
+action_stop_tokens_file="$(pwd)$(mktemp)"
+echo "$action_stop_tokens" | tee $action_stop_tokens_file
 echo "action_stop_tokens_file=$action_stop_tokens_file"
 
-host=0.0.0.0
+host=$(hostname -I | awk '{print $1}')
 port=$(shuf -i 30000-31000 -n 1)
 tool_server_url=http://$host:$port/get_observation
 python -m verl_tool.servers.ray_serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 8 2>&1 > /dev/null &
 server_pid=$!
 echo "Server (pid=$server_pid) started at $tool_server_url"
 
-# export VLLM_USE_V1=1
-PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
+ray job submit --address="http://127.0.0.1:8265" \
+    --runtime-env=verl/verl/trainer/runtime_env.yaml \
+    -- \
+    PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     algorithm.adv_estimator=$rl_alg \
     data.train_files=$train_data \
     data.val_files=$val_data \
