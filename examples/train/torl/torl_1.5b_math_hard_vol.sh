@@ -39,8 +39,10 @@ action_stop_tokens_file=$(mktemp)
 echo "$action_stop_tokens" > $action_stop_tokens_file
 echo "action_stop_tokens_file=$action_stop_tokens_file"
 
-# export VLLM_USE_V1=1
-PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
+ray job submit --address="http://127.0.0.1:8265" \
+    --runtime-env=verl/verl/trainer/runtime_env.yaml \
+    -- \
+    PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     algorithm.adv_estimator=$rl_alg \
     data.train_files=$train_data \
     data.val_files=$val_data \
