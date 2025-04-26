@@ -4,7 +4,7 @@ train_data=$(pwd)/data/acecoder/$dataset_name/train.parquet
 val_data=$(pwd)/data/acecoder/$dataset_name/test.parquet
 model_name=Qwen/Qwen2.5-Coder-7B
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
-n_gpus_per_node=8
+n_gpus_per_node=2
 n_nodes=1
 n=16
 batch_size=128
@@ -36,7 +36,7 @@ run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${
 export VERL_RUN_ID=$run_name
 
 # temp file for action tokens as verl cannot pass special strs as params
-mkdir -p $(pwd)
+mkdir -p $(pwd)/tmp
 action_stop_tokens_file="$(pwd)$(mktemp)"
 echo "$action_stop_tokens" | tee $action_stop_tokens_file
 echo "action_stop_tokens_file=$action_stop_tokens_file"
