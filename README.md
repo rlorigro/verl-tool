@@ -56,7 +56,7 @@ bash examples/train/acecoder/train.sh # train the model
 ```
 2. Worker Node
 ```bash
-ray start --address='head_node_ip:6379' # start ray worker node
+ray start --address='head_node_ip:6379' --block # start ray worker node
 # no need to run the training script on worker node
 ```
 
