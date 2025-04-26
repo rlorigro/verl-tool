@@ -6,6 +6,7 @@ from .metric_utils import (
 )
 from tqdm import tqdm
 
+
 def apply_kl_penalty(data: DataProto, kl_ctrl: core_algos.AdaptiveKLController, kl_penalty='kl'):
     responses = data.batch['responses']
     response_length = responses.size(1)
@@ -38,6 +39,7 @@ def apply_kl_penalty(data: DataProto, kl_ctrl: core_algos.AdaptiveKLController, 
 
     return data, metrics
 
+
 def compute_response_mask(data: DataProto):
     responses = data.batch['responses']
     response_length = responses.size(1)
@@ -47,16 +49,18 @@ def compute_response_mask(data: DataProto):
     else:
         attention_mask = data.batch['attention_mask']
     return attention_mask[:, -response_length:]
+
+
 class AgentRayPPOTrainer(RayPPOTrainer):
-    
+
     def index_select(self, batch: DataProto, indices: list):
         """
         Select a subset of the DataProto based on the given indices.
-        
+
         Args:
             batch (DataProto): The DataProto object to select from.
             indices (list): A list of indices to select.
-            
+
         Returns:
             DataProto: A new DataProto object containing the selected data.
         """
@@ -64,15 +68,16 @@ class AgentRayPPOTrainer(RayPPOTrainer):
             selected_batch = batch.batch[indices]
         else:
             selected_batch = None
-        
+
         selected_non_tensor = {}
         for key, val in batch.non_tensor_batch.items():
             selected_non_tensor[key] = val[indices]
         selected_meta_info = batch.meta_info.copy()
         # Create a new DataProto object with the selected data
-        selected_data = DataProto(batch=selected_batch, non_tensor_batch=selected_non_tensor, meta_info=selected_meta_info)
+        selected_data = DataProto(batch=selected_batch, non_tensor_batch=selected_non_tensor,
+                                  meta_info=selected_meta_info)
         return selected_data
-        
+
     def dynamic_filter(self, batch: DataProto, metrics: dict):
         """
         Dynamic filter for the batch based on the reward scores
@@ -117,13 +122,17 @@ class AgentRayPPOTrainer(RayPPOTrainer):
             'dynamic_filter/after_filtering/avg_acc': np.mean([question_acc[uid] for uid in kept_uids]),
             'dynamic_filter/before_filtering/num_samples': len(question_acc),
             'dynamic_filter/after_filtering/num_samples': len(kept_uids),
-            'dynamic_filter/before_filtering/full_pass_ratio': len([uid for uid in question_uids if question_acc[uid] >= 1]) / len(question_uids),
-            'dynamic_filter/after_filtering/full_pass_ratio': len([uid for uid in kept_uids if question_acc[uid] >= 1]) / len(kept_uids),
-            'dynamic_filter/before_filtering/zero_pass_ratio': len([uid for uid in question_uids if question_acc[uid] <= 0]) / len(question_uids),
-            'dynamic_filter/after_filtering/zero_pass_ratio': len([uid for uid in kept_uids if question_acc[uid] <= 0]) / len(kept_uids),
+            'dynamic_filter/before_filtering/full_pass_ratio': len(
+                [uid for uid in question_uids if question_acc[uid] >= 1]) / len(question_uids),
+            'dynamic_filter/after_filtering/full_pass_ratio': len(
+                [uid for uid in kept_uids if question_acc[uid] >= 1]) / len(kept_uids),
+            'dynamic_filter/before_filtering/zero_pass_ratio': len(
+                [uid for uid in question_uids if question_acc[uid] <= 0]) / len(question_uids),
+            'dynamic_filter/after_filtering/zero_pass_ratio': len(
+                [uid for uid in kept_uids if question_acc[uid] <= 0]) / len(kept_uids),
         })
         return batch
-    
+
     def fit(self):
         """
         The training loop of PPO.
@@ -176,7 +185,7 @@ class AgentRayPPOTrainer(RayPPOTrainer):
                 else:
                     gen_batch = batch.pop(
                         batch_keys=['input_ids', 'attention_mask', 'position_ids'],
-                        non_tensor_batch_keys=['raw_prompt_ids'],
+                        non_tensor_batch_keys=['raw_prompt_ids', "extra_fields"]
                     )
 
                 is_last_step = self.global_steps >= self.total_training_steps
@@ -207,7 +216,7 @@ class AgentRayPPOTrainer(RayPPOTrainer):
                     # repeat to align with repeated responses in rollout
                     batch = batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
                     batch = batch.union(gen_batch_output)
-                    
+
                     if getattr(self.config.trainer, 'dynamic_filter', False):
                         batch = self.dynamic_filter(batch, metrics)
 
@@ -322,15 +331,15 @@ class AgentRayPPOTrainer(RayPPOTrainer):
 
                     # validate
                     if self.val_reward_fn is not None and self.config.trainer.test_freq > 0 and \
-                        (is_last_step or  self.global_steps % self.config.trainer.test_freq == 0):
+                            (is_last_step or self.global_steps % self.config.trainer.test_freq == 0):
                         with _timer('testing', timing_raw):
                             val_metrics: dict = self._validate()
                             if is_last_step:
                                 last_val_metrics = val_metrics
                         metrics.update(val_metrics)
 
-                    if self.config.trainer.save_freq > 0 and ( is_last_step or \
-                            self.global_steps % self.config.trainer.save_freq == 0):
+                    if self.config.trainer.save_freq > 0 and (is_last_step or \
+                                                              self.global_steps % self.config.trainer.save_freq == 0):
                         with _timer('save_checkpoint', timing_raw):
                             self._save_checkpoint()
 
