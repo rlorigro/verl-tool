@@ -16,7 +16,7 @@ from functools import partial
 from mini_webarena.rl_utils import format_score
 from mini_webarena.evaluator import metric_heuristic
 # ------------------------------------------------------------------------------
-# WikiQA Reward Manager
+# WikiRL Reward Manager
 # ------------------------------------------------------------------------------
 
 def clean_text(text):
@@ -24,9 +24,9 @@ def clean_text(text):
     return re.sub(r'[\x00-\x1F\x7F-\x9F\u200b-\u200f\u2028-\u202f\u2060-\u206f]', '', text)
 
 
-class WikiQARewardManager:
+class WikiRLRewardManager:
     """
-    Reward Manager for the wikiQA dataset.
+    Reward Manager for the WikiRL dataset.
 
     This class computes a combined reward for each predicted answer by comparing it with
     the ground truth answers. The final reward is a weighted combination of a fuzzy matching
@@ -34,7 +34,7 @@ class WikiQARewardManager:
     # """
     def __init__(self, tokenizer=None, num_examine=1, compute_score=None) -> None:
         """
-        Initialize the WikiQARewardManager.
+        Initialize the WikiRLRewardManager.
 
         Parameters:
         - fuzzy_weight: The weight applied to the fuzzy matching score.
@@ -204,8 +204,8 @@ if __name__ == '__main__':
     with open("data_stub_new.pkl", "rb") as f:
         dummy_data = pickle.load(f)
 
-    # Instantiate the WikiQARewardManager (you can pass in config if needed)
-    reward_manager = WikiQARewardManager()
+    # Instantiate the WikiRLRewardManager (you can pass in config if needed)
+    reward_manager = WikiRLRewardManager()
 
     # Compute rewards for the loaded data
     rewards = reward_manager(dummy_data)
@@ -213,7 +213,7 @@ if __name__ == '__main__':
 
 
 """
-(TaskRunner pid=2019847) ==== Call WikiQARewardManager ====
+(TaskRunner pid=2019847) ==== Call WikiRLRewardManager ====
 (TaskRunner pid=2019847) DataProto(batch=TensorDict(
 (TaskRunner pid=2019847)     fields={
 (TaskRunner pid=2019847)         attention_mask: Tensor(shape=torch.Size([4, 8192]), device=cpu, dtype=torch.int64, is_shared=False),

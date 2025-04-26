@@ -3,7 +3,6 @@ from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
 from .base import BaseTool, register_tool, registered_tools
-# 请根据实际路径调整 WikiQAEnv 的导入方式
 from mini_webarena.env_worker import WikiQAEnv
 
 @ray.remote
