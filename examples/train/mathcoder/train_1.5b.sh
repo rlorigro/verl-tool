@@ -106,6 +106,7 @@ ray job submit --address="http://127.0.0.1:8265" \
     critic.strategy=$strategy \
     critic.model.path=$model_name \
     critic.ppo_micro_batch_size_per_gpu=$ppo_micro_batch_size_per_gpu \
+    critic.ulysses_sequence_parallel_size=$ulysses_sequence_parallel_size \
     algorithm.kl_ctrl.kl_coef=$kl_coef \
     trainer.logger=['console','wandb'] \
     trainer.project_name=$reward_manager \
