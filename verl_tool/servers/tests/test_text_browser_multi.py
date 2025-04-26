@@ -85,10 +85,10 @@ def test_connection(url="http://localhost:5000/get_observation"):
         # "<think>balabala</think>```stop [Here is a stop message]```",
     ]
 
-    trajectory_ids = []
+    trajectory_ids, results = [], []
     for i in range(32):
         trajectory_ids.append(f"trajectory-{i}")
-    from concurrent.futures import ThreadPoolExecutor
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     with ThreadPoolExecutor(max_workers=16) as executor:
         future_to_id = {
             executor.submit(exec_actions, trajectory_id, actions): trajectory_id
