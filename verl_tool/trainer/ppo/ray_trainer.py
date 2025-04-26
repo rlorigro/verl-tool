@@ -180,12 +180,12 @@ class AgentRayPPOTrainer(RayPPOTrainer):
                 if 'multi_modal_inputs' in batch.non_tensor_batch.keys():
                     gen_batch = batch.pop(
                         batch_keys=['input_ids', 'attention_mask', 'position_ids'],
-                        non_tensor_batch_keys=['raw_prompt_ids', 'multi_modal_data', 'multi_modal_inputs'],
+                        non_tensor_batch_keys=['raw_prompt_ids', 'multi_modal_data', 'multi_modal_inputs', 'extra_fields'],
                     )
                 else:
                     gen_batch = batch.pop(
                         batch_keys=['input_ids', 'attention_mask', 'position_ids'],
-                        non_tensor_batch_keys=['raw_prompt_ids', "extra_fields"]
+                        non_tensor_batch_keys=['raw_prompt_ids', 'extra_fields']
                     )
 
                 is_last_step = self.global_steps >= self.total_training_steps
