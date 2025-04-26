@@ -568,7 +568,6 @@ class AgentActorManager:
             response: Response from the tool server
         """
         safe_payload = sanitize_request(batch_data)
-        # exit(1)
         response = requests.post(self.config.tool_server_url, json=safe_payload)
         if response.status_code != 200:
             print(f"Error: {response.status_code}, {response.text}")
