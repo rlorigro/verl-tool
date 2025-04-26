@@ -332,7 +332,7 @@ class AgentActorManager:
             active_uids = [traj_ids[i] for i in range(len(traj_ids)) if active_mask[i]]
             next_obs, dones, valid_action = self.interact_with_tool_server(
                 active_uids, responses_str, do_actions, active_mask,
-                extra_fields=rollings.non_tensor_batch.get('extra_fields', None)
+                extra_fields=rollings.non_tensor_batch.get('extra_info', None)
             )
             curr_active_mask = torch.tensor([not done for done in dones], dtype=torch.bool)
             active_mask = active_mask * curr_active_mask
@@ -411,7 +411,7 @@ class AgentActorManager:
             active_uids = [traj_ids[i] for i in range(len(traj_ids)) if active_mask[i]]
             next_obs, dones, valid_action = self.interact_with_tool_server(
                 active_uids, responses_str, do_actions, active_mask,
-                extra_fields=rollings.non_tensor_batch.get('extra_fields', None)
+                extra_fields=rollings.non_tensor_batch.get('extra_info', None)
             )
 
             # for debug

@@ -244,7 +244,7 @@ def main():
                     "style": "rule",
                     "ground_truth": golden_answers,
                 },
-                "extra_fields": {
+                "extra_info": {
                     "split": split_name,
                     "index": row_i + index_offset,
                     "id": row_i + index_offset,
