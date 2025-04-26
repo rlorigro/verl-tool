@@ -78,7 +78,7 @@ class AgentActorManager:
             else:
                 raise ValueError(f"action_stop_tokens file not found: {self.config.action_stop_tokens}")
         else:
-            self.action_stop_tokens = None # none will be enough
+            self.action_stop_tokens = [] 
 
     def _batch_tokenize(self, responses: List[str]) -> torch.Tensor:
         """Tokenize a batch of responses."""
@@ -113,7 +113,7 @@ class AgentActorManager:
         do_actions = []
         for i, resp in enumerate(responses_str):
             resp = resp.strip(' \n')
-            if action_step >= self.config.min_action_num and self.action_stop_tokens is not None and len(self.action_stop_tokens) > 0:
+            if action_step >= self.config.min_action_num:
                 has_action = False
                 for j in range(len(self.action_stop_tokens)):
                     if resp.endswith(self.action_stop_tokens[j]):
