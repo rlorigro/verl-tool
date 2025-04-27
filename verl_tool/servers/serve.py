@@ -309,11 +309,15 @@ class AsyncToolServer:
                     # Validate and process request
                     trajectory_ids = data.get("trajectory_ids", [])
                     actions = data.get("actions", [])
-                    extra_keys = [k for k in data.keys() if k not in ["trajectory_ids", "actions"]]
-                    extra_fields = [
-                        {key: data[key][i] for key in extra_keys} 
-                        for i in range(len(trajectory_ids))
-                    ]
+                    if 'extra_fields' in data.keys():
+                        extra_fields = data['extra_fields']
+                        assert len(extra_fields) == len(trajectory_ids)
+                    else:
+                        extra_keys = [k for k in data.keys() if k not in ["trajectory_ids", "actions"]]
+                        extra_fields = [
+                            {key: data[key][i] for key in extra_keys} 
+                            for i in range(len(trajectory_ids))
+                        ]
                     
                     observations, dones, valids = await self.tool_manager.process_actions(
                         trajectory_ids,

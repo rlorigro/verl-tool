@@ -6,14 +6,6 @@ from fastapi import FastAPI, Request
 import uvicorn
 from collections import defaultdict
 
-# Initialize Ray
-if not ray.is_initialized():
-    try:
-        ray.init(ignore_reinit_error=True)
-    except:
-        # Connect to existing Ray cluster
-        ray.init(address="auto", ignore_reinit_error=True)
-
 # Import your tool classes
 from .tools import get_tool_cls, ALL_TOOLS
 
@@ -296,11 +288,15 @@ class RayToolServer:
                     # Validate and process request
                     trajectory_ids = data.get("trajectory_ids", [])
                     actions = data.get("actions", [])
-                    extra_keys = [k for k in data.keys() if k not in ["trajectory_ids", "actions"]]
-                    extra_fields = [
-                        {key: data[key][i] for key in extra_keys} 
-                        for i in range(len(trajectory_ids))
-                    ]
+                    if 'extra_fields' in data.keys():
+                        extra_fields = data['extra_fields']
+                        assert len(extra_fields) == len(trajectory_ids)
+                    else:
+                        extra_keys = [k for k in data.keys() if k not in ["trajectory_ids", "actions"]]
+                        extra_fields = [
+                            {key: data[key][i] for key in extra_keys} 
+                            for i in range(len(trajectory_ids))
+                        ]
                     
                     # Process with Ray
                     observations, dones, valids = await self.tool_manager.process_actions(

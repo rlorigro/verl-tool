@@ -31,8 +31,9 @@ uv pip install flash-attn --no-build-isolation
 ## Features
 1. Fully separated the tool server and the training logic. By passing a list of `action_stop_tokens` to the training script, each action ending with any of the tokens will be passed to the tool server and further processed by identifying the tool type based on the custom pasing logic in each tool (`parse_action` function). 
 2. Fast Tool Server: We use [ray serve](https://docs.ray.io/en/latest/serve/index.html) to serve the tool servers, which is fully asynchronous and compatible with the verl training.
-3. Support multiple tool types, see [./verl_tool/servers/tools](./verl_tool/servers/tools) for all the avaiable tools. Each python file is a tool type we support.
-4. We make [verl](https://github.com/volcengine/verl) as a submodule of this repo, and only add additional logics by inheriting the `ActorRolloutRefWorker` and `RayPPOTrainer`, making it easy to extend and maintain.
+3. Multiple tool types, see [./verl_tool/servers/tools](./verl_tool/servers/tools) for all the avaiable tools. Each python file is a tool type we support.
+4. Natural multi-turn RL with tool calling support by specifying the `max_turns` in the script.
+5. We make [verl](https://github.com/volcengine/verl) as a submodule of this repo, and only add additional logics by inheriting the `ActorRolloutRefWorker` and `RayPPOTrainer`, making it easy to extend and maintain.
 
 ## Training
 
@@ -67,7 +68,7 @@ We do all the evaluation by serving the model in an openai compatible api way. A
 
 ```bash
 # Start the ray server for the tool
-python -m verl_tool.servers.ray_serve --host 0.0.0.0 --port 5000 --tool_type "python_code" &
+python -m verl_tool.servers.serve --host 0.0.0.0 --port 5000 --tool_type "python_code" &
 # Run the tests
 python -m verl_tool.servers.tests.test_python_code_tool python --url=http://localhost:5000/get_observation
 ```
