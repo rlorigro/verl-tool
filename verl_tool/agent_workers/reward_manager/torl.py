@@ -93,15 +93,13 @@ class ToRLRewardManager:
             score['accuracy'] = 1 if torl_score > 0 else 0
             score['score'] = torl_score
         
-            # penalty to errored or timeout execution
-            keywords = ["ERROR:\nTraceback", "Execution timed out"]
-            if any(keyword in response_str for keyword in keywords):
-                score['exec_error'] = 1
-                score['score'] -= 0.5
-            else:
-                score['exec_error'] = 0
-
-            
+            # # penalty to errored or timeout execution
+            # keywords = ["ERROR:\nTraceback", "Execution timed out"]
+            # if any(keyword in response_str for keyword in keywords):
+            #     score['exec_error'] = 1
+            #     score['score'] -= 0.5
+            # else:
+            #     score['exec_error'] = 0
                 
             # execution penalty to do
             if "turns_stats" in data_item.non_tensor_batch:

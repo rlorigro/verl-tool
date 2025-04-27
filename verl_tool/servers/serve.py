@@ -413,5 +413,5 @@ if __name__ == "__main__":
     
     
 """
-python -m verl_tool.servers.ray_serve --tool_type "firejail_python_code" --workers_per_tool 8
+python -m verl_tool.servers.ray_serve --tool_type "firejail_python_code" --workers_per_tool $n
 """

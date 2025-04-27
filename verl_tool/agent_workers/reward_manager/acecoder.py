@@ -249,12 +249,12 @@ class AceCoderRewardManager:
                 num_valid_action = data[i].non_tensor_batch["valid_action_stats"]
                 is_active = data[i].non_tensor_batch["active_mask"]
                 is_done = not is_active
-                # 2.2. add additional penalty for the number of turns and valid actions
-                if scores[i]['binary_pass_rate'] == 0.0 and num_valid_action < 1:
-                    scores[i]['score'] -= 0.5
-                    scores[i]['tool_use_penalty'] = 1
-                else:
-                    scores[i]['tool_use_penalty'] = 0
+                # # 2.2. add additional penalty for the number of turns and valid actions
+                # if scores[i]['binary_pass_rate'] == 0.0 and num_valid_action < 1:
+                #     scores[i]['score'] -= 0.5
+                #     scores[i]['tool_use_penalty'] = 1
+                # else:
+                #     scores[i]['tool_use_penalty'] = 0
                     
             
         for i, score in enumerate(scores):
