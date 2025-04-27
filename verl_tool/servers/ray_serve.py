@@ -6,6 +6,15 @@ from fastapi import FastAPI, Request
 import uvicorn
 from collections import defaultdict
 
+# Initialize Ray
+if not ray.is_initialized():
+    print("Ray not initialized")
+    try:
+        ray.init(ignore_reinit_error=True)
+    except:
+        # Connect to existing Ray cluster
+        ray.init(address="auto", ignore_reinit_error=True)
+
 # Import your tool classes
 from .tools import get_tool_cls, ALL_TOOLS
 
