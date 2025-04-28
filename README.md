@@ -19,12 +19,12 @@ VerlTool: An unified and easy-to-extend tool-agent training framework based on v
 
 ## Installation
 ```bash
+git submodule update --init --recursive
 pip install uv # if not installed
 uv sync
-git submodule update --init --recursive
 source .venv/bin/activate
 uv pip install -e verl
-uv pip install vllm==0.8.4 # we found some memory leaking bugs for vllm==0.8.2, so choose to use 0.8.3 instead
+uv pip install vllm==0.8.4
 uv pip install flash-attn --no-build-isolation
 uv pip install -e .[acecoder,torl]
 uv pip install dill==0.4.0
