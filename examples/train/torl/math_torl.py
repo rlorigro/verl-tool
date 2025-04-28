@@ -30,17 +30,26 @@ def extract_solution(solution_str):
 system_prompot = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem above, and put your final answer within \\boxed{}.:
 '''
 
+system_prompot2 = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem above. If you want to test any python code, writing it inside <python> and  </python> tags following with <output>. Please put your final answer within \\boxed{}.:
+'''
+
 def main(
     data_source='DigitalLearningGmbH/MATH-lighteval',
     local_dir='~/data/math_torl',
     hdfs_dir=None,
     level:str = 'hard',
+    sys_prompt_version: str = 'v1',
 ):
     
     print(f"Loading the {data_source} dataset from huggingface...", flush=True)
     dataset = datasets.load_dataset(data_source, trust_remote_code=True)
     train_dataset = dataset['train']
     test_dataset = dataset['test']
+    
+    if sys_prompt_version == 'v2':
+        system_prompot = system_prompot2
+    else:
+        system_prompot = system_prompot
     
     # easy: level 1
     # medium: level 1-4
@@ -198,4 +207,5 @@ if __name__ == '__main__':
     
 """
 python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl
+python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl_v2 --sys_prompt_version v2
 """

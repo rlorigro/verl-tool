@@ -1,9 +1,10 @@
 set -x
-train_data=$(pwd)/data/math_torl/train.parquet
-val_data=[$(pwd)/data/math_torl/test.parquet,\
-$(pwd)/data/math_torl/math500_test.parquet,\
-$(pwd)/data/math_torl/aime24_test.parquet,\
-$(pwd)/data/math_torl/aime25_test.parquet]
+dataset_name=math_torl_v2
+train_data=$(pwd)/data/${dataset_name}/train.parquet
+val_data=[$(pwd)/data/${dataset_name}/test.parquet,\
+$(pwd)/data/${dataset_name}/math500_test.parquet,\
+$(pwd)/data/${dataset_name}/aime24_test.parquet,\
+$(pwd)/data/${dataset_name}/aime25_test.parquet]
 model_name=Qwen/Qwen2.5-Math-1.5B
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
 n_gpus_per_node=4
@@ -35,7 +36,7 @@ ulysses_sequence_parallel_size=1 # set to 1 for normal verl behavior, otherwise 
 fsdp_size=-1
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
-run_name_postfix="new"
+run_name_postfix="new-v2"
 run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 export VERL_RUN_ID=$run_name
 export NCCL_DEBUG=INFO
