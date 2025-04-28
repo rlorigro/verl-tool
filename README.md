@@ -23,9 +23,13 @@ pip install uv # if not installed
 uv sync
 git submodule update --init --recursive
 source .venv/bin/activate
-uv pip install -e verl[vllm]
-uv pip install vllm==0.8.3 # we found some memory leaking bugs for vllm==0.8.2, so choose to use 0.8.3 instead
+uv pip install -e verl
+uv pip install vllm==0.8.4 # we found some memory leaking bugs for vllm==0.8.2, so choose to use 0.8.3 instead
 uv pip install flash-attn --no-build-isolation
+uv pip install -e .[acecoder,torl]
+uv pip install dill==0.4.0
+uv pip install fsspec==2025.3.2
+uv pip install protobuf==5.29.4
 ```
 
 ## Features
@@ -68,7 +72,7 @@ We do all the evaluation by serving the model in an openai compatible api way. A
 
 ```bash
 # Start the ray server for the tool
-python -m verl_tool.servers.serve --host 0.0.0.0 --port 5000 --tool_type "python_code" &
+python -m verl_tool.servers.ray_serve --host 0.0.0.0 --port 5000 --tool_type "python_code" &
 # Run the tests
 python -m verl_tool.servers.tests.test_python_code_tool python --url=http://localhost:5000/get_observation
 ```

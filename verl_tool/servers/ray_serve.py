@@ -4,7 +4,9 @@ import logging
 from typing import Dict, List, Optional, Tuple, Any, Union
 from fastapi import FastAPI, Request
 import uvicorn
+import time
 from collections import defaultdict
+from .tools import get_tool_cls
 
 # Initialize Ray
 if not ray.is_initialized():
@@ -21,58 +23,44 @@ from .tools import get_tool_cls, ALL_TOOLS
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+        
+@ray.remote(num_cpus=0)
+def ray_execute(tool, trajectory_id: str, action: str, extra_field: Dict[str, Any]):
+    """
+    Execute a single tool action.
+    
+    Args:
+        trajectory_id: Unique identifier for the trajectory
+        action: The action string to execute
+        extra_field: Additional data for the action
+        
+    Returns:
+        tuple: (observation, done, valid) result of the action
+    """
+    return tool.conduct_action(trajectory_id, action, extra_field)
+    
+@ray.remote(num_cpus=0)
+def ray_parse_action(tool, action: str):
+    """
+    Check if this tool can handle the action.
+    
+    Args:
+        action: The action string to parse
+        
+    Returns:
+        tuple: (parsed_action, valid)
+    """
+    return tool.parse_action(action)
 
-# Ray actors for tools
-@ray.remote
-class RayToolWorker:
-    """Ray actor for executing tool operations"""
+@ray.remote(num_cpus=0)
+def ray_get_usage_inst(tool):
+    """
+    Get usage instructions for this tool.
     
-    def __init__(self, tool_type: str):
-        """
-        Initialize a worker for a specific tool type.
-        
-        Args:
-            tool_type: The type of tool this worker will handle
-        """
-        from .tools import get_tool_cls
-        self.tool_type = tool_type
-        # Create a single-worker tool instance (parallelization handled by Ray)
-        self.tool = get_tool_cls(tool_type)()
-        
-    def execute(self, trajectory_id: str, action: str, extra_field: Dict[str, Any]):
-        """
-        Execute a single tool action.
-        
-        Args:
-            trajectory_id: Unique identifier for the trajectory
-            action: The action string to execute
-            extra_field: Additional data for the action
-            
-        Returns:
-            tuple: (observation, done, valid) result of the action
-        """
-        return self.tool.conduct_action(trajectory_id, action, extra_field)
-        
-    def parse_action(self, action: str):
-        """
-        Check if this tool can handle the action.
-        
-        Args:
-            action: The action string to parse
-            
-        Returns:
-            tuple: (parsed_action, valid)
-        """
-        return self.tool.parse_action(action)
-    
-    def get_usage_inst(self):
-        """
-        Get usage instructions for this tool.
-        
-        Returns:
-            str: The usage instructions
-        """
-        return self.tool.get_usage_inst()
+    Returns:
+        str: The usage instructions
+    """
+    return tool.get_usage_inst()
 
 
 class RayToolManager:
@@ -103,17 +91,11 @@ class RayToolManager:
                 continue  # Handle finish tool separately
                 
             # Create multiple workers for each tool type for parallelization
-            self.tool_workers[tool_type] = [
-                RayToolWorker.remote(tool_type) 
-                for _ in range(self.workers_per_tool)
-            ]
+            self.tool_workers[tool_type] = get_tool_cls(tool_type)()
         
         # Initialize finish tool (if needed)
         if "finish" not in self.tool_workers:
-            self.tool_workers["finish"] = [
-                RayToolWorker.remote("finish") 
-                for _ in range(self.workers_per_tool)
-            ]
+            self.tool_workers["finish"] = get_tool_cls("finish")()
             
         # Log available vs. active tools with emoji indicators
         logger.info("Available Tools:")
@@ -141,13 +123,13 @@ class RayToolManager:
             return "finish"
             
         # Try each tool type with Ray
-        for tool_type, workers in self.tool_workers.items():
+        for tool_type, worker in self.tool_workers.items():
             if tool_type == "finish":
                 continue
                 
             # Use the first worker to check validity
             _, valid_ref = await asyncio.to_thread(
-                ray.get, workers[0].parse_action.remote(action)
+                ray.get, ray_parse_action.remote(worker, action)
             )
             
             if valid_ref:
@@ -164,8 +146,8 @@ class RayToolManager:
         """
         # Collect usage instructions from one worker of each type
         futures = {
-            tool_type: workers[0].get_usage_inst.remote()
-            for tool_type, workers in self.tool_workers.items()
+            tool_type: ray_get_usage_inst.remote(worker)
+            for tool_type, worker in self.tool_workers.items()
             if tool_type != "finish"
         }
         
@@ -204,12 +186,11 @@ class RayToolManager:
         dones = [False] * len(actions)
         valids = [False] * len(actions)
         
-        @ray.remote
+        @ray.remote(num_cpus=0)
         def non_tool_action(trajectory_id: str, action: str, extra_field: Dict[str, Any]):
             return "", False, False # no observation if no tool matched
         
         pending_refs = []
-        tool_worker_idx = defaultdict(int)
         for i, tool_type in enumerate(tool_types):
             trajectory_id = trajectory_ids[i]
             action = actions[i]
@@ -219,11 +200,8 @@ class RayToolManager:
                 # Handle actions with no matching tool
                 result_ref = non_tool_action.remote(trajectory_id, action, extra_field)
             else:
-                workers = self.tool_workers[tool_type]
-                worker_idx = tool_worker_idx[tool_type]
-                tool_worker_idx[tool_type] = (worker_idx + 1) % len(workers)
-                worker = workers[worker_idx]
-                result_ref = worker.execute.remote(trajectory_id, action, extra_field)
+                worker = self.tool_workers[tool_type]
+                result_ref = ray_execute.remote(worker, trajectory_id, action, extra_field)
             pending_refs.append(result_ref)
         
         # Get results as they complete
@@ -308,9 +286,13 @@ class RayToolServer:
                         ]
                     
                     # Process with Ray
+                    start = time.time()
+                    print(f"Processing {len(trajectory_ids)} actions")
                     observations, dones, valids = await self.tool_manager.process_actions(
                         trajectory_ids, actions, extra_fields
                     )
+                    end = time.time() - start
+                    print(f"Processed {len(trajectory_ids)} actions in {end:.2f} seconds")
                     # import json
                     # with open("tool_results.json", 'w') as f:
                     #     json.dump({"observations": observations, "dones": dones, "valids": valids}, f, indent=4)
@@ -340,7 +322,7 @@ def main(
     tool_type: Union[str, Tuple[str]] = "base",
     host: str = "0.0.0.0",
     port: int = 5000,
-    workers_per_tool: int = 4,
+    workers_per_tool: int = 16,
     max_concurrent_requests: int = 64,
     ray_address: Optional[str] = None
 ):

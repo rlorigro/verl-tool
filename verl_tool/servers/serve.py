@@ -254,7 +254,7 @@ class AsyncToolServer:
         tool_types: Tuple[str],
         host: str = "0.0.0.0",
         port: int = 5000,
-        workers_per_tool: int = 4,
+        workers_per_tool: int = 32,
         max_concurrent_requests: int = 64,
         use_tqdm: bool = False,
     ):
@@ -413,5 +413,5 @@ if __name__ == "__main__":
     
     
 """
-python -m verl_tool.servers.ray_serve --tool_type "firejail_python_code" --workers_per_tool $n
+python -m verl_tool.servers.ray_serve --tool_type "firejail_python_code" --workers_per_tool 64
 """
