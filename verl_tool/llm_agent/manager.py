@@ -575,12 +575,12 @@ class AgentActorManager:
         return response.json()
 
     def interact_with_tool_server(
-      self,
-      active_uids:List[str],
-      responses: List[str],
-      do_actions:List[bool],
-      active_mask=None,
-      extra_fields=None
+        self,
+        active_uids:List[str],
+        responses: List[str],
+        do_actions:List[bool],
+        active_mask=None,
+        extra_fields=None
     ) -> List[str]:
         """
         Call tool server for queries.

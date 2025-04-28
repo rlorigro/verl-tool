@@ -35,6 +35,7 @@ def test_firejail_python(
     print("--- Test 1: Basic Hello World ---")
     action = """<python>print('Hello from Firejail Python!')</python>"""
     print(_send_test_request(url, trajectory_id, action, "Hello World"))
+    exit(1)
     
     print("--- Test 2: Multiple Print Statements ---")
     action = """```python

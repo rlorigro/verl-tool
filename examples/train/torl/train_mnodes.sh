@@ -1,14 +1,13 @@
 set -x
-train_data=[$(pwd)/data/mathcoder/code_train.parquet,\
-$(pwd)/data/mathcoder/math_train.parquet]
-val_data=[$(pwd)/data/mathcoder/code_test.parquet,\
+train_data=$(pwd)/data/math_torl/train.parquet
+val_data=[$(pwd)/data/math_torl/test.parquet,\
 $(pwd)/data/math_torl/math500_test.parquet,\
 $(pwd)/data/math_torl/aime24_test.parquet,\
 $(pwd)/data/math_torl/aime25_test.parquet]
-model_name=Qwen/Qwen2.5-Math-1.5B
+model_name=Qwen/Qwen2.5-Math-7B
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
-n_gpus_per_node=4
-n_nodes=1
+n_gpus_per_node=8
+n_nodes=2
 n=16
 batch_size=128
 ppo_mini_batch_size=$batch_size
@@ -25,19 +24,21 @@ kl_coef=0
 entropy_coeff=0
 kl_loss_type=low_var_kl
 lr=1e-6
-reward_manager=mathcoder
+reward_manager=torl
 ppo_micro_batch_size_per_gpu=1
 log_prob_micro_batch_size_per_gpu=2
-tensor_model_parallel_size=1
+tensor_model_parallel_size=2
 gpu_memory_utilization=0.6 # higher gpu_memory_utilization will likely cause the vllm to OOM and get stuck, so set it to a lower value like 0.4 or 0.5
 do_offload=True # control actor's fsdp.[param|optimizer]_offload and actor_rollout_ref.rollout.fsdp.[param|optimizer]_offload; if gpu_memory_utilization is set to > 0.6, then do_offload should be set to True otherwise it will cause OOM
-use_dynamic_bsz=True # faster
+use_dynamic_bsz=False # faster
 ulysses_sequence_parallel_size=1 # set to 1 for normal verl behavior, otherwise it will cause OOM
+fsdp_size=8
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
 run_name_postfix="new"
 run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 export VERL_RUN_ID=$run_name
+export NCCL_DEBUG=INFO
 
 # temp file for action tokens as verl cannot pass special strs as params
 mkdir -p $(pwd)/tmp
@@ -48,11 +49,23 @@ echo "action_stop_tokens_file=$action_stop_tokens_file"
 host=$(hostname -I | awk '{print $1}')
 port=$(shuf -i 30000-31000 -n 1)
 tool_server_url=http://$host:$port/get_observation
-python -m verl_tool.servers.serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 32 &
+python -m verl_tool.servers.ray_serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 64 &
 server_pid=$!
+sleep 20
+kill -9 $server_pid
+python -m verl_tool.servers.ray_serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 64 &
+server_pid=$!
+sleep 20
+kill -9 $server_pid
+python -m verl_tool.servers.ray_serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 64 &
+server_pid=$!
+
 echo "Server (pid=$server_pid) started at $tool_server_url"
 
-PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
+ray job submit --address="http://127.0.0.1:8265" \
+    --runtime-env=verl_tool/trainer/runtime_env.yaml \
+    -- \
+    PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     algorithm.adv_estimator=$rl_alg \
     data.train_files=$train_data \
     data.val_files=$val_data \
@@ -77,6 +90,7 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     actor_rollout_ref.actor.entropy_coeff=$entropy_coeff \
     actor_rollout_ref.actor.fsdp_config.param_offload=$do_offload \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=$do_offload \
+    actor_rollout_ref.actor.fsdp_config.fsdp_size=$fsdp_size \
     actor_rollout_ref.actor.ulysses_sequence_parallel_size=$ulysses_sequence_parallel_size \
     +actor_rollout_ref.agent.tool_server_url=$tool_server_url \
     +actor_rollout_ref.agent.max_prompt_length=$max_prompt_length \
@@ -105,6 +119,7 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     critic.optim.lr=1e-5 \
     critic.strategy=$strategy \
     critic.model.path=$model_name \
+    critic.model.fsdp_config.fsdp_size=$fsdp_size \
     critic.ppo_micro_batch_size_per_gpu=$ppo_micro_batch_size_per_gpu \
     critic.ulysses_sequence_parallel_size=$ulysses_sequence_parallel_size \
     algorithm.kl_ctrl.kl_coef=$kl_coef \
@@ -113,6 +128,7 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     trainer.experiment_name=$run_name \
     trainer.val_before_train=True \
     trainer.default_hdfs_dir=null \
+    trainer.default_local_dir=$(pwd)/checkpoints/${reward_manager}/${run_name} \
     trainer.n_gpus_per_node=$n_gpus_per_node \
     trainer.nnodes=$n_nodes \
     +trainer.remove_previous_ckpt_in_save=True \

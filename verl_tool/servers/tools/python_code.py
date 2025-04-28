@@ -8,7 +8,7 @@ from typing import Tuple, Dict, Any, Optional
 from ..utils import kill_python_subprocess_processes
 
 # Timeout for code execution in seconds
-TIMEOUT = 10
+TIMEOUT = 5
 
 def check_forbidden_imports(code: str) -> bool:
     """

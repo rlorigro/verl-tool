@@ -5,9 +5,9 @@ val_data=[$(pwd)/data/mathcoder/code_test.parquet,\
 $(pwd)/data/math_torl/math500_test.parquet,\
 $(pwd)/data/math_torl/aime24_test.parquet,\
 $(pwd)/data/math_torl/aime25_test.parquet]
-model_name=Qwen/Qwen2.5-Math-1.5B
+model_name=Qwen/Qwen2.5-Math-7B
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
-n_gpus_per_node=4
+n_gpus_per_node=8
 n_nodes=1
 n=16
 batch_size=128
@@ -28,7 +28,7 @@ lr=1e-6
 reward_manager=mathcoder
 ppo_micro_batch_size_per_gpu=1
 log_prob_micro_batch_size_per_gpu=2
-tensor_model_parallel_size=1
+tensor_model_parallel_size=2
 gpu_memory_utilization=0.6 # higher gpu_memory_utilization will likely cause the vllm to OOM and get stuck, so set it to a lower value like 0.4 or 0.5
 do_offload=True # control actor's fsdp.[param|optimizer]_offload and actor_rollout_ref.rollout.fsdp.[param|optimizer]_offload; if gpu_memory_utilization is set to > 0.6, then do_offload should be set to True otherwise it will cause OOM
 use_dynamic_bsz=True # faster
@@ -48,11 +48,16 @@ echo "action_stop_tokens_file=$action_stop_tokens_file"
 host=$(hostname -I | awk '{print $1}')
 port=$(shuf -i 30000-31000 -n 1)
 tool_server_url=http://$host:$port/get_observation
-python -m verl_tool.servers.serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 32 &
+python -m verl_tool.servers.ray_serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 64 &
 server_pid=$!
 echo "Server (pid=$server_pid) started at $tool_server_url"
 
-PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
+
+
+ray job submit --address="http://127.0.0.1:8265" \
+    --runtime-env=verl_tool/trainer/runtime_env.yaml \
+    -- \
+    PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     algorithm.adv_estimator=$rl_alg \
     data.train_files=$train_data \
     data.val_files=$val_data \
@@ -113,6 +118,7 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     trainer.experiment_name=$run_name \
     trainer.val_before_train=True \
     trainer.default_hdfs_dir=null \
+    trainer.default_local_dir=$(pwd)/checkpoints/${reward_manager}/${run_name} \
     trainer.n_gpus_per_node=$n_gpus_per_node \
     trainer.nnodes=$n_nodes \
     +trainer.remove_previous_ckpt_in_save=True \
