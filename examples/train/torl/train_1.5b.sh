@@ -1,5 +1,5 @@
 set -x
-dataset_name=math_torl_v2
+dataset_name=math_torl
 train_data=$(pwd)/data/${dataset_name}/train.parquet
 val_data=[$(pwd)/data/${dataset_name}/test.parquet,\
 $(pwd)/data/${dataset_name}/math500_test.parquet,\
@@ -18,7 +18,7 @@ max_obs_length=512
 temperature=1.0
 top_p=1.0
 strategy="fsdp_agent" # remove _agent for normal verl behavior
-action_stop_tokens='<output>'
+action_stop_tokens="\`\`\`output"
 max_turns=1
 kl_loss_coef=0.0
 kl_coef=0
