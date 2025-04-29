@@ -164,8 +164,8 @@ class ModelService:
         ]
         
         # Wait for the service to start (poll the health endpoint)
-        max_retries = 30
-        retry_interval = 5
+        max_retries = 60
+        retry_interval = 10
         vllm_model_status = [False for _ in range(num_models)]
         for i in range(max_retries):
             for j in range(num_models):
@@ -266,7 +266,7 @@ class ModelService:
             for i in range(len(contexts)):
                 if active_masks[i]:
                     contexts[i] += active_responses[active_idx] + observations[active_idx]
-                    final_responses[i] += active_responses[active_idx]
+                    final_responses[i] += active_responses[active_idx] + observations[active_idx]
                     finish_reasons[i] = active_finish_reasons[active_idx]
                     active_masks[i] = not dones[active_idx]
                     active_idx += 1
