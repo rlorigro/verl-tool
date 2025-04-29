@@ -275,23 +275,15 @@ class ModelService:
     
     def generate_response(self, body: Dict[str, Any]) -> Dict[str, Any]:
         """process API request and generate response"""
-        system_prompt = None
-        user_message = None
+        print(f"Received request: {body}")
         
-        for message in body["messages"]:
-            if message["role"] == "system":
-                system_prompt = message["content"]
-            elif message["role"] == "user":
-                user_message = message["content"]
-
-        if not system_prompt:
-            raise ValueError("No system prompt found in the request.")
-        if not user_message:
+        if "messages" not in body or not body["messages"]:
+            raise ValueError("No messages found in the request.")
+        if not 'user' in [message["role"] for message in body["messages"]]:
             raise ValueError("No user message found in the request.")
         
         assert body["model"] == self.model_config.model, f"model mismatch: {body['model']} != {self.model_config.model}"
-        prompt = self.tokenizer.apply_chat_template([{"role": "system", "content": system_prompt}, 
-                                                    {"role": "user", "content": user_message}],
+        prompt = self.tokenizer.apply_chat_template(body['messages'],
                                                     add_generation_prompt=True,
                                                     tokenize=False)
         if body.get('n', 1) > 1:
@@ -301,10 +293,9 @@ class ModelService:
 
         sampling_params = {
             "temperature": body.get("temperature", 1.0),
-            "max_tokens": body.get("max_tokens", 512),
+            "max_tokens": body.get("max_tokens", body.get("max_completion_tokens", 512)),
             "top_p": body.get("top_p", 1.0),
             "stop": self.tool_config.action_stop_tokens,
-            # "include_stop_str_in_output": True,
         }
 
         all_responses, finish_reasons = self.generate_with_tools(prompts, sampling_params)
