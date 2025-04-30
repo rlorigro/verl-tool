@@ -73,7 +73,7 @@ class AgentActorManager:
         if self.config.action_stop_tokens is not None:
             if os.path.exists(self.config.action_stop_tokens):
                 with open(self.config.action_stop_tokens, 'r') as f:
-                    self.action_stop_tokens = f.read().strip('\n').split(',')
+                    self.action_stop_tokens = f.read().split(',')
                 print(f"Using action stop tokens: {self.action_stop_tokens}")
             else:
                 raise ValueError(f"action_stop_tokens file not found: {self.config.action_stop_tokens}")
@@ -112,11 +112,11 @@ class AgentActorManager:
         )
         do_actions = []
         for i, resp in enumerate(responses_str):
-            resp = resp.strip(' \n')
             if action_step >= self.config.min_action_num:
                 has_action = False
                 for j in range(len(self.action_stop_tokens)):
-                    if resp.endswith(self.action_stop_tokens[j]):
+                    # if resp.endswith(self.action_stop_tokens[j]):
+                    if self.action_stop_tokens[j] in resp[-(len(self.action_stop_tokens[j]) + 5):]: # 5 for some action token tokens not indepdently decoded
                         has_action = True
                         responses_str[i] = resp.split(self.action_stop_tokens[j])[0] + self.action_stop_tokens[j]
                         break

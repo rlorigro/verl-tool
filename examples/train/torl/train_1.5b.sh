@@ -1,13 +1,14 @@
 set -x
-dataset_name=math_torl
+dataset_name=math_torl_official
 train_data=$(pwd)/data/${dataset_name}/train.parquet
+dataset_name=math_torl
 val_data=[$(pwd)/data/${dataset_name}/test.parquet,\
 $(pwd)/data/${dataset_name}/math500_test.parquet,\
 $(pwd)/data/${dataset_name}/aime24_test.parquet,\
 $(pwd)/data/${dataset_name}/aime25_test.parquet]
 model_name=Qwen/Qwen2.5-Math-1.5B
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
-n_gpus_per_node=4
+n_gpus_per_node=8
 n_nodes=1
 n=16
 batch_size=128
@@ -36,7 +37,8 @@ ulysses_sequence_parallel_size=1 # set to 1 for normal verl behavior, otherwise 
 fsdp_size=-1
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
-run_name_postfix="new-v2"
+# run_name_postfix="new-5-turns-force-reflection"
+run_name_postfix="torl_same_train"
 run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 export VERL_RUN_ID=$run_name
 export NCCL_DEBUG=INFO
@@ -44,7 +46,7 @@ export NCCL_DEBUG=INFO
 # temp file for action tokens as verl cannot pass special strs as params
 mkdir -p $(pwd)/tmp
 action_stop_tokens_file="$(pwd)$(mktemp)"
-echo "$action_stop_tokens" | tee $action_stop_tokens_file
+echo -e -n "$action_stop_tokens" | tee $action_stop_tokens_file
 echo "action_stop_tokens_file=$action_stop_tokens_file"
 
 host=$(hostname -I | awk '{print $1}')
@@ -116,7 +118,7 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     trainer.logger=['console','wandb'] \
     trainer.project_name=$reward_manager \
     trainer.experiment_name=$run_name \
-    trainer.val_before_train=True \
+    trainer.val_before_train=False \
     trainer.default_hdfs_dir=null \
     trainer.n_gpus_per_node=$n_gpus_per_node \
     trainer.nnodes=$n_nodes \

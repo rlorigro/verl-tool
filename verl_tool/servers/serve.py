@@ -331,6 +331,18 @@ class AsyncToolServer:
                         dones=dones,
                         valids=valids
                     )
+                    # import json
+                    # with open("request_response.json", "w") as f:
+                    #     json.dump([
+                    #         {
+                    #             "trajectory_id": trajectory_ids[i],
+                    #             "action": actions[i],
+                    #             "extra_field": extra_fields[i],
+                    #             "observation": observations[i],
+                    #             "done": dones[i],
+                    #             "valid": valids[i]
+                    #         } for i in range(len(trajectory_ids))
+                    #     ], f, indent=4)
                     logger.debug(f"Sending response: {response}")
                     return response
                     

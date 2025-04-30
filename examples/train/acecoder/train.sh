@@ -1,8 +1,8 @@
 set -x
-dataset_name=CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference-with-execution-prompt
-train_data=$(pwd)/data/acecoder/$dataset_name/train.parquet
-val_data=$(pwd)/data/acecoder/$dataset_name/test.parquet
-model_name=Qwen/Qwen2.5-Coder-7B
+dataset_name=acecoder_long/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference-with-execution-prompt
+train_data=$(pwd)/data/$dataset_name/train.parquet
+val_data=$(pwd)/data/$dataset_name/test.parquet
+model_name=VerlTool/Qwen2.5-Coder-7B-Inst-Interpreter-thinking-valid-tool
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
 n_gpus_per_node=8
 n_nodes=1
@@ -15,8 +15,8 @@ max_obs_length=512
 temperature=1.0
 top_p=1.0
 strategy="fsdp_agent" # remove _agent for normal verl behavior
-action_stop_tokens='<output>'
-max_turns=1
+action_stop_tokens='```output'
+max_turns=5
 kl_loss_coef=0.0
 kl_coef=0
 entropy_coeff=0
@@ -41,7 +41,7 @@ export NCCL_DEBUG=INFO
 # temp file for action tokens as verl cannot pass special strs as params
 mkdir -p $(pwd)/tmp
 action_stop_tokens_file="$(pwd)$(mktemp)"
-echo "$action_stop_tokens" | tee $action_stop_tokens_file
+echo -e -n "$action_stop_tokens" | tee $action_stop_tokens_file
 echo "action_stop_tokens_file=$action_stop_tokens_file"
 
 host=$(hostname -I | awk '{print $1}')
