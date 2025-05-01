@@ -9,13 +9,13 @@ server_pid=$!
 echo "Server (pid=$server_pid) started at $tool_server_url"
 
 # 2. start api service
-model_path="GAIR/ToRL-1.5B"
+model_path="/home/aiops/jiangdf/Workspace/LLaMA-Factory/saves/qwen25_interpreter_thinking_tool/full/sft/checkpoint-444"
 max_turns=1
 api_host="0.0.0.0"
 api_port=5000
 action_stop_tokens='```output'
 tensor_parallel_size=1
-num_models=2 # number of vllm instances; num_models * tensor_parallel_size should be equal to the number of GPUs
+num_models=4 # number of vllm instances; num_models * tensor_parallel_size should be equal to the number of GPUs
 # temp file for action tokens as verl cannot pass special strs as params
 action_stop_tokens_file=$(mktemp)
 echo "$action_stop_tokens" > $action_stop_tokens_file

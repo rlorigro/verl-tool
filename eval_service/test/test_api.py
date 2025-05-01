@@ -8,7 +8,7 @@ from openai import OpenAI
 client = OpenAI(api_key="sk-proj-1234567890", base_url="http://0.0.0.0:5000") # Replace with your local server address
 
 completion = client.chat.completions.create(
-    model="GAIR/ToRL-1.5B",
+    model="/home/aiops/jiangdf/Workspace/LLaMA-Factory/saves/qwen25_interpreter_thinking_tool/full/sft/checkpoint-444",
     messages=[
 		{
             "role": "system",
