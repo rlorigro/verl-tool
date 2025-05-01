@@ -324,7 +324,8 @@ def main(
     port: int = 5000,
     workers_per_tool: int = 16,
     max_concurrent_requests: int = 64,
-    ray_address: Optional[str] = None
+    ray_address: Optional[str] = None,
+    slient=False,
 ):
     """
     Start the Ray Tool Server.
@@ -359,6 +360,11 @@ def main(
         workers_per_tool=workers_per_tool,
         max_concurrent_requests=max_concurrent_requests
     )
+    if slient:
+        import sys
+        import os
+        sys.stdout = open(os.devnull, 'w')
+        sys.stderr = open(os.devnull, 'w')
     server.start()
 
 

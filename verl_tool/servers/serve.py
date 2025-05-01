@@ -382,6 +382,7 @@ def main(
     max_concurrent_requests: int = 128,
     use_tqdm: bool = True,
     log_level: str = "info",
+    slient=False,
 ):
     """
     Start the async tool server
@@ -417,6 +418,11 @@ def main(
         max_concurrent_requests=max_concurrent_requests,
         use_tqdm=use_tqdm,
     )
+    if slient:
+        import sys
+        import os
+        sys.stdout = open(os.devnull, 'w')
+        sys.stderr = open(os.devnull, 'w')
     server.start()
 
 

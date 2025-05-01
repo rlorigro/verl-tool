@@ -169,8 +169,8 @@ class PythonCodeTool(BaseTool):
         if action.endswith("<output>"):
             observation = observation + "\n</output>"
         
-        print(f"action: {action}")
-        print(f"observation: {observation}")
+        # print(f"action: {action}")
+        # print(f"observation: {observation}")
         observation = "\n" + observation + "\n"
         return observation, done, valid
         

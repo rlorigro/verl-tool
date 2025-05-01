@@ -4,13 +4,13 @@ set -x
 host=0.0.0.0
 port=$(shuf -i 30000-31000 -n 1)
 tool_server_url=http://$host:$port/get_observation
-python -m verl_tool.servers.ray_serve --host $host --port $port --tool_type "python_code" 2>&1 > /dev/null &
+python -m verl_tool.servers.ray_serve --host $host --port $port --tool_type "python_code" --workers_per_tool 32 --slient True &
 server_pid=$!
 echo "Server (pid=$server_pid) started at $tool_server_url"
 
 # 2. start api service
-model_path="/home/aiops/jiangdf/Workspace/LLaMA-Factory/saves/qwen25_interpreter_thinking_tool/full/sft/checkpoint-444"
-max_turns=1
+model_path=VerlTool/torl-fsdp_agent-qwen_qwen2.5-math-7b-grpo-n16-b128-t1.0-lr1e-6
+max_turns=4
 api_host="0.0.0.0"
 api_port=5000
 action_stop_tokens='```output'

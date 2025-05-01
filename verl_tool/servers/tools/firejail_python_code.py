@@ -129,8 +129,9 @@ class FirejailPythonCodeTool(BaseTool):
     tool_type = "firejail_python_code"
     timeout = TIMEOUT
     stop_tokens = ["```output", "<output>"]
-    enable_history_code_execution = True
-    enable_mannual_reflection = True
+    enable_history_code_execution = False
+    enable_mannual_reflection = False
+    
     def get_usage_inst(self):
         return "You are able to write and execute Python code securely inside a Firejail sandbox."
     

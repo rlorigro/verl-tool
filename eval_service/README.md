@@ -13,7 +13,7 @@ Server is managed by `app.py`, while the main tool-calling logic is implemented 
 Start the Python code execution tool server and API Service:
 
 ```bash
-bash eval_service/scripts/start_api_service.sh
+bash eval_service/scripts/start_api_service.sh &
 ```
 
 > You can set your own params in `start_api_service.sh`
@@ -37,11 +37,12 @@ How to convert megatron/vllm model ckpt to huggingface ckpt:
 
 ```bash
 backend=fsdp
-checkpoint_path=checkpoints/torl/torl-fsdp_agent-qwen_qwen2.5-math-1.5b-grpo-n16-b128-t1.0-lr1e-6new-v2/global_step_430/actor
-hf_upload_path=VerlTool/torl-fsdp_agent-qwen_qwen2.5-math-1.5b-grpo-n16-b128-t1.0-lr1e-6new-v2-430-step
+checkpoint_path=checkpoints/torl/torl-fsdp_agent-qwen_qwen2.5-math-1.5b-grpo-n16-b128-t1.0-lr1e-6torl_same_train/global_step_310/actor
+hf_upload_path=VerlTool/torl-fsdp_agent-qwen_qwen2.5-math-1.5b-grpo-n16-b128-t1.0-lr1e-6torl_same_train-310-step
 python3 verl/scripts/model_merger.py --backend $backend --hf_model_path $checkpoint_path/huggingface --hf_upload_path $hf_upload_path --local_dir $checkpoint_path --target_dir $checkpoint_path/huggingface
 
 # optional: also upload the step records to the model
-step_records_dir=verl_step_records/torl-fsdp_agent-qwen_qwen2.5-math-7b-grpo-n16-b128-t1.0-lr1e-6new
-huggingface-cli upload --repo-type model $hf_upload_path $step_records_dir step_records
+step_records_dir=verl_step_records/torl-fsdp_agent-qwen_qwen2.5-math-1.5b-grpo-n16-b128-t1.0-lr1e-6torl_same_train
+zip -r $step_records_dir/step_records.zip $step_records_dir 
+huggingface-cli upload --repo-type model $hf_upload_path $step_records_dir/step_records.zip step_records
 ```

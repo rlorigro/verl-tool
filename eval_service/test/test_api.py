@@ -8,7 +8,7 @@ from openai import OpenAI
 client = OpenAI(api_key="sk-proj-1234567890", base_url="http://0.0.0.0:5000") # Replace with your local server address
 
 completion = client.chat.completions.create(
-    model="/home/aiops/jiangdf/Workspace/LLaMA-Factory/saves/qwen25_interpreter_thinking_tool/full/sft/checkpoint-444",
+    model="VerlTool/torl-fsdp_agent-qwen_qwen2.5-math-7b-grpo-n16-b128-t1.0-lr1e-6",
     messages=[
 		{
             "role": "system",
@@ -24,5 +24,33 @@ completion = client.chat.completions.create(
     top_p=1,
     n=1,
 )
-
 print(completion.choices[0].message.content)
+
+tempalte = """<|im_start|>system
+{system_prompt}
+<|im_end|>
+<|im_start|>user
+{math_problem}
+<|im_end|>
+<|im_start|>assistant
+"""
+completion = client.completions.create(
+    model="VerlTool/torl-fsdp_agent-qwen_qwen2.5-math-7b-grpo-n16-b128-t1.0-lr1e-6",
+    prompt=tempalte.format(system_prompt=system_prompt, math_problem=math_problem),
+    temperature=0,
+    max_tokens=2048,
+    top_p=1,
+    n=1,
+)
+print(completion.choices[0].text)
+
+
+completion = client.completions.create(
+    model="VerlTool/torl-fsdp_agent-qwen_qwen2.5-math-7b-grpo-n16-b128-t1.0-lr1e-6",
+    prompt=f"system\n{system_prompt}\n\nuser\n{math_problem}\nassistant\n",
+    temperature=0,
+    max_tokens=1241241,
+    top_p=1,
+    n=1,
+)
+print(completion.choices[0].text)

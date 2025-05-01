@@ -5,7 +5,7 @@ import time
 from vllm import LLM, SamplingParams
 from datetime import datetime
 from tqdm import tqdm
-
+import openai
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
@@ -16,7 +16,8 @@ from trajectory import *
 from data_loader import load_data
 from python_executor import PythonExecutor
 from model_utils import load_hf_lm_and_tokenizer, generate_completions
-
+from concurrent.futures import ThreadPoolExecutor
+from tqdm import tqdm
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -40,6 +41,8 @@ def parse_args():
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--use_safetensors", action="store_true")
     parser.add_argument("--max_func_call", default=4, type=int)
+    parser.add_argument("--base_url", default="http://0.0.0.0:5000", type=str)
+    parser.add_argument("--num_threads", default=64, type=int)
     args = parser.parse_args()
     args.top_p = 1 if args.temperature == 0 else args.top_p # top_p must be 1 when using greedy sampling (vllm)
     return args
@@ -86,27 +89,14 @@ def prepare_data(data_name, args):
 
 def setup(args):
     # load model
-    available_gpus = os.environ['CUDA_VISIBLE_DEVICES'].split(',')
-    if args.use_vllm:
-        print("Using VLLM for inference.")
-        print("Available GPUs:", available_gpus)
-        print("VLLM model name:", args.model_name_or_path)
-        llm = LLM(model=args.model_name_or_path, tensor_parallel_size=len(available_gpus), trust_remote_code=True)
-        print("VLLM model loaded.")
-        tokenizer = None
-    else:
-        llm, tokenizer =  load_hf_lm_and_tokenizer(
-                model_name_or_path=args.model_name_or_path, 
-                load_in_half=True,
-                use_fast_tokenizer=True,
-                use_safetensors=args.use_safetensors,
-            )
+    client = openai.Client(base_url=args.base_url, api_key="sk-proj-1234567890") # random api key will be fine
+    tokenizer = None
 
     # infer & eval
     data_list = args.data_names.split(',')
     results = []
     for data_name in data_list:
-        results.append(main(llm, tokenizer, data_name, args))
+        results.append(main(client, tokenizer, data_name, args))
     
     # add "avg" result to data_list and results
     data_list.append("avg")
@@ -120,7 +110,7 @@ def setup(args):
     print("\t".join([f"{result['acc']:.1f}".ljust(pad, " ") for result in results]))
 
 
-def main(llm, tokenizer, data_name, args):
+def main(client, tokenizer, data_name, args):
     examples, processed_samples, out_file = prepare_data(data_name, args)
     print("=" * 50)
     print("data:", data_name, " ,remain samples:", len(examples))
@@ -177,96 +167,27 @@ def main(llm, tokenizer, data_name, args):
         if args.prompt_type == "pot-qwen-r1":
             stop_words.extend(["</python>"])
     print("Stop words:", stop_words)
-
-    # start inference
-    # measure time use
-    start_time = time.time()
-    for epoch in range(max_func_call):
-        print("-" * 20, "Epoch", epoch)
-        current_prompts = remain_prompts
-        if len(current_prompts) == 0:
-            break
-
-        # get all outputs
-        prompts = [item[1] for item in current_prompts]
-        if args.use_vllm:
-            outputs = llm.generate(prompts, SamplingParams(
-                            temperature=args.temperature,
-                            top_p=args.top_p,
-                            max_tokens=args.max_tokens_per_call,
-                            n=1,
-                            stop=stop_words,
-            ))
-
-            outputs = sorted(outputs, key=lambda x: int(x.request_id)) # sort outputs by request_id
-            outputs = [output.outputs[0].text for output in outputs]
-        else:
-            outputs = generate_completions(
-                model=llm,
-                tokenizer=tokenizer,
-                prompts=prompts,
-                max_new_tokens=args.max_tokens_per_call,
-                batch_size=16,
-                stop_id_sequences=stop_words,
+    
+    def call_vt_model(prompt):
+        try:
+            response = client.completions.create(
+                prompt=prompt,
+                model=args.model_name_or_path,
+                temperature=args.temperature,
+                max_tokens=args.max_tokens_per_call,
+                top_p=args.top_p,
+                n=1,
+                stop=stop_words,
             )
+            return response.choices[0].text
+        except Exception as e:
+            return None
 
-        assert len(outputs) == len(current_prompts)
-
-        # process all outputs
-        remain_prompts = []
-        remain_codes = []
-        for (i, query), output in zip(current_prompts, outputs):
-            output = output.rstrip()
-            query += output
-            if args.prompt_type == "pal":
-                remain_prompts.append((i, query))
-                if "```python" in output:
-                    output = extract_program(query)
-                remain_codes.append(output)
-            elif args.prompt_type == "cot":
-                end_prompts.append((i, query))
-            elif args.prompt_type == "pot-qwen-r1":
-                if "<python>" in output:
-                    output += "</python>"
-                    program = extract_pot_program(output)
-                    query += "</python>"
-                    remain_prompts.append((i, query))
-                    remain_codes.append(program)
-                else:
-                    end_prompts.append((i, query))
-            elif ("boxed" not in output and output.endswith("```")):
-                program = extract_program(query)
-                remain_prompts.append((i, query))
-                remain_codes.append(program)
-            else:
-                end_prompts.append((i, query))
-        
-        print("remain_codes:", remain_codes)
-
-        # execute the remain prompts
-        remain_results = executor.batch_apply(remain_codes)
-        print("remain_results:", remain_results)
-        for k in range(len(remain_prompts)):
-            i, query = remain_prompts[k]
-            res, report = remain_results[k]
-            exec_result = res if res else report
-            if args.prompt_type == "pot-qwen-r1":
-                exec_result = f"\n\n<information>{exec_result}</information>\n\n"
-            else:
-                if "pal" in args.prompt_type:
-                    exec_result = "\\boxed{" + exec_result + "}"
-                exec_result = f"\n```output\n{exec_result}\n```\n"
-            query += exec_result
-            # not end
-            if epoch == max_func_call - 1:
-                query += "\nReach max function call limit."
-            remain_prompts[k] = (i, query)
-
-    # unsolved samples
-    print("Unsolved samples:", len(remain_prompts))
-    end_prompts.extend(remain_prompts)
-    # sort by idx
-    end_prompts = sorted(end_prompts, key=lambda x: x[0])
+    start_time = time.time()
+    with ThreadPoolExecutor(max_workers=args.num_threads) as executor:
+        results = list(tqdm(executor.map(call_vt_model, input_prompts), total=len(input_prompts), desc="Calling VT Served Model"))
+    print(results.count(None), "failed to get response from model")
+    end_prompts = [(i, prompt+result) for i, (prompt, result) in enumerate(zip(input_prompts, results))]
 
     # remove input_prompt from end_prompt
     codes = []

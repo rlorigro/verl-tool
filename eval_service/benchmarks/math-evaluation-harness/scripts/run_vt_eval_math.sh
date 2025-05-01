@@ -1,6 +1,4 @@
 set -ex
-
-export CUDA_VISIBLE_DEVICES=0
 PROMPT_TYPE="tool_math_qwen"
 MODEL_NAMES=(
     "VerlTool/torl-fsdp_agent-qwen_qwen2.5-math-7b-grpo-n16-b128-t1.0-lr1e-6"
@@ -10,6 +8,7 @@ MODEL_NAMES=(
 DATA_NAMES="gsm8k,math500,minerva_math,olympiadbench,aime24,amc23"
 SPLIT="test"
 NUM_TEST_SAMPLE=-1
+vt_base_url="http://localhost:5000"
 
 for MODEL_NAME_OR_PATH in "${MODEL_NAMES[@]}"; do
     echo "Evaluating model: ${MODEL_NAME_OR_PATH}"
@@ -17,7 +16,7 @@ for MODEL_NAME_OR_PATH in "${MODEL_NAMES[@]}"; do
     
     # single-gpu
     TOKENIZERS_PARALLELISM=false \
-    python3 -u math_eval.py \
+    python3 -u vt_math_eval.py \
         --model_name_or_path ${MODEL_NAME_OR_PATH} \
         --output_dir ${OUTPUT_DIR} \
         --data_names ${DATA_NAMES} \
@@ -35,6 +34,7 @@ for MODEL_NAME_OR_PATH in "${MODEL_NAMES[@]}"; do
         --use_vllm \
         --max_func_call 4 \
         --overwrite \
+        --base_url ${vt_base_url} \
         2>&1 | tee "logs_${MODEL_NAME_OR_PATH//\//_}.log"
 done
 
