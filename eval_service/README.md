@@ -37,11 +37,11 @@ How to convert megatron/vllm model ckpt to huggingface ckpt:
 
 ```bash
 backend=fsdp
-checkpoint_path=checkpoints/acecoder/acecoder-fsdp_agent-qwen_qwen2.5-coder-7b-grpo-n16-b128-t1.0-lr1e-6/global_step_340/actor
-hf_upload_path=VerlTool/acecoder-fsdp_agent-qwen_qwen2.5-coder-7b-grpo-n16-b128-t1.0-lr1e-6-340-step
+checkpoint_path=checkpoints/torl/torl-fsdp_agent-qwen_qwen2.5-math-1.5b-grpo-n16-b128-t1.0-lr1e-6new-v2/global_step_430/actor
+hf_upload_path=VerlTool/torl-fsdp_agent-qwen_qwen2.5-math-1.5b-grpo-n16-b128-t1.0-lr1e-6new-v2-430-step
 python3 verl/scripts/model_merger.py --backend $backend --hf_model_path $checkpoint_path/huggingface --hf_upload_path $hf_upload_path --local_dir $checkpoint_path --target_dir $checkpoint_path/huggingface
 
 # optional: also upload the step records to the model
-step_records_dir=verl_step_records/acecoder-fsdp_agent-qwen_qwen2.5-coder-7b-grpo-n16-b128-t1.0-lr1e-6
+step_records_dir=verl_step_records/torl-fsdp_agent-qwen_qwen2.5-math-7b-grpo-n16-b128-t1.0-lr1e-6new
 huggingface-cli upload --repo-type model $hf_upload_path $step_records_dir step_records
 ```

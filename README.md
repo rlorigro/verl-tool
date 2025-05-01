@@ -76,7 +76,7 @@ We do all the evaluation by serving the model in an openai compatible api way. A
 
 ```bash
 # Start the ray server for the tool
-python -m verl_tool.servers.serve --host 0.0.0.0 --port 5000 --tool_type "python_code" &
+python -m verl_tool.servers.serve --host 0.0.0.0 --port 5000 --tool_type "firejail_python_code" &
 # Run the tests
 python -m verl_tool.servers.tests.test_python_code_tool python --url=http://localhost:5000/get_observation
 ```

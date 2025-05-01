@@ -1,22 +1,22 @@
 set -x
-dataset_name=CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference-with-execution-prompt
-train_data=$(pwd)/data/acecoder/$dataset_name/train.parquet
-val_data=$(pwd)/data/acecoder/$dataset_name/test.parquet
+dataset_name=acecoder_naive/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference-with-execution-prompt
+train_data=$(pwd)/data/$dataset_name/train.parquet
+val_data=$(pwd)/data/$dataset_name/test.parquet
 model_name=Qwen/Qwen2.5-Coder-1.5B
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
 n_gpus_per_node=8
 n_nodes=1
 n=16
 batch_size=128
-ppo_mini_batch_size=$batch_size
+ppo_mini_batch_size=64
 max_prompt_length=1024
 max_response_length=3072
 max_obs_length=512
 temperature=1.0
 top_p=1.0
 strategy="fsdp_agent" # remove _agent for normal verl behavior
-action_stop_tokens='<output>'
-max_turns=1
+action_stop_tokens="\n\`\`\`\n,\`\`\`output"
+max_turns=5
 kl_loss_coef=0.0
 kl_coef=0
 entropy_coeff=0
@@ -33,7 +33,7 @@ ulysses_sequence_parallel_size=1 # set to 1 for normal verl behavior, otherwise 
 fsdp_size=-1
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
-run_name_postfix="new"
+run_name_postfix="new-5-turns-force-reflection-debug"
 run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 export VERL_RUN_ID=$run_name
 export NCCL_DEBUG=INFO
@@ -41,7 +41,7 @@ export NCCL_DEBUG=INFO
 # temp file for action tokens as verl cannot pass special strs as params
 mkdir -p $(pwd)/tmp
 action_stop_tokens_file="$(pwd)$(mktemp)"
-echo "$action_stop_tokens" | tee $action_stop_tokens_file
+echo -e -n "$action_stop_tokens" | tee $action_stop_tokens_file
 echo "action_stop_tokens_file=$action_stop_tokens_file"
 
 host=$(hostname -I | awk '{print $1}')

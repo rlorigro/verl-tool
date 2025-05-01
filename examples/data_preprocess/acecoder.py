@@ -29,10 +29,10 @@ The final program will be evaluated against the hidden test cases. If the final 
 """
 
 naive_instruction = "Let's think step by step and generate the final program in a markdown code block like this: ```python\nyour code here\n```."
-# naive_execution_prompt = """
-# A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. The Assistant can reason with the help of Python code. If the Assistant wants to run any Python code, it writes it inside ```python and ``` tags, and makes sure to follow it with "```output", meaning that it is requesting the code to be executed. Then the result of execution will be provided to the Assistant between "```output" and "```" for the python code block that it follows. The Assistant can test Python codes as many times as it wants. If the Assistant finds no further code execution needed, it can then give the final solution in a markdown code block like this: ```python\nyour code here\n``` without appending anything.
-# """
-naive_execution_prompt = """A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the coding problems below. If you want to test any python code, writing it inside <python> and  </python> tags following with <output>. Please put your final answer in a markdown code block like this: python\nyour code here\n``` without appending anything."""
+naive_execution_prompt = """
+A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. The Assistant can reason with the help of Python code. If the Assistant wants to run any Python code, it writes it inside ```python and ``` tags, and makes sure to follow it with "```output", meaning that it is requesting the code to be executed. Then the result of execution will be provided to the Assistant between "```output" and "```" for the python code block that it follows. The Assistant can test Python codes as many times as it wants. If the Assistant finds no further code execution needed, it can then give the final solution in a markdown code block like this: ```python\nyour code here\n``` without appending anything.
+"""
+# naive_execution_prompt = """A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the coding problems below. If you want to test any python code, writing it inside <python> and </python> tags, results will be inside <output> and </output>. Please put your final answer in a markdown code block like this: python\nyour code here\n``` without appending anything."""
 
 coder_instruction = """\
 Let's think step by step and generate the correct program for this coding question. You should attempt multiple times before give the final program.
@@ -132,4 +132,8 @@ if __name__ == '__main__':
 python examples/data_preprocess/acecoder.py --dataset_path CodeDPO/AceCoderV2-mini-processed --local_dir data/acecoder --add_execution_prompt
 python examples/data_preprocess/acecoder.py --dataset_path chiruan/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference --local_dir data/acecoder --add_execution_prompt
 python examples/data_preprocess/acecoder.py --dataset_path CodeDPO/AceCoderV2-150K-processed --local_dir data/acecoder --add_execution_prompt
+
+python examples/data_preprocess/acecoder.py --dataset_path chiruan/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference --local_dir data/acecoder_naive --add_execution_prompt
+
+python examples/data_preprocess/acecoder.py --dataset_path chiruan/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference --local_dir data/acecoder_long --add_execution_prompt
 """

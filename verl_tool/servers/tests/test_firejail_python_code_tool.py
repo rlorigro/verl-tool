@@ -19,6 +19,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from multiprocessing import cpu_count
 from tqdm import tqdm
 
+
+# {"trajectory_id": "6d8d07eb-598c-4823-bce7-fd24e26e0d5d", "metadata": {"turns": 3}, "previous_obs": [{"action": "def find_least_recent_backup(files: List[Tuple[str, str]]) -> Tuple[str, str]:", "is_valid": true, "observation": "Error:\nFile \"<string>\", line 2\n    def find_least_recent_backup(files: List[Tuple[str, str]]) -> Tuple[str, str]:\n                                                                                  ^\nIndentationError: expected an indented block after function definition on line 2", "extra_field": {"finish": false}}, {"action": "Input: files = [\n    ('file1.txt', '2023-01-01 10:00:00'),\n    ('file2.txt', '2023-01-02 09:00:00'),\n    ('file3.txt', '2022-12-31 23:59:59')\n]\nOutput: ('file3.txt', '2022-12-31 23:59:59')\n\nInput: files = [\n    ('file1.txt', '2023-01-01 10:00:00'),\n    ('file2.txt', '2023-01-02 09:00:00'),\n    ('file3.txt', '2023-01-01 10:00:00')\n]\nOutput: ('file3.txt', '2023-01-01 10:00:00')\n\nInput: files = [\n    ('file1.txt', '2023-01-01 10:00:00'),\n    ('file2.txt', '2023-01-02 09:00:00'),\n    ('file3.txt', '2023-01-02 09:00:00')\n]\nOutput: ('file2.txt', '2023-01-02 09:00:00')", "is_valid": true, "observation": "Error:\nFile \"<string>\", line 2\n    Input: files = [\n    ^\nIndentationError: expected an indented block after function definition on line 1", "extra_field": {"finish": false}}, {"action": "Input: files = [\n    ('file1.txt', '2023-01-01 10:00:00'),\n    ('file2.txt', '2023-01-02 09:00:00'),\n    ('file3.txt', '2022-12-31 23:59:59')\n]\nOutput: ('file3.txt', '2022-12-31 23:59:59')\n\nInput: files = [\n    ('file1.txt', '2023-01-01 10:00:00'),\n    ('file2.txt', '2023-01-02 09:00:00'),\n    ('file3.txt', '2023-01-01 10:00:00')\n]\nOutput: ('file3.txt', '2023-01-01 10:00:00')\n\nInput: files = [\n    ('file1.txt', '2023-01-01 10:00:00'),\n    ('file2.txt', '2023-01-02 09:00:00'),\n    ('file3.txt', '2023-01-02 09:00:00')\n]\nOutput: ('file2.txt', '2023-01-02 09:00:00')", "is_valid": true, "observation": "", "extra_field": {"finish": false}}]}
+
 # Add parent directory to path to import FirejailPythonCodeTool
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ..tools.firejail_python_code import FirejailPythonCodeTool
@@ -35,7 +38,75 @@ def test_firejail_python(
     print("--- Test 1: Basic Hello World ---")
     action = """<python>print('Hello from Firejail Python!')</python>"""
     print(_send_test_request(url, trajectory_id, action, "Hello World"))
-    exit(1)
+    
+    print("--- Test 1.1: History code running ---")
+    action = """### Problem Title: Find the Least Recently Backed Up File
+
+### Problem Description:
+You are given a list of files, where each file is represented as a tuple containing the filename and its last backup timestamp. Your task is to identify the file that was backed up the least recently (i.e., with the oldest backup timestamp) and return its filename along with the corresponding timestamp.
+
+If there are multiple files with the same oldest timestamp, return the filename that comes first in lexicographical order.
+
+### Function Signature:
+```python
+def find_least_recent_backup(files: List[Tuple[str, str]]) -> Tuple[str, str]:
+```
+"""
+    print(_send_test_request(url, trajectory_id, action, "Hello World"))
+    
+    action = """Oops, the code crashed. I'll analyze the error message and see if I can fix it. Based on the error, I think the issue is with the indentation of the function definition. Let me try fixing it and see if that resolves the problem. Ok, I've fixed the indentation issue. Now, let's see if the code runs without any errors. Ok, the code seems to be working fine now. Let's test it with some example inputs to make sure it's giving the correct output. Ok, here are some example inputs and their expected outputs:
+
+```python
+Input: files = [
+    ('file1.txt', '2023-01-01 10:00:00'),
+    ('file2.txt', '2023-01-02 09:00:00'),
+    ('file3.txt', '2022-12-31 23:59:59')
+]
+Output: ('file3.txt', '2022-12-31 23:59:59')
+
+Input: files = [
+    ('file1.txt', '2023-01-01 10:00:00'),
+    ('file2.txt', '2023-01-02 09:00:00'),
+    ('file3.txt', '2023-01-01 10:00:00')
+]
+Output: ('file3.txt', '2023-01-01 10:00:00')
+
+Input: files = [
+    ('file1.txt', '2023-01-01 10:00:00'),
+    ('file2.txt', '2023-01-02 09:00:00'),
+    ('file3.txt', '2023-01-02 09:00:00')
+]
+Output: ('file2.txt', '2023-01-02 09:00:00')
+```
+"""
+    print(_send_test_request(url, trajectory_id, action, "Hello World"))
+    
+    action = """Wait, I got some errors of my previous code, I'll double-check code logic and try to fix the root cause. Based on the error, I think the issue is with the indentation of the function definition. Let me try fixing it and see if that resolves the problem. Ok, I've fixed the indentation issue. Now, let's see if the code runs without any errors. Ok, the code seems to be working fine now. Let's test it with some example inputs to make sure it's giving the correct output. Ok, here are some example inputs and their expected outputs:
+
+```python
+Input: files = [
+    ('file1.txt', '2023-01-01 10:00:00'),
+    ('file2.txt', '2023-01-02 09:00:00'),
+    ('file3.txt', '2022-12-31 23:59:59')
+]
+Output: ('file3.txt', '2022-12-31 23:59:59')
+
+Input: files = [
+    ('file1.txt', '2023-01-01 10:00:00'),
+    ('file2.txt', '2023-01-02 09:00:00'),
+    ('file3.txt', '2023-01-01 10:00:00')
+]
+Output: ('file3.txt', '2023-01-01 10:00:00')
+
+Input: files = [
+    ('file1.txt', '2023-01-01 10:00:00'),
+    ('file2.txt', '2023-01-02 09:00:00'),
+    ('file3.txt', '2023-01-02 09:00:00')
+]
+Output: ('file2.txt', '2023-01-02 09:00:00')
+```
+"""
+    print(_send_test_request(url, trajectory_id, action, "Hello World"))
     
     print("--- Test 2: Multiple Print Statements ---")
     action = """```python

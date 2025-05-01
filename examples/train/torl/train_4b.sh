@@ -44,7 +44,7 @@ export NCCL_DEBUG=INFO
 # temp file for action tokens as verl cannot pass special strs as params
 mkdir -p $(pwd)/tmp
 action_stop_tokens_file="$(pwd)$(mktemp)"
-echo "$action_stop_tokens" | tee $action_stop_tokens_file
+echo -e -n "$action_stop_tokens" | tee $action_stop_tokens_file
 echo "action_stop_tokens_file=$action_stop_tokens_file"
 
 host=$(hostname -I | awk '{print $1}')

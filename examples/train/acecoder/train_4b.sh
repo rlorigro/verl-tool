@@ -15,7 +15,7 @@ max_obs_length=512
 temperature=1.0
 top_p=1.0
 strategy="fsdp_agent" # remove _agent for normal verl behavior
-action_stop_tokens="\`\`\`output"
+action_stop_tokens='```output'
 max_turns=1
 kl_loss_coef=0.0
 kl_coef=0
@@ -41,7 +41,7 @@ export NCCL_DEBUG=INFO
 # temp file for action tokens as verl cannot pass special strs as params
 mkdir -p $(pwd)/tmp
 action_stop_tokens_file="$(pwd)$(mktemp)"
-echo "$action_stop_tokens" | tee $action_stop_tokens_file
+echo -e -n "$action_stop_tokens" | tee $action_stop_tokens_file
 echo "action_stop_tokens_file=$action_stop_tokens_file"
 
 host=$(hostname -I | awk '{print $1}')

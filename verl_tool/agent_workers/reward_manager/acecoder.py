@@ -203,7 +203,6 @@ class AceCoderRewardManager:
         ]
         # save the dumped samples to a file
         temp_file = self.record_dir / f"step-{self.step_idx}_{hash_string(''.join(question_hashes))}.jsonl"
-        self.step_idx += 1
         with open(temp_file, "w") as f:
             for sample in samples:
                 f.write(json.dumps(sample) + "\n")
