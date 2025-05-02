@@ -109,7 +109,7 @@ class ToRLRewardManager:
                 is_done = not is_active
                 # add penalty to wrong response but did not use tool
                 if score['accuracy'] == 0 and num_valid_action < 1:
-                    score['score'] -= 0.5
+                    # score['score'] -= 0.5
                     score['tool_use_penalty'] = 1
                 else:
                     score['tool_use_penalty'] = 0
