@@ -7,7 +7,7 @@ $(pwd)/data/math_torl/aime24_test.parquet,\
 $(pwd)/data/math_torl/aime25_test.parquet]
 model_name=Qwen/Qwen2.5-Coder-1.5B
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
-n_gpus_per_node=8
+n_gpus_per_node=4
 n_nodes=1
 n=16
 batch_size=128
@@ -51,7 +51,7 @@ echo "action_stop_tokens_file=$action_stop_tokens_file"
 host=$(hostname -I | awk '{print $1}')
 port=$(shuf -i 30000-31000 -n 1)
 tool_server_url=http://$host:$port/get_observation
-python -m verl_tool.servers.serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 64 &
+python -m verl_tool.servers.serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 32 &
 server_pid=$!
 
 echo "Server (pid=$server_pid) started at $tool_server_url"
