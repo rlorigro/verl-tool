@@ -6,9 +6,9 @@ val_data=[$(pwd)/data/${dataset_name}/test.parquet,\
 $(pwd)/data/${dataset_name}/math500_test.parquet,\
 $(pwd)/data/${dataset_name}/aime24_test.parquet,\
 $(pwd)/data/${dataset_name}/aime25_test.parquet]
-model_name=Qwen/Qwen2.5-Coder-1.5B
+model_name=VerlTool/Qwen2.5-Math-1.5B-TIR-SFT
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
-n_gpus_per_node=4
+n_gpus_per_node=8
 n_nodes=1
 n=16
 batch_size=128
@@ -20,7 +20,7 @@ temperature=1.0
 top_p=1.0
 strategy="fsdp_agent" # remove _agent for normal verl behavior
 action_stop_tokens="\`\`\`output"
-max_turns=1
+max_turns=3
 kl_loss_coef=0.0
 kl_coef=0
 entropy_coeff=0
@@ -31,15 +31,15 @@ ppo_micro_batch_size_per_gpu=1
 log_prob_micro_batch_size_per_gpu=8
 tensor_model_parallel_size=1
 gpu_memory_utilization=0.5 # higher gpu_memory_utilization will likely cause the vllm to OOM and get stuck, so set it to a lower value like 0.4 or 0.5
-do_offload=True # control actor's fsdp.[param|optimizer]_offload and actor_rollout_ref.rollout.fsdp.[param|optimizer]_offload; if gpu_memory_utilization is set to > 0.6, then do_offload should be set to True otherwise it will cause OOM
+do_offload=False # control actor's fsdp.[param|optimizer]_offload and actor_rollout_ref.rollout.fsdp.[param|optimizer]_offload; if gpu_memory_utilization is set to > 0.6, then do_offload should be set to True otherwise it will cause OOM
 use_dynamic_bsz=True # faster
 ulysses_sequence_parallel_size=1 # set to 1 for normal verl behavior, otherwise it will cause OOM
 fsdp_size=-1
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
 # run_name_postfix="new-5-turns-force-reflection"
-# run_name_postfix="new-no-toolusepenalty"
-run_name_postfix="new"
+run_name_postfix="new-no-toolusepenalty"
+# run_name_postfix="new"
 run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 export VERL_RUN_ID=$run_name
 export NCCL_DEBUG=INFO
@@ -53,7 +53,7 @@ echo "action_stop_tokens_file=$action_stop_tokens_file"
 host=$(hostname -I | awk '{print $1}')
 port=$(shuf -i 30000-31000 -n 1)
 tool_server_url=http://$host:$port/get_observation
-python -m verl_tool.servers.serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 32 &
+python -m verl_tool.servers.ray_serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 32 &
 server_pid=$!
 
 echo "Server (pid=$server_pid) started at $tool_server_url"

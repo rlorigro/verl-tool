@@ -23,6 +23,9 @@ import torch
 from verl import DataProto
 from .reward_score import _default_compute_score
 
+import asyncio
+from verl.utils.reward_score.prime_code import compute_score as prime_code_compute_score
+from verl.workers.reward_manager.prime import parallel_compute_score_async
 
 import hashlib
 import random
@@ -34,59 +37,6 @@ from pathlib import Path
 
 def hash_string(s):
     return hashlib.sha256(s.encode()).hexdigest()
-
-
-async def single_compute_score(evaluation_func, completion, reference, task, executor, timeout=300.):
-    loop = asyncio.get_running_loop()
-    try:
-        # Ensure process_completion is called properly
-        tasks = [
-            asyncio.wait_for(
-                loop.run_in_executor(
-                    executor,
-                    partial(evaluation_func, task, completion, reference)  # Ensure synchronous
-                ),
-                timeout=timeout)
-        ]
-        return await asyncio.gather(*tasks)
-    except asyncio.TimeoutError:
-        print(f"Timeout occurred for completion: {completion}")
-        return None  # Default value for timed-out rows
-    except Exception as e:
-        print(f"Error processing completion: {completion[:10]}, Error: {e}")
-        return None  # Default value for failed rows
-
-
-async def parallel_compute_score_async(evaluation_func, completions, references, tasks, num_processes=64):
-    scores = []
-    with ProcessPoolExecutor(max_workers=num_processes) as executor:
-        # Create tasks for all rows
-        tasks_async = [
-            single_compute_score(evaluation_func, completion, reference, task, executor, timeout=300.)
-            for completion, reference, task in zip(completions, references, tasks)
-        ]
-        # to prevent very occasional starvation caused by some anomalous programs ( like infinite loop ), the exceptions in async programs will instantly halt the evaluation, and all summoned processes will be killed.
-        try:
-            results = await asyncio.gather(*tasks_async, return_exceptions=False)
-        except:
-            for pid, proc in executor._processes.items():
-                try:
-                    proc.kill()
-                except Exception as kill_err:
-                    print('shut down failed: ' + str(kill_err))
-            raise
-
-    # Process results
-    for result, completion, reference, task in zip(results, completions, references, tasks):
-        if isinstance(result, Exception) or result is None:
-            # Handle failed or timed-out tasks
-            scores.append(0.0)
-        elif isinstance(result[0], (int, float, bool)):
-            scores.append(float(result[0]))
-        else:
-            scores.append(float(result[0][0]))
-    return scores
-
 
 def parse_code(action: str):
     """
@@ -116,6 +66,16 @@ def parse_code(action: str):
     
     return parsed_code
 
+def prime_code_compute_score_async(data_source, solution_str, ground_truth, extra_info=None):
+    res = prime_code_compute_score(solution_str, ground_truth, continuous=True)
+    if isinstance(res, dict):
+        return res
+    elif isinstance(res, (int, float, bool)):
+        return float(res)
+    else:
+        return float(res[0])
+
+
 class AceCoderRewardManager:
     """
     The Reward Manager used in https://github.com/TIGER-AI-Lab/AceCoder
@@ -132,6 +92,81 @@ class AceCoderRewardManager:
             from acecoder import evaluate_test_cases
         except ImportError:
             raise ImportError("`from acecoder import evaluate_test_cases` failed, please install acecoder to use test_case rule")
+        
+    def get_acecoder_data_score(self, data: DataProto, response_str, prompt_str, extracted_answers, test_cases):
+        scores = [{} for _ in range(len(data))]
+        data_sources = data.non_tensor_batch['data_source']
+        # 1. Testing code on the test cases
+        question_hashes = [hash_string(question) for question in prompt_str]
+        # ensure the length of lists are of the same, avoid Ray error
+        assert len(response_str) == len(test_cases) == len(data_sources)
+        # before perform batched scoring: dump the statistics of the list of responses
+        samples = [
+            {
+                'task_id': question_hash,
+                'prompt': question,
+                'output': answer,
+                'original_response': response,
+                'tests': list(test_case),
+                '_identifier': f"{question_hash}_{i}"
+            }
+            for i, (question_hash, question, answer, test_case, response) in enumerate(zip(question_hashes, prompt_str, extracted_answers, test_cases, response_str))
+        ]
+        # save the dumped samples to a file
+        temp_file = self.record_dir / f"step-{self.step_idx}_{hash_string(''.join(question_hashes))}.jsonl"
+        with open(temp_file, "w") as f:
+            for sample in samples:
+                f.write(json.dumps(sample) + "\n")
+        # perform batched scoring for coding score: call the acecoder evaluation script to retrieve the coder part scores
+        output_file = Path(temp_file).with_suffix(f".eval_results{'_binary' if self.binary else ''}.jsonl").absolute()
+        command = f"python -m acecoder.eval_test_cases --samples {temp_file} --n_workers {self.n_workers} \
+            --extract_solution True --output_file {output_file} --test_details {not self.binary} \
+            --i_just_wanna_run True --min_time_limit 1 --gt_time_limit_factor 1"
+        start = time.time()
+        subprocess.run(command, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+        end = time.time()
+        print(f"Step {self.step_idx}: acecoder evaluation script took {end - start:.2f} seconds for {len(samples)} samples.")
+        # the script will dump the results into the output_file, read it and parse it as a list
+        with open(output_file, "r") as f:
+            all_samples_results = [json.loads(x) for x in f]
+        pass_rates = [x['eval_results']['pass_rate'] for x in all_samples_results]
+        # remove the temp_file and output_file after finish code pass rate computation and result extraction
+        try:
+            os.remove(temp_file)
+            os.remove(output_file)
+        except:
+            pass
+        
+        for i in range(len(scores)):
+            scores[i]['pass_rate'] = pass_rates[i]
+            scores[i]['binary_pass_rate'] = 1.0 if pass_rates[i] == 1.0 else 0.0
+            scores[i]['score'] = 1.0 if pass_rates[i] == 1.0 else -1.0 # -1.0 for failed test cases
+        return scores
+    
+    def get_prime_code_data_score(self, data: DataProto, response_str, prompt_str, extracted_answers, test_cases):
+        scores = [{} for _ in range(len(data))]
+        data_sources = data.non_tensor_batch['data_source']
+        
+        sequences_str = response_str
+        ground_truth = test_cases
+        data_sources = ["taco"] * len(sequences_str)
+        extra_info = [None] * len(sequences_str)
+        pass_rates = asyncio.run(
+            parallel_compute_score_async(
+                prime_code_compute_score_async,
+                sequences_str,
+                ground_truth,
+                data_sources,
+                extra_info=extra_info,
+                num_processes=64,
+            )
+        ) # list of 1.0 or 0.0
+        for i in range(len(scores)):
+            scores[i]['pass_rate'] = pass_rates[i]
+            scores[i]['binary_pass_rate'] = 1.0 if pass_rates[i] == 1.0 else 0.0
+            scores[i]['score'] = 1.0 if pass_rates[i] == 1.0 else -1.0 # -1.0 for failed test cases
+        return scores
+        
         
     def __call__(self, data: DataProto, return_dict=False):
         """We will expand this function gradually based on the available datasets"""
@@ -174,61 +209,45 @@ class AceCoderRewardManager:
         response_str = self.tokenizer.batch_decode(response_ids, skip_special_tokens=True)
         prompt_str = self.tokenizer.batch_decode(prompt_ids, skip_special_tokens=True)
         
-        # retrieve the list of ground truths/test cases
-        if isinstance(data[0].non_tensor_batch['reward_model']['ground_truth'], list):
-            ground_truth = [data_item.non_tensor_batch['reward_model']['ground_truth'] for data_item in data]
-        else:
-            ground_truth = [data_item.non_tensor_batch['extra_info']['ground_truth'] for data_item in data]
-        data_sources = data.non_tensor_batch['data_source']
-        
-        
-        # 1. Testing code on the test cases
         # extract the answer for the list of responses
         extracted_answers = [re.sub(r"<think>(.|\n)*?</think>", "", response) for response in response_str]
-        extracted_answers = [parse_code(response) for response in extracted_answers] # get the last code blcok
-        question_hashes = [hash_string(question) for question in prompt_str]
-        # ensure the length of lists are of the same, avoid Ray error
-        assert len(response_str) == len(ground_truth) == len(data_sources)
-        # before perform batched scoring: dump the statistics of the list of responses
-        samples = [
-            {
-                'task_id': question_hash,
-                'prompt': question,
-                'output': answer,
-                'original_response': response,
-                'tests': list(test_case),
-                '_identifier': f"{question_hash}_{i}"
-            }
-            for i, (question_hash, question, answer, test_case, response) in enumerate(zip(question_hashes, prompt_str, extracted_answers, ground_truth, response_str))
-        ]
-        # save the dumped samples to a file
-        temp_file = self.record_dir / f"step-{self.step_idx}_{hash_string(''.join(question_hashes))}.jsonl"
-        with open(temp_file, "w") as f:
-            for sample in samples:
-                f.write(json.dumps(sample) + "\n")
-        # perform batched scoring for coding score: call the acecoder evaluation script to retrieve the coder part scores
-        output_file = Path(temp_file).with_suffix(f".eval_results{'_binary' if self.binary else ''}.jsonl").absolute()
-        command = f"python -m acecoder.eval_test_cases --samples {temp_file} --n_workers {self.n_workers} \
-            --extract_solution True --output_file {output_file} --test_details {not self.binary} \
-            --i_just_wanna_run True --min_time_limit 1 --gt_time_limit_factor 1"
-        start = time.time()
-        subprocess.run(command, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-        end = time.time()
-        print(f"Step {self.step_idx}: acecoder evaluation script took {end - start:.2f} seconds for {len(samples)} samples.")
-        # the script will dump the results into the output_file, read it and parse it as a list
-        with open(output_file, "r") as f:
-            all_samples_results = [json.loads(x) for x in f]
-        pass_rates = [x['eval_results']['pass_rate'] for x in all_samples_results]
-        # remove the temp_file and output_file after finish code pass rate computation and result extraction
-        try:
-            os.remove(temp_file)
-            os.remove(output_file)
-        except:
-            pass
-        for i in range(len(scores)):
-            scores[i]['pass_rate'] = pass_rates[i]
-            scores[i]['binary_pass_rate'] = 1.0 if pass_rates[i] == 1.0 else 0.0
-            scores[i]['score'] = 1.0 if pass_rates[i] == 1.0 else -1.0
+        extracted_answers = [parse_code(response) for response in extracted_answers]
+        
+        # retrieve the list of ground truths/test cases
+        test_cases = []
+        acecoder_data_idxs = []
+        prime_code_data_idxs = []
+        for i in range(len(data)):
+            if data[i].non_tensor_batch['extra_info'].get("inputs_outputs"):
+                test_cases.append(data[i].non_tensor_batch['extra_info']['inputs_outputs'])
+                prime_code_data_idxs.append(i)
+            elif data[i].non_tensor_batch['extra_info'].get("test_cases"):
+                test_cases.append(data[i].non_tensor_batch['extra_info']['test_cases'])
+                acecoder_data_idxs.append(i)
+            else:
+                raise ValueError(f"Cannot find test cases for data {i} in {data[i].non_tensor_batch['extra_info']}")
+
+        # 1.1 process acecoder data
+        acecoder_data = data[acecoder_data_idxs]
+        acecoder_response_str = [response_str[i] for i in acecoder_data_idxs]
+        acecoder_prompt_str = [prompt_str[i] for i in acecoder_data_idxs]
+        acecoder_test_cases = [test_cases[i] for i in acecoder_data_idxs]
+        acecoder_scores = self.get_acecoder_data_score(acecoder_data, acecoder_response_str, acecoder_prompt_str, extracted_answers, acecoder_test_cases)
+        
+        # 1.2 
+        prime_code_data = data[prime_code_data_idxs]
+        prime_code_response_str = [response_str[i] for i in prime_code_data_idxs]
+        prime_code_prompt_str = [prompt_str[i] for i in prime_code_data_idxs]
+        prime_code_test_cases = [test_cases[i] for i in prime_code_data_idxs]
+        prime_code_scores = self.get_prime_code_data_score(prime_code_data, prime_code_response_str, prime_code_prompt_str, extracted_answers, prime_code_test_cases)
+        
+        # 1.3 merge the scores
+        idxs_map = sorted([(idx, i, 'acecoder') for i, idx in enumerate(acecoder_data_idxs)] + [(idx, i, 'prime_code') for i, idx in enumerate(prime_code_data_idxs)], key=lambda x: x[0])
+        for i in range(len(data)):
+            if idxs_map[i][2] == "acecoder":
+                scores[i] = acecoder_scores[idxs_map[i][1]]
+            else:
+                scores[i] = prime_code_scores[idxs_map[i][1]]
         
         # 2. Adding additional penalty for errored or timed out
         keywords = ["ERROR:\nTraceback", "Execution timed out"]
@@ -270,10 +289,10 @@ class AceCoderRewardManager:
                 {
                     "id": data[i].non_tensor_batch['extra_info']['id'] if 'id' in data[i].non_tensor_batch['extra_info'] else None,
                     "data_source": data[i].non_tensor_batch['data_source'],
-                    "prompt": samples[i]['prompt'],
-                    "response": samples[i]['original_response'],
-                    "extracted_code": samples[i]['output'],
-                    "ground_truth": samples[i]['tests'],
+                    "prompt": prompt_str[i],
+                    "response": response_str[i],
+                    "extracted_code": extracted_answers[i],
+                    "ground_truth": test_cases[i],
                     "score": scores[i],
                     'extra_info': data[i].non_tensor_batch.get('extra_info', None),
                 }

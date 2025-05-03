@@ -1,7 +1,12 @@
 set -x
-dataset_name=acecoder_naive/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference-with-execution-prompt
-train_data=$(pwd)/data/$dataset_name/train.parquet
-val_data=$(pwd)/data/$dataset_name/test.parquet
+dataset_name1=acecoder_long/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference-with-execution-prompt
+# dataset_name2=deepcoder/all-with-execution-prompt
+dataset_name2=taco/TACO-verified-with-execution-prompt
+train_data=[$(pwd)/data/${dataset_name1}/train.parquet,\
+$(pwd)/data/${dataset_name2}/train.parquet]
+val_data=[$(pwd)/data/${dataset_name1}/test.parquet,\
+$(pwd)/data/${dataset_name2}/test.parquet]
+
 model_name=Qwen/Qwen2.5-Coder-1.5B
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
 n_gpus_per_node=8
@@ -15,8 +20,8 @@ max_obs_length=512
 temperature=1.0
 top_p=1.0
 strategy="fsdp_agent" # remove _agent for normal verl behavior
-action_stop_tokens="\n\`\`\`\n,\`\`\`output"
-max_turns=5
+action_stop_tokens="\`\`\`output"
+max_turns=1
 kl_loss_coef=0.0
 kl_coef=0
 entropy_coeff=0
@@ -33,7 +38,7 @@ ulysses_sequence_parallel_size=1 # set to 1 for normal verl behavior, otherwise 
 fsdp_size=-1
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
-run_name_postfix="new-5-turns-force-reflection-debug"
+run_name_postfix="-with-taco-debug"
 run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 export VERL_RUN_ID=$run_name
 export NCCL_DEBUG=INFO

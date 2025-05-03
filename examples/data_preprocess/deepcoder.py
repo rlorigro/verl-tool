@@ -18,6 +18,7 @@ import fire
 import os
 import datasets
 from pathlib import Path
+from tqdm import tqdm
 
 execution_prompt = """\
 Answer the given coding question. You must conduct reasoning about the problem and then provide the final program as answer. 
@@ -49,43 +50,66 @@ Now start thinking and generate the final program in a markdown code block like 
 """
 
 def main(
-    dataset_path: str = 'CodeDPO/AceCoderV2-mini-processed',
-    local_dir: str = 'data/acecoder',
+    dataset_path: str = 'agentica-org/DeepCoder-Preview-Dataset',
+    subset='all',
+    local_dir: str = 'data/deepcoder',
     add_execution_prompt: bool = False,
     detaield_instruction: bool = False
 ):
-    local_dir = Path(local_dir) / dataset_path.split('/')[-1]
+    all_subsets = ['lcbv5', 'taco', 'codeforces', 'primeintellect']
+    assert subset in all_subsets + ['all'], f"Invalid subset {subset}, please choose from {all_subsets} or 'all'"
+    
+    local_dir = Path(local_dir) / subset
     if add_execution_prompt:
         local_dir = local_dir.parent / (local_dir.name + '-with-execution-prompt')
     if detaield_instruction:
         local_dir = local_dir.parent / (local_dir.name + '-detailed')
     local_dir.mkdir(parents=True, exist_ok=True)
 
-    dataset = datasets.load_dataset(dataset_path, split='train')
+    if subset == 'all':
+        train_data = []
+        test_data = []
+        for _subset in all_subsets:
+            dataset = datasets.load_dataset(dataset_path, _subset)
+            if "train" in dataset:
+                train_data.extend([
+                    {
+                        'problem': example['problem'],
+                        'tests': example['tests'],
+                        'data_source': _subset,
+                    }
+                for example in dataset['train']])
+            if "test" in dataset:
+                test_data.extend([
+                    {
+                        'problem': example['problem'],
+                        'tests': example['tests'],
+                        'data_source': _subset,
+                    }
+                for example in dataset['test']])
+        train_dataset = datasets.Dataset.from_list(train_data)
+        test_dataset = datasets.Dataset.from_list(test_data)
+    else:
+        dataset = datasets.load_dataset(dataset_path, subset)
+        if "train" in dataset:
+            train_dataset = dataset['train']
+        else:
+            train_dataset = None
+        if "test" in dataset:
+            test_dataset = dataset['test']
+        else:
+            test_dataset = None
 
-    # 500 examples for testing
-    
-    dataset = dataset.train_test_split(test_size=500, seed=42)
-    train_dataset = dataset['train']
-    test_dataset = dataset['test']
 
     # add a row to each data item that represents a unique id
     def make_map_fn(split):
 
         def process_fn(example, idx):
-            question_raw = example.pop('question')
-
-            # if not add_execution_prompt:
-            #     if not detaield_instruction:
-            #         question = question_raw + ' ' + naive_instruction
-            #     else:
-            #         question = question_raw + ' ' + coder_instruction
-            # else:
-            #     question = question_raw + ' ' + execution_prompt
-            
-            tests = example.pop('tests')
+            question_raw = example.pop('problem')
+            inputs_outputs = example.pop('tests')
+            data_source = example.get('data_source', f"{dataset_path}-{subset}")
             data = {
-                "data_source": dataset_path,
+                "data_source": data_source,
                 "prompt": [
                     {
                         "role": "system",
@@ -104,38 +128,47 @@ def main(
                 "extra_info": {
                     'split': split,
                     'index': idx,
-                    'id': str(example['id']),
+                    'id': f"{data_source}:{idx}",
                     "question": question_raw,
-                    "test_cases": tests,
-                    "inputs_outputs": None,
+                    "test_cases": None,
+                    "inputs_outputs": inputs_outputs,
                 }
             }
             return data
 
         return process_fn
-
-    train_dataset = train_dataset.map(function=make_map_fn('train'), with_indices=True, remove_columns=train_dataset.column_names)
-    test_dataset = test_dataset.map(function=make_map_fn('test'), with_indices=True, remove_columns=test_dataset.column_names)
-    
-    print(f"Loaded {len(train_dataset)} training samples")
-    print(f"Loaded {len(test_dataset)} testing samples")
-    print(f"Example of a training sample:")
-    print(train_dataset[0])
-
-    train_dataset.to_parquet(os.path.join(local_dir, 'train.parquet'))
-    test_dataset.to_parquet(os.path.join(local_dir, 'test.parquet'))
-    print(f"Saved to {len(train_dataset)} training samples to {local_dir}/train.parquet")
-    print(f"Saved to {len(test_dataset)} testing samples to {local_dir}/test.parquet")
+    if train_dataset is not None:
+        try:
+            train_dataset = train_dataset.map(function=make_map_fn('train'), with_indices=True, remove_columns=train_dataset.column_names)
+        except Exception as e:
+            map_func = make_map_fn('train')
+            train_data = [map_func(example, idx) for idx, example in tqdm(enumerate(train_dataset), total=len(train_dataset), desc="Mapping train dataset")]
+            train_dataset = datasets.Dataset.from_list(train_data)
+        print(f"Loaded {len(train_dataset)} training samples")
+        print(f"Example of a training sample:")
+        print(train_dataset[0])
+        train_dataset.to_parquet(os.path.join(local_dir, 'train.parquet'))
+        print(f"Saved to {len(train_dataset)} training samples to {local_dir}/train.parquet")
+    if test_dataset is not None:
+        try:
+            test_dataset = test_dataset.map(function=make_map_fn('test'), with_indices=True, remove_columns=test_dataset.column_names)
+        except Exception as e:
+            map_func = make_map_fn('test')
+            test_data = [map_func(example, idx) for idx, example in tqdm(enumerate(test_dataset), total=len(test_dataset), desc="Mapping test dataset")]
+            test_dataset = datasets.Dataset.from_list(test_data)
+        print(f"Loaded {len(test_dataset)} testing samples")
+        print(f"Example of a test sample:")
+        print(test_dataset[0])
+        test_dataset.to_parquet(os.path.join(local_dir, 'test.parquet'))
+        print(f"Saved to {len(test_dataset)} testing samples to {local_dir}/test.parquet")
 
 if __name__ == '__main__':
     fire.Fire(main)
     
 """
-python examples/data_preprocess/acecoder.py --dataset_path CodeDPO/AceCoderV2-mini-processed --local_dir data/acecoder --add_execution_prompt
-python examples/data_preprocess/acecoder.py --dataset_path chiruan/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference --local_dir data/acecoder --add_execution_prompt
-python examples/data_preprocess/acecoder.py --dataset_path CodeDPO/AceCoderV2-150K-processed --local_dir data/acecoder --add_execution_prompt
-
-python examples/data_preprocess/acecoder.py --dataset_path chiruan/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference --local_dir data/acecoder_naive --add_execution_prompt
-
-python examples/data_preprocess/acecoder.py --dataset_path chiruan/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference --local_dir data/acecoder_long --add_execution_prompt
+python examples/data_preprocess/deepcoder.py --dataset_path agentica-org/DeepCoder-Preview-Dataset --subset lcbv5 --local_dir data/deepcoder --add_execution_prompt
+python examples/data_preprocess/deepcoder.py --dataset_path agentica-org/DeepCoder-Preview-Dataset --subset taco --local_dir data/deepcoder --add_execution_prompt
+python examples/data_preprocess/deepcoder.py --dataset_path agentica-org/DeepCoder-Preview-Dataset --subset codeforces --local_dir data/deepcoder --add_execution_prompt
+python examples/data_preprocess/deepcoder.py --dataset_path agentica-org/DeepCoder-Preview-Dataset --subset primeintellect --local_dir data/deepcoder --add_execution_prompt
+python examples/data_preprocess/deepcoder.py --dataset_path agentica-org/DeepCoder-Preview-Dataset --subset all --local_dir data/deepcoder --add_execution_prompt
 """

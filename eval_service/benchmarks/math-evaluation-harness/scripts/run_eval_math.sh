@@ -1,11 +1,18 @@
 set -ex
 
-export CUDA_VISIBLE_DEVICES=0
-PROMPT_TYPE="tool_math_qwen"
+export CUDA_VISIBLE_DEVICES=0,1
+# PROMPT_TYPE="tool_math_qwen"
+# MODEL_NAMES=(
+#     "VerlTool/torl-fsdp_agent-qwen_qwen2.5-math-1.5b-grpo-n16-b128-t1.0-lr1e-6new-320-step"
+#     # Add more model paths here, one per line
+# )
+
+PROMPT_TYPE="qwen-torl-2"
 MODEL_NAMES=(
-    "VerlTool/torl-fsdp_agent-qwen_qwen2.5-math-7b-grpo-n16-b128-t1.0-lr1e-6"
+    "VerlTool/Qwen2.5-Math-1.5B-TIR-SFT"
     # Add more model paths here, one per line
 )
+
 # DATA_NAMES="aime24"
 DATA_NAMES="gsm8k,math500,minerva_math,olympiadbench,aime24,amc23"
 SPLIT="test"
