@@ -144,6 +144,7 @@ def main(
             map_func = make_map_fn('train')
             train_data = [map_func(example, idx) for idx, example in tqdm(enumerate(train_dataset), total=len(train_dataset), desc="Mapping train dataset")]
             train_dataset = datasets.Dataset.from_list(train_data)
+            print(train_dataset)
         print(f"Loaded {len(train_dataset)} training samples")
         print(f"Example of a training sample:")
         print(train_dataset[0])
@@ -156,6 +157,7 @@ def main(
             map_func = make_map_fn('test')
             test_data = [map_func(example, idx) for idx, example in tqdm(enumerate(test_dataset), total=len(test_dataset), desc="Mapping test dataset")]
             test_dataset = datasets.Dataset.from_list(test_data)
+            print(train_dataset)
         print(f"Loaded {len(test_dataset)} testing samples")
         print(f"Example of a test sample:")
         print(test_dataset[0])

@@ -1,11 +1,13 @@
 set -x
 dataset_name1=acecoder_long/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference-with-execution-prompt
-# dataset_name2=deepcoder/all-with-execution-prompt
-dataset_name2=taco/TACO-verified-with-execution-prompt
+dataset_name2=deepcoder/primeintellect-with-execution-prompt
+dataset_name3=deepcoder/taco-with-execution-prompt
+dataset_name4=deepcoder/lcbv5-with-execution-prompt
 train_data=[$(pwd)/data/${dataset_name1}/train.parquet,\
-$(pwd)/data/${dataset_name2}/train.parquet]
+$(pwd)/data/${dataset_name2}/train.parquet,\
+$(pwd)/data/${dataset_name3}/train.parquet]
 val_data=[$(pwd)/data/${dataset_name1}/test.parquet,\
-$(pwd)/data/${dataset_name2}/test.parquet]
+$(pwd)/data/${dataset_name4}/test.parquet]
 
 model_name=Qwen/Qwen2.5-Coder-1.5B
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
@@ -38,7 +40,7 @@ ulysses_sequence_parallel_size=1 # set to 1 for normal verl behavior, otherwise 
 fsdp_size=-1
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
-run_name_postfix="-with-taco-debug"
+run_name_postfix="-with-deepcoder-data"
 run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 export VERL_RUN_ID=$run_name
 export NCCL_DEBUG=INFO
