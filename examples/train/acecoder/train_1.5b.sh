@@ -1,14 +1,21 @@
 set -x
-dataset_name1=acecoder_long/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference-with-execution-prompt
-dataset_name2=deepcoder/primeintellect-with-execution-prompt
-dataset_name3=deepcoder/taco-with-execution-prompt
-train_data=[$(pwd)/data/${dataset_name1}/train.parquet,\
-$(pwd)/data/${dataset_name3}/train.parquet]
-val_data=[$(pwd)/data/${dataset_name1}/test.parquet]
+dataset_name1=acecoder_long/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference-with-execution-prompt-complex
+dataset_name2=deepcoder/all-with-execution-prompt-complex
+dataset_name3=acecoderv2/AceCoderV2-122K-processed-filtered-with-execution-prompt-complex
+# train_data=[$(pwd)/data/${dataset_name1}/train.parquet,\
+# $(pwd)/data/${dataset_name2}/train.parquet]
+# val_data=[$(pwd)/data/${dataset_name1}/test.parquet,\
+# $(pwd)/data/${dataset_name2}/test.parquet]
+
+# train_data=[$(pwd)/data/${dataset_name1}/train.parquet]
+# val_data=[$(pwd)/data/${dataset_name1}/test.parquet]
+
+train_data=[$(pwd)/data/${dataset_name3}/train.parquet]
+val_data=[$(pwd)/data/${dataset_name3}/test.parquet]
 
 model_name=Qwen/Qwen2.5-Coder-1.5B
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
-n_gpus_per_node=4
+n_gpus_per_node=8
 n_nodes=1
 n=16
 batch_size=128
@@ -20,7 +27,7 @@ temperature=1.0
 top_p=1.0
 strategy="fsdp_agent" # remove _agent for normal verl behavior
 action_stop_tokens="\`\`\`output"
-max_turns=1
+max_turns=3
 kl_loss_coef=0.0
 kl_coef=0
 entropy_coeff=0
@@ -37,7 +44,7 @@ ulysses_sequence_parallel_size=1 # set to 1 for normal verl behavior, otherwise 
 fsdp_size=-1
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
-run_name_postfix="-with-taco-data-debug"
+run_name_postfix="-122k"
 run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 export VERL_RUN_ID=$run_name
 export NCCL_DEBUG=INFO
@@ -119,9 +126,9 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     trainer.n_gpus_per_node=$n_gpus_per_node \
     trainer.nnodes=$n_nodes \
     +trainer.remove_previous_ckpt_in_save=True \
-    trainer.save_freq=10 \
-    trainer.test_freq=10 \
-    trainer.total_epochs=2
+    trainer.save_freq=50 \
+    trainer.test_freq=50 \
+    trainer.total_epochs=1
 
 
 pkill -P -9 $server_pid

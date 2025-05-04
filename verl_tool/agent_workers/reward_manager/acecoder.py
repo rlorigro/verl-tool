@@ -147,7 +147,7 @@ class AceCoderRewardManager:
         scores = [{} for _ in range(len(data))]
         data_sources = data.non_tensor_batch['data_source']
         
-        sequences_str = response_str
+        sequences_str = extracted_answers
         ground_truth = test_cases
         data_sources = ["taco"] * len(sequences_str)
         extra_info = [None] * len(sequences_str)
@@ -233,7 +233,8 @@ class AceCoderRewardManager:
         acecoder_response_str = [response_str[i] for i in acecoder_data_idxs]
         acecoder_prompt_str = [prompt_str[i] for i in acecoder_data_idxs]
         acecoder_test_cases = [test_cases[i] for i in acecoder_data_idxs]
-        acecoder_scores = self.get_acecoder_data_score(acecoder_data, acecoder_response_str, acecoder_prompt_str, extracted_answers, acecoder_test_cases)
+        acecoder_extracted_answers = [extracted_answers[i] for i in acecoder_data_idxs]
+        acecoder_scores = self.get_acecoder_data_score(acecoder_data, acecoder_response_str, acecoder_prompt_str, acecoder_extracted_answers, acecoder_test_cases)
         if len(acecoder_scores) > 0:
             print(f"Step {self.step_idx}: {len(acecoder_data_idxs)} acecoder data scores")
             print(" - Average pass rate: ", sum([x['pass_rate'] for x in acecoder_scores]) / len(acecoder_scores))
@@ -245,7 +246,8 @@ class AceCoderRewardManager:
         prime_code_response_str = [response_str[i] for i in prime_code_data_idxs]
         prime_code_prompt_str = [prompt_str[i] for i in prime_code_data_idxs]
         prime_code_test_cases = [test_cases[i] for i in prime_code_data_idxs]
-        prime_code_scores = self.get_prime_code_data_score(prime_code_data, prime_code_response_str, prime_code_prompt_str, extracted_answers, prime_code_test_cases)
+        prime_code_extracted_answers = [extracted_answers[i] for i in prime_code_data_idxs]
+        prime_code_scores = self.get_prime_code_data_score(prime_code_data, prime_code_response_str, prime_code_prompt_str, prime_code_extracted_answers, prime_code_test_cases)
         if len(prime_code_scores) > 0:
             print(f"Step {self.step_idx}: {len(prime_code_data_idxs)} prime code data scores")
             print(" - Average pass rate: ", sum([x['pass_rate'] for x in prime_code_scores]) / len(prime_code_scores))
