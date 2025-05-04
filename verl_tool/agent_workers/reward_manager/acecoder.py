@@ -217,6 +217,7 @@ class AceCoderRewardManager:
         test_cases = []
         acecoder_data_idxs = []
         prime_code_data_idxs = []
+        # data.save_to_disk("temp_data.pkl")
         for i in range(len(data)):
             if data[i].non_tensor_batch['extra_info'].get("inputs_outputs"):
                 test_cases.append(data[i].non_tensor_batch['extra_info']['inputs_outputs'])
@@ -233,6 +234,11 @@ class AceCoderRewardManager:
         acecoder_prompt_str = [prompt_str[i] for i in acecoder_data_idxs]
         acecoder_test_cases = [test_cases[i] for i in acecoder_data_idxs]
         acecoder_scores = self.get_acecoder_data_score(acecoder_data, acecoder_response_str, acecoder_prompt_str, extracted_answers, acecoder_test_cases)
+        if len(acecoder_scores) > 0:
+            print(f"Step {self.step_idx}: {len(acecoder_data_idxs)} acecoder data scores")
+            print(" - Average pass rate: ", sum([x['pass_rate'] for x in acecoder_scores]) / len(acecoder_scores))
+            print(" - Average binary pass rate: ", sum([x['binary_pass_rate'] for x in acecoder_scores]) / len(acecoder_scores))
+            print(" - Average score: ", sum([x['score'] for x in acecoder_scores]) / len(acecoder_scores))
         
         # 1.2 
         prime_code_data = data[prime_code_data_idxs]
@@ -240,6 +246,11 @@ class AceCoderRewardManager:
         prime_code_prompt_str = [prompt_str[i] for i in prime_code_data_idxs]
         prime_code_test_cases = [test_cases[i] for i in prime_code_data_idxs]
         prime_code_scores = self.get_prime_code_data_score(prime_code_data, prime_code_response_str, prime_code_prompt_str, extracted_answers, prime_code_test_cases)
+        if len(prime_code_scores) > 0:
+            print(f"Step {self.step_idx}: {len(prime_code_data_idxs)} prime code data scores")
+            print(" - Average pass rate: ", sum([x['pass_rate'] for x in prime_code_scores]) / len(prime_code_scores))
+            print(" - Average binary pass rate: ", sum([x['binary_pass_rate'] for x in prime_code_scores]) / len(prime_code_scores))
+            print(" - Average score: ", sum([x['score'] for x in prime_code_scores]) / len(prime_code_scores))
         
         # 1.3 merge the scores
         idxs_map = sorted([(idx, i, 'acecoder') for i, idx in enumerate(acecoder_data_idxs)] + [(idx, i, 'prime_code') for i, idx in enumerate(prime_code_data_idxs)], key=lambda x: x[0])
@@ -248,7 +259,15 @@ class AceCoderRewardManager:
                 scores[i] = acecoder_scores[idxs_map[i][1]]
             else:
                 scores[i] = prime_code_scores[idxs_map[i][1]]
-        
+        # with open("test_scores", 'w') as f:
+        #     json.dump({
+        #         "prime_code": prime_code_scores,
+        #         "acecoder": acecoder_scores,
+        #         "scores": scores,
+        #         "acecoder_data_idxs": acecoder_data_idxs,
+        #         "prime_code_data_idxs": prime_code_data_idxs,
+        #     }, f, indent=4)
+            
         # 2. Adding additional penalty for errored or timed out
         keywords = ["ERROR:\nTraceback", "Execution timed out"]
         for i, response in enumerate(response_str):

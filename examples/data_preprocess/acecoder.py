@@ -138,4 +138,7 @@ python examples/data_preprocess/acecoder.py --dataset_path CodeDPO/AceCoderV2-15
 python examples/data_preprocess/acecoder.py --dataset_path chiruan/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference --local_dir data/acecoder_naive --add_execution_prompt
 
 python examples/data_preprocess/acecoder.py --dataset_path chiruan/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference --local_dir data/acecoder_long --add_execution_prompt
+
+
+python examples/data_preprocess/acecoder.py --dataset_path chiruan/AceCoderV2-150K-processed-V2 --local_dir data/acecoderv2_long --add_execution_prompt
 """
