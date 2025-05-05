@@ -313,17 +313,19 @@ class AceCoderRewardManager:
                     "prompt": prompt_str[i],
                     "response": response_str[i],
                     "extracted_code": extracted_answers[i],
-                    "ground_truth": test_cases[i],
+                    "ground_truth": "",
                     "score": scores[i],
                     'extra_info': data[i].non_tensor_batch.get('extra_info', None),
                 }
                 for i in range(len(data))
             ]
-            if "turns_stats" in data.non_tensor_batch:
-                for i in range(len(data)):
+            for i in range(len(data)):
+                if "turns_stats" in data.non_tensor_batch:
                     to_save_records[i]['num_turn'] = data[i].non_tensor_batch["turns_stats"]
                     to_save_records[i]['num_valid_action'] = data[i].non_tensor_batch["valid_action_stats"]
                     to_save_records[i]['is_done'] = not data[i].non_tensor_batch["active_mask"]
+                if len(to_save_records[i]['extra_info']['inputs_outputs']) > 1000:
+                    to_save_records[i]['extra_info']['inputs_outputs'] = to_save_records[i]['extra_info']['inputs_outputs'][:1000]
             # Save the records to a file
             if self.num_examine == 1:
                 temp_file = self.record_dir / f"acecoder-step-val-{self.step_idx}.json"
