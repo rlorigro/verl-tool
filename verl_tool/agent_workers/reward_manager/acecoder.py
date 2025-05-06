@@ -324,7 +324,7 @@ class AceCoderRewardManager:
                     to_save_records[i]['num_turn'] = data[i].non_tensor_batch["turns_stats"]
                     to_save_records[i]['num_valid_action'] = data[i].non_tensor_batch["valid_action_stats"]
                     to_save_records[i]['is_done'] = not data[i].non_tensor_batch["active_mask"]
-                if len(to_save_records[i]['extra_info']['inputs_outputs']) > 1000:
+                if isinstance(to_save_records[i]['extra_info']['inputs_outputs'], str) and len(to_save_records[i]['extra_info']['inputs_outputs']) > 1000:
                     to_save_records[i]['extra_info']['inputs_outputs'] = to_save_records[i]['extra_info']['inputs_outputs'][:1000]
             # Save the records to a file
             if self.num_examine == 1:

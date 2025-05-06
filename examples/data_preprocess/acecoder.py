@@ -74,16 +74,26 @@ Coding questions can ask various forms of program solutions:
 Let's think step by step and generate the final program in a markdown code block like this: ```python\nyour code here\n```.
 """
 
+public_test_template = """\
+### Public Test Cases
+Here are some public test cases where you can use to test your program.
+```python
+{test_cases}
+```
+"""
 def main(
-    dataset_path: str = 'chiruan/AceCoderV2-122K-processed-filtered',
+    dataset_path: str = 'VerlTool/AceCoderV2-122K',
     local_dir: str = 'data/acecoder',
     add_execution_prompt: bool = False,
     propmt_type='complex',
+    add_public_tests: bool = False,
 ):
     local_dir = Path(local_dir)
     local_dir_post_fix = ""
     if add_execution_prompt:
         local_dir_post_fix = "-with-execution-prompt"
+    if add_public_tests:
+        local_dir_post_fix += "-with-public-tests"
     local_dir_post_fix += f"-{propmt_type}"
     local_dir = local_dir / (dataset_path.split('/')[-1] + local_dir_post_fix)
     local_dir.mkdir(parents=True, exist_ok=True)
@@ -109,6 +119,14 @@ def main(
             else:
                 raise ValueError(f"Unknown propmt_type: {propmt_type}")
             
+            if add_public_tests:
+                system_instruction = system_instruction + "\n" + "Note that there may or may not be public test cases for this question. If there are, you can use them to test your program and even write more test cases by your own based on the public test cases to test your program. If there are no public test cases, you can write your own test cases to test your program. Put your test cases in the same markdown code block as your program to be executed so you can see the output of your test cases."
+                public_tests = example.pop('public_tests')
+                if public_tests:
+                    public_tests_str = "\n".join(public_tests)
+                    public_tests_str = public_test_template.format(test_cases=public_tests_str)
+                    question_raw = f"{question_raw}\n\n{public_tests_str}"
+                    
             tests = example.pop('tests')
             data = {
                 "data_source": dataset_path,
@@ -132,6 +150,7 @@ def main(
                     'index': idx,
                     'id': str(example['id']),
                     "question": question_raw,
+                    "public_tests": public_tests if add_public_tests else None,
                     "test_cases": tests,
                     "inputs_outputs": None,
                 }
@@ -158,15 +177,17 @@ if __name__ == '__main__':
     
 """
 python examples/data_preprocess/acecoder.py --dataset_path CodeDPO/AceCoderV2-mini-processed --local_dir data/acecoder --add_execution_prompt
-python examples/data_preprocess/acecoder.py --dataset_path chiruan/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference --local_dir data/acecoder --add_execution_prompt
+python examples/data_preprocess/acecoder.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder --add_execution_prompt
 python examples/data_preprocess/acecoder.py --dataset_path CodeDPO/AceCoderV2-150K-processed --local_dir data/acecoder --add_execution_prompt
 
-python examples/data_preprocess/acecoder.py --dataset_path chiruan/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference --local_dir data/acecoder_naive --add_execution_prompt
+python examples/data_preprocess/acecoder.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_naive --add_execution_prompt
 
-python examples/data_preprocess/acecoder.py --dataset_path chiruan/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference --local_dir data/acecoder_long --add_execution_prompt --propmt_type complex
+python examples/data_preprocess/acecoder.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_long --add_execution_prompt --propmt_type complex
 
-python examples/data_preprocess/acecoder.py --dataset_path chiruan/AceCoderV2-122K-processed-filtered --local_dir data/acecoderv2 --add_execution_prompt True --propmt_type complex
-python examples/data_preprocess/acecoder.py --dataset_path chiruan/AceCoderV2-122K-processed-filtered --local_dir data/acecoderv2 --add_execution_prompt True --propmt_type naive
-python examples/data_preprocess/acecoder.py --dataset_path chiruan/AceCoderV2-122K-processed-filtered --local_dir data/acecoderv2 --add_execution_prompt False --propmt_type complex
-python examples/data_preprocess/acecoder.py --dataset_path chiruan/AceCoderV2-122K-processed-filtered --local_dir data/acecoderv2 --add_execution_prompt False --propmt_type naive
+python examples/data_preprocess/acecoder.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_long --add_execution_prompt --propmt_type complex --add_public_tests True
+
+python examples/data_preprocess/acecoder.py --dataset_path VerlTool/AceCoderV2-122K --local_dir data/acecoderv2 --add_execution_prompt True --propmt_type complex
+python examples/data_preprocess/acecoder.py --dataset_path VerlTool/AceCoderV2-122K --local_dir data/acecoderv2 --add_execution_prompt True --propmt_type naive
+python examples/data_preprocess/acecoder.py --dataset_path VerlTool/AceCoderV2-122K --local_dir data/acecoderv2 --add_execution_prompt False --propmt_type complex
+python examples/data_preprocess/acecoder.py --dataset_path VerlTool/AceCoderV2-122K --local_dir data/acecoderv2 --add_execution_prompt False --propmt_type naive
 """

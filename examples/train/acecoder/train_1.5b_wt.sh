@@ -8,10 +8,14 @@ dataset_name4=acecoder_long/AceCoderV2-69K-with-execution-prompt-with-public-tes
 # val_data=[$(pwd)/data/${dataset_name1}/test.parquet,\
 # $(pwd)/data/${dataset_name2}/test.parquet]
 
-train_data=[$(pwd)/data/${dataset_name1}/train.parquet]
-val_data=[$(pwd)/data/${dataset_name1}/test.parquet]
+# train_data=[$(pwd)/data/${dataset_name1}/train.parquet]
+# val_data=[$(pwd)/data/${dataset_name1}/test.parquet]
 
-model_name=Qwen/Qwen2.5-Coder-1.5B
+train_data=[$(pwd)/data/${dataset_name4}/train.parquet]
+val_data=[$(pwd)/data/${dataset_name4}/test.parquet]
+
+# model_name=Qwen/Qwen2.5-Coder-1.5B
+model_name=Qwen/Qwen2.5-Coder-1.5B-Instruct
 # model_name=VerlTool/Qwen2.5-Coder-1B-TIR-SFT-new-Interpreter-Thinking
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
 n_gpus_per_node=8
@@ -28,7 +32,7 @@ strategy="fsdp_agent" # remove _agent for normal verl behavior
 action_stop_tokens="\`\`\`output"
 max_turns=3
 min_action_num=1
-mask_observations=True # mask observations for kl loss and gradient descent
+mask_observations=False # mask observations for kl loss and gradient descent
 kl_loss_coef=0.0
 kl_coef=0
 entropy_coeff=0
@@ -46,7 +50,7 @@ fsdp_size=-1
 additional_eos_token_ids=[151660] # <|fim_middle|> token id
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
-run_name_postfix="-69k"
+run_name_postfix="-69k-force-test-debug"
 run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 export VERL_RUN_ID=$run_name
 export NCCL_DEBUG=INFO
