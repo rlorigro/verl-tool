@@ -82,6 +82,7 @@ def main(
     local_dir: str = 'data/deepcoder',
     add_execution_prompt: bool = False,
     propmt_type='complex',
+    add_public_tests: bool = False,
 ):
     all_subsets = ['lcbv5', 'taco', 'codeforces', 'primeintellect']
     assert subset in all_subsets + ['all'], f"Invalid subset {subset}, please choose from {all_subsets} or 'all'"
@@ -90,6 +91,8 @@ def main(
     local_dir_post_fix = ""
     if add_execution_prompt:
         local_dir_post_fix = "-with-execution-prompt"
+    if add_public_tests:
+        local_dir_post_fix += "-with-public-tests"
     local_dir_post_fix += f"-{propmt_type}"
     local_dir = local_dir / (subset + local_dir_post_fix)
     local_dir.mkdir(parents=True, exist_ok=True)
@@ -176,7 +179,14 @@ def main(
                     func_name = example['metadata']['func_name']
                     new_tests['fn_name'] = func_name
                 inputs_outputs = json.dumps(new_tests)
-                
+            
+            if add_public_tests:
+                public_tests = json.loads(inputs_outputs)
+                public_tests['inputs'] = public_tests['inputs'][:3]
+                public_tests['outputs'] = public_tests['outputs'][:3]
+                public_tests = json.dumps(public_tests)
+            else:
+                public_tests = None
             data = {
                 "data_source": data_source,
                 "prompt": [
@@ -201,6 +211,7 @@ def main(
                     "question": question_raw,
                     "test_cases": None,
                     "inputs_outputs": inputs_outputs,
+                    "public_tests": public_tests,
                 }
             }
             return data

@@ -14,8 +14,8 @@ dataset_name4=acecoder_long/AceCoderV2-69K-with-execution-prompt-with-public-tes
 train_data=[$(pwd)/data/${dataset_name4}/train.parquet]
 val_data=[$(pwd)/data/${dataset_name4}/test.parquet]
 
-# model_name=Qwen/Qwen2.5-Coder-1.5B
-model_name=Qwen/Qwen2.5-Coder-1.5B-Instruct
+model_name=Qwen/Qwen2.5-Coder-1.5B
+# model_name=Qwen/Qwen2.5-Coder-1.5B-Instruct
 # model_name=VerlTool/Qwen2.5-Coder-1B-TIR-SFT-new-Interpreter-Thinking
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
 n_gpus_per_node=8
@@ -50,7 +50,7 @@ fsdp_size=-1
 additional_eos_token_ids=[151660] # <|fim_middle|> token id
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
-run_name_postfix="-69k-force-test-debug"
+run_name_postfix="-69k-force-test"
 run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 export VERL_RUN_ID=$run_name
 export NCCL_DEBUG=INFO

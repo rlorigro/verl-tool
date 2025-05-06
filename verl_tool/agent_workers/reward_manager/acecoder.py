@@ -229,30 +229,34 @@ class AceCoderRewardManager:
                 raise ValueError(f"Cannot find test cases for data {i} in {data[i].non_tensor_batch['extra_info']}")
 
         # 1.1 process acecoder data
-        acecoder_data = data[acecoder_data_idxs]
-        acecoder_response_str = [response_str[i] for i in acecoder_data_idxs]
-        acecoder_prompt_str = [prompt_str[i] for i in acecoder_data_idxs]
-        acecoder_test_cases = [test_cases[i] for i in acecoder_data_idxs]
-        acecoder_extracted_answers = [extracted_answers[i] for i in acecoder_data_idxs]
-        acecoder_scores = self.get_acecoder_data_score(acecoder_data, acecoder_response_str, acecoder_prompt_str, acecoder_extracted_answers, acecoder_test_cases)
-        if len(acecoder_scores) > 0:
+        if len(acecoder_data_idxs) > 0:
+            acecoder_data = data[acecoder_data_idxs]
+            acecoder_response_str = [response_str[i] for i in acecoder_data_idxs]
+            acecoder_prompt_str = [prompt_str[i] for i in acecoder_data_idxs]
+            acecoder_test_cases = [test_cases[i] for i in acecoder_data_idxs]
+            acecoder_extracted_answers = [extracted_answers[i] for i in acecoder_data_idxs]
+            acecoder_scores = self.get_acecoder_data_score(acecoder_data, acecoder_response_str, acecoder_prompt_str, acecoder_extracted_answers, acecoder_test_cases)
             print(f"Step {self.step_idx}: {len(acecoder_data_idxs)} acecoder data scores")
             print(" - Average pass rate: ", sum([x['pass_rate'] for x in acecoder_scores]) / len(acecoder_scores))
             print(" - Average binary pass rate: ", sum([x['binary_pass_rate'] for x in acecoder_scores]) / len(acecoder_scores))
             print(" - Average score: ", sum([x['score'] for x in acecoder_scores]) / len(acecoder_scores))
+        else:
+            acecoder_scores = []
         
         # 1.2 
-        prime_code_data = data[prime_code_data_idxs]
-        prime_code_response_str = [response_str[i] for i in prime_code_data_idxs]
-        prime_code_prompt_str = [prompt_str[i] for i in prime_code_data_idxs]
-        prime_code_test_cases = [test_cases[i] for i in prime_code_data_idxs]
-        prime_code_extracted_answers = [extracted_answers[i] for i in prime_code_data_idxs]
-        prime_code_scores = self.get_prime_code_data_score(prime_code_data, prime_code_response_str, prime_code_prompt_str, prime_code_extracted_answers, prime_code_test_cases)
-        if len(prime_code_scores) > 0:
+        if len(prime_code_data_idxs) > 0:
+            prime_code_data = data[prime_code_data_idxs]
+            prime_code_response_str = [response_str[i] for i in prime_code_data_idxs]
+            prime_code_prompt_str = [prompt_str[i] for i in prime_code_data_idxs]
+            prime_code_test_cases = [test_cases[i] for i in prime_code_data_idxs]
+            prime_code_extracted_answers = [extracted_answers[i] for i in prime_code_data_idxs]
+            prime_code_scores = self.get_prime_code_data_score(prime_code_data, prime_code_response_str, prime_code_prompt_str, prime_code_extracted_answers, prime_code_test_cases)
             print(f"Step {self.step_idx}: {len(prime_code_data_idxs)} prime code data scores")
             print(" - Average pass rate: ", sum([x['pass_rate'] for x in prime_code_scores]) / len(prime_code_scores))
             print(" - Average binary pass rate: ", sum([x['binary_pass_rate'] for x in prime_code_scores]) / len(prime_code_scores))
             print(" - Average score: ", sum([x['score'] for x in prime_code_scores]) / len(prime_code_scores))
+        else:
+            prime_code_scores = []
         
         # 1.3 merge the scores
         idxs_map = sorted([(idx, i, 'acecoder') for i, idx in enumerate(acecoder_data_idxs)] + [(idx, i, 'prime_code') for i, idx in enumerate(prime_code_data_idxs)], key=lambda x: x[0])
