@@ -106,6 +106,7 @@ class AceCoderRewardManager:
         self.binary = True
         self.add_format_think_penalty = False # -0.5 if not begines with <think> and end with </think>
         self.add_format_answer_penalty = False # -0.5 if not having <answer> </answer>
+        self.parse_code_mode = "all" # "all", "first", "last"
         try:
             from acecoder import evaluate_test_cases
         except ImportError:
@@ -136,7 +137,7 @@ class AceCoderRewardManager:
             for sample in samples:
                 f.write(json.dumps(sample) + "\n")
         # perform batched scoring for coding score: call the acecoder evaluation script to retrieve the coder part scores
-        output_file = Path(temp_file).with_suffix(f".eval_results'_binary'.jsonl").absolute()
+        output_file = Path(temp_file).with_suffix(f".eval_results_binary.jsonl").absolute()
         command = f"python -m acecoder.eval_test_cases --samples {temp_file} --n_workers {self.n_workers} \
             --extract_solution True --output_file {output_file} --test_details True \
             --i_just_wanna_run True --min_time_limit 1 --gt_time_limit_factor 1"
@@ -235,7 +236,7 @@ class AceCoderRewardManager:
         
         # extract the answer for the list of responses
         extracted_answers = [re.sub(r"<think>(.|\n)*?</think>", "", response) for response in response_str]
-        extracted_answers = [parse_code(response) for response in extracted_answers]
+        extracted_answers = [parse_code(response, self.parse_code_mode) for response in extracted_answers]
         
         # retrieve the list of ground truths/test cases
         test_cases = []
