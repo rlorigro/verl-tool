@@ -103,40 +103,18 @@ class AgentActorManager:
         """
         # we manually repeat the input by n times if needed since every trajectory is independent
         do_sample = inputs.meta_info.get("do_sample", True)
+        assert 'traj_ids' in inputs.non_tensor_batch, "traj_ids should be claimed univerally in the ray trainer"
+        ori_len = len(inputs.batch['input_ids'])
         if not do_sample:
             n = 1
         else:
             n = self.config.n
-            inputs = inputs.repeat(n)
-
-        # all the codes in the manager will actually run tensor_parallel_size times for each data group. 
-        # however, since the random state of each tp rank is same in the same tp group, it's safe to use random to get the same uuid
-        inputs.non_tensor_batch['traj_ids'] = np.array(self.generate_consistent_random_uuid(len(inputs.batch)), dtype=object)
+            inputs = inputs.repeat(n, interleave=True)
+        # add "_{i}" for each trajectory to the traj_ids
+        for i in range(ori_len):
+            for j in range(n):
+                inputs.non_tensor_batch['traj_ids'][i*n+j] += f"_{j}"
         return inputs
-    
-    def generate_consistent_random_uuid(self, num):
-        """Generate a list of consistent UUIDs using a controlled random state
-        
-        Args:
-            num: Number of UUIDs to generate
-            seed_value: Seed value for random number generator, if None will use system random
-            
-        Returns:
-            List of UUID objects
-        """
-        uuids = []
-        for _ in range(num):
-            # Generate 16 random bytes (128 bits)
-            random_bytes = bytearray([random.randint(0, 255) for _ in range(16)])
-            
-            # Set the version bits (4) and variant bits according to RFC 4122
-            random_bytes[6] = (random_bytes[6] & 0x0F) | 0x40  # version 4
-            random_bytes[8] = (random_bytes[8] & 0x3F) | 0x80  # variant RFC 4122
-            
-            # Create and append the UUID
-            uuids.append(str(uuid.UUID(bytes=bytes(random_bytes))))
-            
-        return uuids
 
     def _postprocess_responses(self, responses: torch.Tensor, action_step: int) -> torch.Tensor:
         """Process responses to stop at python operation or answer operation."""

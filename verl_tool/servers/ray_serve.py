@@ -188,7 +188,7 @@ class RayToolManager:
         
         @ray.remote(num_cpus=0)
         def non_tool_action(trajectory_id: str, action: str, extra_field: Dict[str, Any]):
-            return "", True, False # no observation if no tool matched, [obs, done, valid]
+            return "", False, False # no observation if no tool matched, [obs, done, valid]
         
         pending_refs = []
         for i, tool_type in enumerate(tool_types):

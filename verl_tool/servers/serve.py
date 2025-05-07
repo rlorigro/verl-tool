@@ -229,7 +229,7 @@ class AsyncToolManager:
             for idx in indices:
                 # all_observations[idx] = usage_instructions
                 all_observations[idx] = "" # no observation
-                all_dones[idx] = True
+                all_dones[idx] = False
                 all_valids[idx] = False
         
         # Await all tool processing tasks
@@ -442,6 +442,7 @@ def main(
     numeric_level = getattr(logging, log_level.upper(), None)
     if isinstance(numeric_level, int):
         logging.basicConfig(level=numeric_level)
+        logger.setLevel(numeric_level)
     
     # Convert string to tuple of tool types if needed
     if isinstance(tool_type, str):

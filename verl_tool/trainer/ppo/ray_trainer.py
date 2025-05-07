@@ -196,6 +196,7 @@ class AgentRayPPOTrainer(RayPPOTrainer):
 
                 with _timer('step', timing_raw):
                     # generate a batch
+                    gen_batch.non_tensor_batch['traj_ids'] = np.array([str(uuid.uuid4()) for _ in range(len(gen_batch.batch))], dtype=object)
                     with _timer('gen', timing_raw):
                         gen_batch_output = self.actor_rollout_wg.generate_sequences(gen_batch)
 

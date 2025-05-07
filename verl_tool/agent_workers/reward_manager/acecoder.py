@@ -33,12 +33,23 @@ import os
 import json
 import subprocess
 import time
+import ast
 from pathlib import Path
 
 def hash_string(s):
     return hashlib.sha256(s.encode()).hexdigest()
 
-def parse_code(action: str):
+def check_syntax(code_string):
+    try:
+        # Attempt to parse the code string
+        ast.parse(code_string)
+        return True
+    except SyntaxError as e:
+        # If a SyntaxError is raised, the code is not valid
+        # print(f"Syntax error in code: {e}")
+        return False
+    
+def parse_code(action: str, mode="all"):
     """
     Parse the raw action string (which is the llm response) into an actual action and its contents.
     Ensures that the parsed code is valid and safe for execution.
@@ -55,15 +66,20 @@ def parse_code(action: str):
     if not all_valid_python_code:
         all_valid_python_code = re.findall(r"```python(.*?)```", action, re.DOTALL)
     
-    if not all_valid_python_code:
-        all_valid_python_code = re.findall(r"```(.*?)```", action, re.DOTALL)
-    
     if len(all_valid_python_code) == 0:
         return ""
     
-    # Use the final code block found (we could extend this to support multiple blocks)
-    parsed_code = all_valid_python_code[-1].strip()
-    
+    if mode == "all":
+        parsed_code = "\n".join([code for code in all_valid_python_code if check_syntax(code)])
+    elif mode == "first":
+        # Use the first code block found
+        parsed_code = all_valid_python_code[0]
+    elif mode == "last":
+        # Use the last code block found
+        parsed_code = all_valid_python_code[-1]
+    else:
+        raise ValueError(f"Invalid mode: {mode}. Use 'all', 'first', or 'last'.")
+    passed_code = parsed_code.strip(' \n')
     return parsed_code
 
 def prime_code_compute_score_async(data_source, solution_str, ground_truth, extra_info=None):
@@ -87,7 +103,9 @@ class AceCoderRewardManager:
         self.compute_score = compute_score or _default_compute_score
         self.step_idx = 0
         self.n_workers = 64
-        self.binary = False
+        self.binary = True
+        self.add_format_think_penalty = False # -0.5 if not begines with <think> and end with </think>
+        self.add_format_answer_penalty = False # -0.5 if not having <answer> </answer>
         try:
             from acecoder import evaluate_test_cases
         except ImportError:
@@ -118,9 +136,9 @@ class AceCoderRewardManager:
             for sample in samples:
                 f.write(json.dumps(sample) + "\n")
         # perform batched scoring for coding score: call the acecoder evaluation script to retrieve the coder part scores
-        output_file = Path(temp_file).with_suffix(f".eval_results{'_binary' if self.binary else ''}.jsonl").absolute()
+        output_file = Path(temp_file).with_suffix(f".eval_results'_binary'.jsonl").absolute()
         command = f"python -m acecoder.eval_test_cases --samples {temp_file} --n_workers {self.n_workers} \
-            --extract_solution True --output_file {output_file} --test_details {not self.binary} \
+            --extract_solution True --output_file {output_file} --test_details True \
             --i_just_wanna_run True --min_time_limit 1 --gt_time_limit_factor 1"
         start = time.time()
         subprocess.run(command, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
@@ -140,7 +158,10 @@ class AceCoderRewardManager:
         for i in range(len(scores)):
             scores[i]['pass_rate'] = pass_rates[i]
             scores[i]['binary_pass_rate'] = 1.0 if pass_rates[i] == 1.0 else 0.0
-            scores[i]['score'] = 1.0 if pass_rates[i] == 1.0 else -1.0 # -1.0 for failed test cases
+            if self.binary:
+                scores[i]['score'] = 1.0 if pass_rates[i] == 1.0 else -1.0 # -1.0 for failed test cases
+            else:
+                scores[i]['score'] = pass_rates[i]
         return scores
     
     def get_prime_code_data_score(self, data: DataProto, response_str, prompt_str, extracted_answers, test_cases):
@@ -164,7 +185,10 @@ class AceCoderRewardManager:
         for i in range(len(scores)):
             scores[i]['pass_rate'] = pass_rates[i]
             scores[i]['binary_pass_rate'] = 1.0 if pass_rates[i] == 1.0 else 0.0
-            scores[i]['score'] = 1.0 if pass_rates[i] == 1.0 else -1.0 # -1.0 for failed test cases
+            if self.binary:
+                scores[i]['score'] = 1.0 if pass_rates[i] == 1.0 else -1.0
+            else:
+                scores[i]['score'] = pass_rates[i]
         return scores
         
         
@@ -265,6 +289,23 @@ class AceCoderRewardManager:
                 scores[i] = acecoder_scores[idxs_map[i][1]]
             else:
                 scores[i] = prime_code_scores[idxs_map[i][1]]
+        # 1.4 format penalty
+        if self.add_format_think_penalty:
+            for i, response in enumerate(response_str):
+                match = re.search(r"<think>(.*?)</think>", response, re.DOTALL)
+                if not match:
+                    scores[i]['score'] -= 0.5
+                    scores[i]['think_format_penalty'] = 1
+                else:
+                    scores[i]['think_format_penalty'] = 0
+        if self.add_format_answer_penalty:
+            for i, response in enumerate(response_str):
+                match = re.search(r"<answer>(.*?)</answer>", response, re.DOTALL)
+                if not match:
+                    scores[i]['score'] -= 0.5
+                    scores[i]['answer_format_penalty'] = 1
+                else:
+                    scores[i]['answer_format_penalty'] = 0
         # with open("test_scores", 'w') as f:
         #     json.dump({
         #         "prime_code": prime_code_scores,

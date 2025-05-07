@@ -137,7 +137,7 @@ class FirejailPythonCodeTool(BaseTool):
     stop_tokens = ["```output", "<output>"]
     enable_history_code_execution = False
     enable_mannual_reflection = False
-    force_run_test_cases = True
+    force_run_test_cases = False
     
     def get_usage_inst(self):
         return "You are able to write and execute Python code securely inside a Firejail sandbox."
@@ -238,7 +238,7 @@ class FirejailPythonCodeTool(BaseTool):
                 # print("------")
                 # print(execution_result)
                 # print("------")
-                # print("----")
+                # print("----") 
                 # print([obs["observation"] for obs in env["previous_obs"]])
                 # print("----")
                 for previous_obs in env["previous_obs"]:
@@ -257,13 +257,13 @@ class FirejailPythonCodeTool(BaseTool):
                 observation = f"{execution_result}"
             
             if action.endswith("```output"):
-                observation = observation + "\n```"
+                observation = "\n" + observation + "\n```\n"
             elif action.endswith("<output>"):
-                observation = observation + "\n</output>"
+                observation = "\n" + observation + "\n</output>\n"
             elif action.endswith("</python>") or "</python>" in action:
-                observation = "<output>" + observation + "\n</output>"
+                observation = "\n<output>" + observation + "\n</output>\n"
             elif action.strip(' \n').endswith("```") or "```python" in action:
-                observation = "```output\n" + observation + "\n```"
+                observation = "Now testing the above codes. Execution Result:\n```output\n" + observation + "\n```\n"
             else:
                 observation = "\n" + observation + "\n"
             
@@ -286,6 +286,10 @@ class FirejailPythonCodeTool(BaseTool):
                             test_result = f"Testing the above code with the following test cases:\n```python\n{test_cases_code}\n```\n\nTest result:\n```output\n{test_execution_result}\n```\n"
                             if not test_execution_result:
                                 test_result += "All public test cases passed!\n"
+                            elif 'error:' in test_execution_result.lower():
+                                test_result += "Some test cases did not pass, I will first think and then fix them with a new program and test again.\n"
+                            else:
+                                test_result += "I'll check the test cases and see if they are correct.\n"
                     elif isinstance(test_cases, dict):
                         assert "inputs" in test_cases and "outputs" in test_cases, f"Invalid test cases format: {test_cases.keys()}"
                         test_result = ""
@@ -306,30 +310,30 @@ class FirejailPythonCodeTool(BaseTool):
                     else:
                         raise ValueError(f"Invalid test cases format: {test_cases}")
                     observation = observation + "\n" + test_result
+            if self.enable_mannual_reflection:
+                # case: empty (correctly runned or the test case does not have output, need to check)
+                if execution_result == "":
+                    # randomly select a sentence from the empty heuristic sentences
+                    idx = random.randint(0, len(heuristic_sentences["empty"]) - 1)
+                    observation += heuristic_sentences["empty"][idx]
+                # case: execution timed out, need to check if the code is correct
+                elif "execution timed out" in observation.lower():
+                    # observation = execution_result
+                    idx = random.randint(0, len(heuristic_sentences["timeout"]) - 1)
+                    observation += heuristic_sentences["timeout"][idx]
+                # case: execution ends with error, need to look back and fix the bug
+                elif "error:" in observation.lower():
+                    # observation = f"Execution completed with errors:\n{execution_result}"
+                    idx = random.randint(0, len(heuristic_sentences["error"]) - 1)
+                    observation += heuristic_sentences["error"][idx]     
+                # case: generated output without error, need to check the code's output
+                else:
+                    # observation = f"Execution result:\n{execution_result}"
+                    idx = random.randint(0, len(heuristic_sentences["success"]) - 1)
+                    observation += heuristic_sentences["success"][idx]
+                    
             done = False
             valid = True
-        
-        if valid and self.enable_mannual_reflection:
-            # case: empty (correctly runned or the test case does not have output, need to check)
-            if execution_result == "":
-                # randomly select a sentence from the empty heuristic sentences
-                idx = random.randint(0, len(heuristic_sentences["empty"]) - 1)
-                observation += heuristic_sentences["empty"][idx]
-            # case: execution timed out, need to check if the code is correct
-            elif "execution timed out" in observation.lower():
-                # observation = execution_result
-                idx = random.randint(0, len(heuristic_sentences["timeout"]) - 1)
-                observation += heuristic_sentences["timeout"][idx]
-            # case: execution ends with error, need to look back and fix the bug
-            elif "error:" in observation.lower():
-                # observation = f"Execution completed with errors:\n{execution_result}"
-                idx = random.randint(0, len(heuristic_sentences["error"]) - 1)
-                observation += heuristic_sentences["error"][idx]     
-            # case: generated output without error, need to check the code's output
-            else:
-                # observation = f"Execution result:\n{execution_result}"
-                idx = random.randint(0, len(heuristic_sentences["success"]) - 1)
-                observation += heuristic_sentences["success"][idx]
         
         self.update_env(trajectory_id, env, parsed_action, is_valid, extra_field, execution_result)
         self.save_env(trajectory_id, env)
