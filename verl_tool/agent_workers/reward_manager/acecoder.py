@@ -44,7 +44,8 @@ def check_syntax(code_string):
         # Attempt to parse the code string
         ast.parse(code_string)
         return True
-    except SyntaxError as e:
+    # except SyntaxError as e:
+    except Exception as e:
         # If a SyntaxError is raised, the code is not valid
         # print(f"Syntax error in code: {e}")
         return False
@@ -106,7 +107,7 @@ class AceCoderRewardManager:
         self.binary = True
         self.add_format_think_penalty = False # -0.5 if not begines with <think> and end with </think>
         self.add_format_answer_penalty = False # -0.5 if not having <answer> </answer>
-        self.parse_code_mode = "all" # "all", "first", "last"
+        self.parse_code_mode = "last" # "all", "first", "last"
         try:
             from acecoder import evaluate_test_cases
         except ImportError:

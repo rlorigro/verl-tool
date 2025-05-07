@@ -1,15 +1,18 @@
-set -x
+ppset -x
 dataset_name1=acecoder_long/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference-with-execution-prompt-complex
 dataset_name2=deepcoder/all-with-execution-prompt-complex
 dataset_name3=acecoderv2/AceCoderV2-122K-processed-filtered-with-execution-prompt-complex
 dataset_name4=acecoder_long/AceCoderV2-69K-with-execution-prompt-with-public-tests-complex
+dataset_name5=acecoder_custom/AceCoderV2-69K-system-prompt-1
+dataset_name6=acecoder_custom/AceCoderV2-69K-system-prompt-2
+dataset_name7=acecoder_custom/AceCoderV2-69K-system-prompt-3
 # train_data=[$(pwd)/data/${dataset_name1}/train.parquet,\
 # $(pwd)/data/${dataset_name2}/train.parquet]
 # val_data=[$(pwd)/data/${dataset_name1}/test.parquet,\
 # $(pwd)/data/${dataset_name2}/test.parquet]
 
-train_data=[$(pwd)/data/${dataset_name1}/train.parquet]
-val_data=[$(pwd)/data/${dataset_name1}/test.parquet]
+train_data=[$(pwd)/data/${dataset_name7}/train.parquet]
+val_data=[$(pwd)/data/${dataset_name7}/test.parquet]
 
 model_name=Qwen/Qwen2.5-Coder-1.5B
 # model_name=VerlTool/Qwen2.5-Coder-1B-TIR-SFT-new-Interpreter-Thinking
@@ -18,16 +21,17 @@ n_gpus_per_node=8
 n_nodes=1
 n=16
 batch_size=128
-ppo_mini_batch_size=64
+ppo_mini_batch_size=$batch_size
 max_prompt_length=1536
 max_response_length=3072
 max_obs_length=512
 temperature=1.0
 top_p=1.0
-strategy="fsdp_agent" # remove _agent for normal verl behavior
+strategy="fsdp" # remove _agent for normal verl behavior
 action_stop_tokens="\`\`\`output"
-max_turns=3
-min_action_num=1
+# action_stop_tokens="</python>"
+max_turns=1
+min_action_num=0
 mask_observations=True # mask observations for kl loss and gradient descent
 kl_loss_coef=0.0
 kl_coef=0
@@ -46,7 +50,7 @@ fsdp_size=-1
 additional_eos_token_ids=[151660] # <|fim_middle|> token id
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
-run_name_postfix="-69k"
+run_name_postfix="-69k-sys1"
 run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 export VERL_RUN_ID=$run_name
 export NCCL_DEBUG=INFO

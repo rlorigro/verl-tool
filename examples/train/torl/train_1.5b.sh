@@ -1,13 +1,12 @@
 set -x
-dataset_name=math_torl # or math_torl_offical to use torl training data
+dataset_name=math_torl_v2 # or math_torl_offical to use torl training data
 train_data=$(pwd)/data/${dataset_name}/train.parquet
 dataset_name=math_torl
 val_data=[$(pwd)/data/${dataset_name}/test.parquet,\
 $(pwd)/data/${dataset_name}/math500_test.parquet,\
 $(pwd)/data/${dataset_name}/aime24_test.parquet,\
 $(pwd)/data/${dataset_name}/aime25_test.parquet]
-model_name=Qwen/Qwen2.5-Coder-1.5B
-# model_name=VerlTool/Qwen2.5-Math-1.5B-TIR-SFT-new
+model_name=Qwen/Qwen2.5-Math-1.5B
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
 n_gpus_per_node=8
 n_nodes=1
@@ -21,6 +20,7 @@ temperature=1.0
 top_p=1.0
 strategy="fsdp_agent" # remove _agent for normal verl behavior
 action_stop_tokens="\`\`\`output"
+# action_stop_tokens="</python>"
 max_turns=1
 kl_loss_coef=0.0
 kl_coef=0
@@ -39,7 +39,7 @@ fsdp_size=-1
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
 # run_name_postfix="new-5-turns-force-reflection"
-run_name_postfix="new-no-toolusepenalty"
+run_name_postfix="v2-reproduce"
 # run_name_postfix="new"
 run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 export VERL_RUN_ID=$run_name
