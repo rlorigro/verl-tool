@@ -35,6 +35,8 @@ system_prompt2 = '''A conversation between User and Assistant. The user asks a q
 
 system_prompt3 = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem above. If you want to run any python code, write code in the python markdown code block and the execution will be appended in an output code block like "```python\nyou code here\n```\n```output\nresult here\n```". Please put your final answer within \\boxed{}.'''
 
+system_prompt4 = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please put your final answer within \\boxed{}.'''
+
 def main(
     data_source='DigitalLearningGmbH/MATH-lighteval',
     local_dir='~/data/math_torl',
@@ -52,6 +54,8 @@ def main(
         system_prompt = system_prompt2
     elif sys_prompt_version == 'v3':
         system_prompt = system_prompt3
+    elif sys_prompt_version == 'v4':
+        system_prompt = system_prompt4
     else:
         system_prompt = system_prompt
     
@@ -213,4 +217,5 @@ if __name__ == '__main__':
 python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl
 python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl_v2 --sys_prompt_version v2
 python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl_v3 --sys_prompt_version v3
+python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl_v4 --sys_prompt_version v4
 """
