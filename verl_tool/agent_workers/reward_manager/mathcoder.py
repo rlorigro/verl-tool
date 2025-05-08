@@ -128,13 +128,15 @@ class MathCoderRewardManager:
                     "response": responses[i],
                     "ground_truth": ground_truths[i],
                     "score": raw_score[i],
-                    "num_turn": num_turn[i],
-                    "num_valid_action": num_valid_action[i],
-                    "is_done": is_done[i],
                     'extra_info': data[i].non_tensor_batch.get('extra_info', None),
                 }
                 for i in range(len(data))
             ]
+            if "turns_stats" in data.non_tensor_batch:
+                for i, record in enumerate(to_save_records):
+                    to_save_records[i]['num_turn'] = num_turn[i]
+                    to_save_records[i]['num_valid_action'] = num_valid_action[i]
+                    to_save_records[i]['is_done'] = is_done[i]
             
             # Save the records to a file
             if self.num_examine == 1:
