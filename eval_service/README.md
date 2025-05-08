@@ -35,14 +35,16 @@ How to convert megatron/vllm model ckpt to huggingface ckpt:
 - `local_dir` is the model path that training started from
 - `target_dir` is the local hugging face model that you want to save to
 
+## Upload VTModels
+
 ```bash
 backend=fsdp
-checkpoint_path=checkpoints/acecoder/acecoder-fsdp_agent-qwen_qwen2.5-coder-1.5b-grpo-n16-b128-t1.0-lr1e-6-with-deepcoder-data/global_step_400/actor
-hf_upload_path=VerlTool/acecoder-fsdp_agent-qwen_qwen2.5-coder-1.5b-grpo-n16-b128-t1.0-lr1e-6-with-wdcoder-400-step
+checkpoint_path=checkpoints/acecoder/acecoder-fsdp-qwen_qwen2.5-coder-1.5b-grpo-n16-b128-t1.0-lr1e-6-69k-sys3/global_step_250/actor
+hf_upload_path=VerlTool/acecoder-fsdp-qwen_qwen2.5-coder-1.5b-grpo-n16-b128-t1.0-lr1e-6-69k-sys3-250-step
 python3 verl/scripts/model_merger.py --backend $backend --hf_model_path $checkpoint_path/huggingface --hf_upload_path "$hf_upload_path" --local_dir $checkpoint_path --target_dir $checkpoint_path/huggingface
 
 # optional: also upload the step records to the model
-step_records_dir=verl_step_records/acecoder-fsdp_agent-qwen_qwen2.5-coder-1.5b-grpo-n16-b128-t1.0-lr1e-6-with-deepcoder-data
+step_records_dir=verl_step_records/acecoder-fsdp-qwen_qwen2.5-coder-1.5b-grpo-n16-b128-t1.0-lr1e-6-69k-sys3
 zip -r $step_records_dir/step_records.zip $step_records_dir 
 huggingface-cli upload --repo-type model $hf_upload_path $step_records_dir/step_records.zip 
 ```

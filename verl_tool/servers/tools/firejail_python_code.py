@@ -5,6 +5,7 @@ import os
 import signal
 import sys
 import json
+import hashlib
 from typing import Tuple, Dict, Any, Optional
 from ..utils import kill_python_subprocess_processes
 
@@ -102,13 +103,19 @@ def execute_python_in_firejail(code: str, timeout: int=TIMEOUT, stdin: Optional[
         "--rlimit-fsize=2m",  # Limit file size
         "--rlimit-as=1096m",
     ]
-    command.extend(["python3", "-c", code])
-    
+    # set cwd to be a temp dir
+    cwd = os.path.join(os.getcwd(), "tmp/firejail")
+    if not os.path.exists(cwd):
+        os.makedirs(cwd, exist_ok=True)
+    # write code to a temp file
+    file_name = f"code_{hashlib.md5(code.encode()).hexdigest()}.py"
+    file_path = os.path.join(cwd, file_name)
+    with open(file_path, "w") as f:
+        f.write(code)
+    # command.extend(["python3", "-c", code])
+    command.extend(["python3", file_path])
     try:
-        # set cwd to be a temp dir
-        cwd = os.path.join(os.getcwd(), "tmp/firejail")
-        if not os.path.exists(cwd):
-            os.makedirs(cwd, exist_ok=True)
+        # Execute the command
         result = subprocess.run(
             command,
             input=stdin if stdin else None,
@@ -128,6 +135,11 @@ def execute_python_in_firejail(code: str, timeout: int=TIMEOUT, stdin: Optional[
             result = result.strip()
     except subprocess.TimeoutExpired:
         result = f"Execution timed out after {timeout} seconds.\n"
+    # Clean up the temporary file
+    try:
+        os.remove(file_path)
+    except Exception as e:
+        pass
     return result
 
 @register_tool
@@ -261,9 +273,9 @@ class FirejailPythonCodeTool(BaseTool):
             elif action.endswith("<output>"):
                 observation = "\n" + observation + "\n</output>\n"
             elif action.endswith("</python>") or "</python>" in action:
-                observation = "\n<output>" + observation + "\n</output>\n"
+                observation = "\n<output>\n" + observation + "\n</output>\n"
             elif action.strip(' \n').endswith("```") or "```python" in action:
-                observation = "Now testing the above codes. Execution Result:\n```output\n" + observation + "\n```\n"
+                observation = "\n```output\n" + observation + "\n```\n"
             else:
                 observation = "\n" + observation + "\n"
             

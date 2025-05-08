@@ -8,7 +8,7 @@ from openai import OpenAI
 client = OpenAI(api_key="sk-proj-1234567890", base_url="http://0.0.0.0:5000") # Replace with your local server address
 
 completion = client.chat.completions.create(
-    model="VerlTool/torl-fsdp_agent-qwen_qwen2.5-math-7b-grpo-n16-b128-t1.0-lr1e-6",
+    model="VerlTool/acecoder-fsdp-qwen_qwen2.5-coder-1.5b-grpo-n16-b128-t1.0-lr1e-6-69k-sys3-250-step",
     messages=[
 		{
             "role": "system",
@@ -35,7 +35,7 @@ tempalte = """<|im_start|>system
 <|im_start|>assistant
 """
 completion = client.completions.create(
-    model="VerlTool/torl-fsdp_agent-qwen_qwen2.5-math-7b-grpo-n16-b128-t1.0-lr1e-6",
+    model="VerlTool/acecoder-fsdp-qwen_qwen2.5-coder-1.5b-grpo-n16-b128-t1.0-lr1e-6-69k-sys3-250-step",
     prompt=tempalte.format(system_prompt=system_prompt, math_problem=math_problem),
     temperature=0,
     max_tokens=2048,
@@ -46,7 +46,7 @@ print(completion.choices[0].text)
 
 
 completion = client.completions.create(
-    model="VerlTool/torl-fsdp_agent-qwen_qwen2.5-math-7b-grpo-n16-b128-t1.0-lr1e-6",
+    model="VerlTool/acecoder-fsdp-qwen_qwen2.5-coder-1.5b-grpo-n16-b128-t1.0-lr1e-6-69k-sys3-250-step",
     prompt=f"system\n{system_prompt}\n\nuser\n{math_problem}\nassistant\n",
     temperature=0,
     max_tokens=1241241,

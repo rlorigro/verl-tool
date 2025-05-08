@@ -1,3 +1,5 @@
+# verl_tool: firejail_python_code: force_run_test_cases=True, enable_history_code_execution=True
+# acecoder reward manager: add_format_think_penalty = True, add_format_answer_penalty = True, parse_code_mode = "all"
 set -x
 dataset_name1=acecoder_long/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference-with-execution-prompt-complex
 dataset_name2=deepcoder/all-with-execution-prompt-complex
@@ -45,15 +47,15 @@ reward_manager=acecoder
 ppo_micro_batch_size_per_gpu=1
 log_prob_micro_batch_size_per_gpu=8
 tensor_model_parallel_size=1
-gpu_memory_utilization=0.4 # higher gpu_memory_utilization will likely cause the vllm to OOM and get stuck, so set it to a lower value like 0.4 or 0.5
-do_offload=False # control actor's fsdp.[param|optimizer]_offload and actor_rollout_ref.rollout.fsdp.[param|optimizer]_offload; if gpu_memory_utilization is set to > 0.6, then do_offload should be set to True otherwise it will cause OOM
+gpu_memory_utilization=0.5 # higher gpu_memory_utilization will likely cause the vllm to OOM and get stuck, so set it to a lower value like 0.4 or 0.5
+do_offload=True # control actor's fsdp.[param|optimizer]_offload and actor_rollout_ref.rollout.fsdp.[param|optimizer]_offload; if gpu_memory_utilization is set to > 0.6, then do_offload should be set to True otherwise it will cause OOM
 use_dynamic_bsz=True # faster
 ulysses_sequence_parallel_size=1 # set to 1 for normal verl behavior, otherwise it will cause OOM
 fsdp_size=-1
 additional_eos_token_ids=[151660] # <|fim_middle|> token id
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
-run_name_postfix="-69k-force-test-new-debug"
+run_name_postfix="-69k-force-test-r1-naive"
 run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 export VERL_RUN_ID=$run_name
 export NCCL_DEBUG=INFO
@@ -133,7 +135,7 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     trainer.logger=['console','wandb'] \
     trainer.project_name=$reward_manager \
     trainer.experiment_name=$run_name \
-    trainer.val_before_train=False \
+    trainer.val_before_train=True \
     trainer.default_hdfs_dir=null \
     trainer.n_gpus_per_node=$n_gpus_per_node \
     trainer.nnodes=$n_nodes \
