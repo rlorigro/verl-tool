@@ -11,8 +11,8 @@ dataset_name7=acecoder_custom/AceCoderV2-69K-system-prompt-3
 # val_data=[$(pwd)/data/${dataset_name1}/test.parquet,\
 # $(pwd)/data/${dataset_name2}/test.parquet]
 
-train_data=[$(pwd)/data/${dataset_name5}/train.parquet]
-val_data=[$(pwd)/data/${dataset_name5}/test.parquet]
+train_data=[$(pwd)/data/${dataset_name6}/train.parquet]
+val_data=[$(pwd)/data/${dataset_name6}/test.parquet]
 
 model_name=Qwen/Qwen2.5-Coder-1.5B
 # model_name=VerlTool/Qwen2.5-Coder-1B-TIR-SFT-new-Interpreter-Thinking
@@ -28,8 +28,8 @@ max_obs_length=512
 temperature=1.0
 top_p=1.0
 strategy="fsdp_agent" # remove _agent for normal verl behavior
-# action_stop_tokens="\`\`\`output"
-action_stop_tokens="</python>"
+action_stop_tokens="\`\`\`output"
+# action_stop_tokens="</python>"
 max_turns=1
 min_action_num=0
 mask_observations=True # mask observations for kl loss and gradient descent
@@ -50,7 +50,7 @@ fsdp_size=-1
 additional_eos_token_ids=[151660] # <|fim_middle|> token id
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
-run_name_postfix="-69k-sys1"
+run_name_postfix="-69k-sys2"
 run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 export VERL_RUN_ID=$run_name
 export NCCL_DEBUG=INFO

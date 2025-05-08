@@ -27,11 +27,13 @@ from verl.utils.reward_score import prime_math
 def extract_solution(solution_str):
     return remove_boxed(last_boxed_only_string(solution_str))
 
-system_prompot = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem above, and put your final answer within \\boxed{}.:
+system_prompt = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem above, and put your final answer within \\boxed{}.:
 '''
 
 system_prompt2 = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem above. If you want to test any python code, writing it inside <python> and  </python> tags following with <output>. Please put your final answer within \\boxed{}.:
 '''
+
+system_prompt3 = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem above. If you want to run any python code, write code in the python markdown code block and the execution will be appended in an output code block like "```python\nyou code here\n```\n```output\nresult here\n```". Please put your final answer within \\boxed{}.'''
 
 def main(
     data_source='DigitalLearningGmbH/MATH-lighteval',
@@ -47,9 +49,11 @@ def main(
     test_dataset = dataset['test']
     
     if sys_prompt_version == 'v2':
-        system_prompot = system_prompt2
+        system_prompt = system_prompt2
+    elif sys_prompt_version == 'v3':
+        system_prompt = system_prompt3
     else:
-        system_prompot = system_prompot
+        system_prompt = system_prompt
     
     # easy: level 1
     # medium: level 1-4
@@ -80,7 +84,7 @@ def main(
                 "prompt": [
                 {
                     "role": "system",
-                    "content": system_prompot
+                    "content": system_prompt
                 },
                 {
                     "role": "user",
@@ -127,7 +131,7 @@ def main(
                 "prompt": [
                 {
                     "role": "system",
-                    "content": system_prompot
+                    "content": system_prompt
                 },
                 {
                     "role": "user",
@@ -170,7 +174,7 @@ def main(
                 "prompt": [
                 {
                     "role": "system",
-                    "content": system_prompot
+                    "content": system_prompt
                 },
                 {
                     "role": "user",
@@ -208,4 +212,5 @@ if __name__ == '__main__':
 """
 python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl
 python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl_v2 --sys_prompt_version v2
+python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl_v3 --sys_prompt_version v3
 """

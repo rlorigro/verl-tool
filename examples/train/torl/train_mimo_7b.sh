@@ -1,5 +1,5 @@
 set -x
-dataset_name=math_torl # or math_torl_offical to use torl training data
+dataset_name=math_torl_v3 # or math_torl_offical to use torl training data
 train_data=$(pwd)/data/${dataset_name}/train.parquet
 dataset_name=math_torl
 val_data=[$(pwd)/data/${dataset_name}/test.parquet,\
@@ -37,7 +37,7 @@ ulysses_sequence_parallel_size=1 # set to 1 for normal verl behavior, otherwise 
 fsdp_size=-1
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
-run_name_postfix=""
+run_name_postfix="v3"
 run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 export VERL_RUN_ID=$run_name
 export NCCL_DEBUG=INFO

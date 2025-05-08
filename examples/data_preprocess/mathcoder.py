@@ -53,6 +53,9 @@ math_system_prompt = '''A conversation between User and Assistant. The user asks
 mathcoder_system_prompt = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem above. The execution result for a code block will be put in the a "output" markdown block if you want to run it. For math problems, please put your final answer within \\boxed{}. For code problems, please put your final answer in a markdown code block like this: ```python\nyour code here\n```.
 '''
 
+mathcoder_system_prompt_v2 = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. Please integrate natural language reasoning with programs to solve the problem above. If you want to run any python code, write code in the python markdown code block and the execution will be appended in an output code block like "```python\nyour code here\n```\n```output\nresult here\n```". For math problems, please put your final answer within \\boxed{}. For code problems, please put your final answer in a markdown code block like this: ```python\nyour code here\n```.
+'''
+
 ### Utils ###
 def extract_solution(solution_str):
     return remove_boxed(last_boxed_only_string(solution_str))
@@ -66,8 +69,12 @@ def main(
     hdfs_dir: str = None,
     level: str = 'hard',
     add_execution_prompt: bool = False,
-    detaield_instruction: bool = False
+    detaield_instruction: bool = False,
+    sys_prompt_version: str = 'v1',
 ):
+    if sys_prompt_version == 'v2':
+        global mathcoder_system_prompt
+        mathcoder_system_prompt = mathcoder_system_prompt_v2
     local_dir = Path(local_dir)
     local_dir.mkdir(parents=True, exist_ok=True)
 
@@ -116,14 +123,15 @@ def _process_acecoder(dataset_path, local_dir, add_execution_prompt, detaield_in
                 "ability": "code",
                 "reward_model": {
                     "style": "rule",
-                    "ground_truth": ""
+                    "ground_truth": None,
                 },
                 "extra_info": {
                     'split': split,
                     'index': idx,
                     'id': example['id'],
                     "question": question_raw,
-                    "ground_truth": tests
+                    "test_cases": tests,
+                    "inputs_outputs": None,
                 }
             }
             return data
@@ -295,9 +303,7 @@ def _process_math(data_source, local_dir, hdfs_dir, level):
                 "extra_info": {
                     'split': split,
                     'index': idx,
-                    'id': 'NULL',
                     'question': question,
-                    "ground_truth": np.array([0]) 
                 }
             }
             return data
@@ -320,4 +326,5 @@ if __name__ == '__main__':
 
 """
 python examples/data_preprocess/mathcoder.py --code_dataset_path chiruan/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference --local_dir data/mathcoder --add_execution_prompt 
+python examples/data_preprocess/mathcoder.py --code_dataset_path chiruan/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference --local_dir data/mathcoder_v2 --add_execution_prompt --sys_prompt_version v2
 """
