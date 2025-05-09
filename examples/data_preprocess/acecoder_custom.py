@@ -27,6 +27,24 @@ system_prompt2 = """A conversation between User and Assistant. The user asks a q
 
 system_prompt3 = """A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please solve the coding problems below and put your final answer in a markdown code block like this: python\nyour code here\n``` without appending anything.
 """
+
+system_prompt4 = """A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the coding problems below. If the you want to run any python code, execution result will be in the output markdown block like "```output\nexecution result here\n```" following the code block. Please put your final answer in a markdown code block like this: python\nyour code here\n``` without appending anything. make sure you also write test cases for the code you write so you can get meaningful execution results for debugging.
+"""
+
+system_prompt5 = """A conversation between user and assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. If the you want to run any python code during your thinking process, format the code you want to run as follows:
+
+[your previous thinking about the solution code and its potential tests here]
+```python
+[solution code here]
+[your self-written tests here]
+```
+```output
+[execution result here]
+```
+[Your continual thinking and analysis based on the execution result]
+
+Make sure you also write test cases for the code you write so you can get meaningful execution results for debugging. Please put your final solution code ready to submit in the last markdown code block without appending anything. 
+"""
     
 
 public_test_template = """\
@@ -114,6 +132,8 @@ if __name__ == '__main__':
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_custom --system_prompt_idx 1
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_custom --system_prompt_idx 2
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_custom --system_prompt_idx 3
+python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_custom --system_prompt_idx 4
+python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_custom --system_prompt_idx 5
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-122K --local_dir data/acecoder_custom --system_prompt_idx 1
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-122K --local_dir data/acecoder_custom --system_prompt_idx 2
 """

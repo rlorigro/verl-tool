@@ -92,7 +92,6 @@ def prime_code_compute_score_async(data_source, solution_str, ground_truth, extr
     else:
         return float(res[0])
 
-
 class AceCoderRewardManager:
     """
     The Reward Manager used in https://github.com/TIGER-AI-Lab/AceCoder
@@ -105,9 +104,14 @@ class AceCoderRewardManager:
         self.step_idx = 0
         self.n_workers = 64
         self.binary = True
+        self.parse_code_mode = "last" # "all", "first", "last"
         self.add_format_think_penalty = False # -0.5 if not begines with <think> and end with </think>
         self.add_format_answer_penalty = False # -0.5 if not having <answer> </answer>
-        self.parse_code_mode = "last" # "all", "first", "last"
+        self.add_valid_action_penalty = True # -0.25 if num turns > 0 not action not valid
+        self.add_unfinished_traj_penalty = True # -0.25 if the traj is not finished
+        self.add_no_tool_interact_penalty = False # -0.25 if the traj's num turn is 0, no interaction at all
+        self.add_code_exec_penalty = False # -0.25 if the execution has an error.
+        
         try:
             from acecoder import evaluate_test_cases
         except ImportError:
@@ -192,7 +196,54 @@ class AceCoderRewardManager:
             else:
                 scores[i]['score'] = pass_rates[i]
         return scores
+    
+    def add_additional_penalties(self, response: str, data_i, scores_i: dict):
+        # 1.4 format penalty
+        if self.add_format_think_penalty:
+            match = re.search(r"<think>(.*?)</think>", response, re.DOTALL)
+            if not match:
+                scores_i['score'] -= 0.5
+                scores_i['think_format_penalty'] = 1
+            else:
+                scores_i['think_format_penalty'] = 0
+        if self.add_format_answer_penalty:
+            match = re.search(r"<answer>(.*?)</answer>", response, re.DOTALL)
+            if not match:
+                scores_i['score'] -= 0.5
+                scores_i['answer_format_penalty'] = 1
+            else:
+                scores_i['answer_format_penalty'] = 0
+        if self.add_valid_action_penalty:
+            num_turn = data_i.non_tensor_batch["turns_stats"]
+            num_valid_action = data_i.non_tensor_batch["valid_action_stats"]
+            if num_valid_action > num_turn:
+                scores_i['score'] -= 0.25
+                scores_i['valid_action_penalty'] = 1
+            else:
+                scores_i['valid_action_penalty'] = 0
+        if self.add_unfinished_traj_penalty:
+            is_active = data_i.non_tensor_batch["active_mask"]
+            if is_active:
+                scores_i['score'] -= 0.25
+                scores_i['unfinished_traj_penalty'] = 1
+            else:
+                scores_i['unfinished_traj_penalty'] = 0
+        if self.add_no_tool_interact_penalty:
+            num_turn = data_i.non_tensor_batch["turns_stats"]
+            if num_turn == 0:
+                scores_i['score'] -= 0.25
+                scores_i['no_tool_interact_penalty'] = 1
+            else:
+                scores_i['no_tool_interact_penalty'] = 0
+        if self.add_code_exec_penalty:
+            keywords = ["ERROR:\nTraceback", "Execution timed out"]
+            if any(keyword in response for keyword in keywords):
+                scores_i['score'] -= 0.25
+                scores_i['exec_error'] = 1
+            else:
+                scores_i['exec_error'] = 0
         
+        return scores_i
         
     def __call__(self, data: DataProto, return_dict=False):
         """We will expand this function gradually based on the available datasets"""
@@ -231,6 +282,17 @@ class AceCoderRewardManager:
         response_ids = data.batch['responses']
         valid_response_length = data.batch['attention_mask'][:, prompt_length:].sum(dim=-1)
         
+        # with open("test.json", 'w') as f:
+        #     # batch decode the list of responses and prompts
+        #     response_str = self.tokenizer.batch_decode(response_ids, skip_special_tokens=False)
+        #     prompt_str = self.tokenizer.batch_decode(prompt_ids, skip_special_tokens=False)
+        #     json.dump({
+        #         "response_ids": response_ids.tolist(),
+        #         "prompt_ids": prompt_ids.tolist(),
+        #         "response_str": response_str,
+        #         "prompt_str": prompt_str,  
+        #     }, f, indent=4)
+            
         # batch decode the list of responses and prompts
         response_str = self.tokenizer.batch_decode(response_ids, skip_special_tokens=True)
         prompt_str = self.tokenizer.batch_decode(prompt_ids, skip_special_tokens=True)
@@ -243,7 +305,6 @@ class AceCoderRewardManager:
         test_cases = []
         acecoder_data_idxs = []
         prime_code_data_idxs = []
-        # data.save_to_disk("temp_data.pkl")
         for i in range(len(data)):
             if data[i].non_tensor_batch['extra_info'].get("inputs_outputs"):
                 test_cases.append(data[i].non_tensor_batch['extra_info']['inputs_outputs'])
@@ -291,58 +352,12 @@ class AceCoderRewardManager:
                 scores[i] = acecoder_scores[idxs_map[i][1]]
             else:
                 scores[i] = prime_code_scores[idxs_map[i][1]]
-        # 1.4 format penalty
-        if self.add_format_think_penalty:
-            for i, response in enumerate(response_str):
-                match = re.search(r"<think>(.*?)</think>", response, re.DOTALL)
-                if not match:
-                    scores[i]['score'] -= 0.5
-                    scores[i]['think_format_penalty'] = 1
-                else:
-                    scores[i]['think_format_penalty'] = 0
-        if self.add_format_answer_penalty:
-            for i, response in enumerate(response_str):
-                match = re.search(r"<answer>(.*?)</answer>", response, re.DOTALL)
-                if not match:
-                    scores[i]['score'] -= 0.5
-                    scores[i]['answer_format_penalty'] = 1
-                else:
-                    scores[i]['answer_format_penalty'] = 0
-        # with open("test_scores", 'w') as f:
-        #     json.dump({
-        #         "prime_code": prime_code_scores,
-        #         "acecoder": acecoder_scores,
-        #         "scores": scores,
-        #         "acecoder_data_idxs": acecoder_data_idxs,
-        #         "prime_code_data_idxs": prime_code_data_idxs,
-        #     }, f, indent=4)
+                
+        # 1.4 additional penalty
+        for i in range(len(data)):
+            scores[i] = self.add_additional_penalties(response_str[i], data[i], scores[i])       
             
-        # 2. Adding additional penalty for errored or timed out
-        keywords = ["ERROR:\nTraceback", "Execution timed out"]
-        for i, response in enumerate(response_str):
-            if any(keyword in response for keyword in keywords):
-                # time_out_reward_tensor[i, valid_response_length[i].item() - 1] -= 0.5
-                scores[i]['exec_error'] = 1
-            else:
-                scores[i]['exec_error'] = 0
-            
-            # 2.1.
-            # if scores[i]['exec_error'] == 1:
-            #     scores[i]['score'] -= 0.5 # minus 0.5 for execution error
-            
-            if "turns_stats" in data[i].non_tensor_batch:
-                num_turn = data[i].non_tensor_batch["turns_stats"]
-                num_valid_action = data[i].non_tensor_batch["valid_action_stats"]
-                is_active = data[i].non_tensor_batch["active_mask"]
-                is_done = not is_active
-                # # 2.2. add additional penalty for the number of turns and valid actions
-                # if scores[i]['binary_pass_rate'] == 0.0 and num_valid_action < 1:
-                #     scores[i]['score'] -= 0.5
-                #     scores[i]['tool_use_penalty'] = 1
-                # else:
-                #     scores[i]['tool_use_penalty'] = 0
-                    
-            
+
         for i, score in enumerate(scores):
             if isinstance(score, dict):
                 reward_tensor[i, valid_response_length[i].item() - 1] = score['score']

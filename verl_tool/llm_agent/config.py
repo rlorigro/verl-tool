@@ -21,3 +21,4 @@ class AgentActorConfig:
     action_stop_tokens: list=None
     additional_eos_token_ids: list=None
     mask_observations: bool=True
+    force_finish_for_last_turn: bool=False

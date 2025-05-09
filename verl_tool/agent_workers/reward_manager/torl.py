@@ -33,7 +33,61 @@ class ToRLRewardManager:
         self.torl_compute_score = torl_compute_score
         self.reward_fn_key = reward_fn_key
         self.step = 0
+        self.add_format_think_penalty = False # -0.5 if not begines with <think> and end with </think>
+        self.add_format_answer_penalty = False # -0.5 if not having <answer> </answer>
+        self.add_valid_action_penalty = True # -0.25 if num turns > 0 not action not valid
+        self.add_unfinished_traj_penalty = True # -0.25 if the traj is not finished
+        self.add_no_tool_interact_penalty = False # -0.25 if the traj's num turn is 0, no interaction at all
+        self.add_code_exec_penalty = False # -0.25 if the execution has an error.
 
+    def add_additional_penalties(self, response: str, data_i, scores_i: dict):
+        # 1.4 format penalty
+        if self.add_format_think_penalty:
+            match = re.search(r"<think>(.*?)</think>", response, re.DOTALL)
+            if not match:
+                scores_i['score'] -= 0.5
+                scores_i['think_format_penalty'] = 1
+            else:
+                scores_i['think_format_penalty'] = 0
+        if self.add_format_answer_penalty:
+            match = re.search(r"<answer>(.*?)</answer>", response, re.DOTALL)
+            if not match:
+                scores_i['score'] -= 0.5
+                scores_i['answer_format_penalty'] = 1
+            else:
+                scores_i['answer_format_penalty'] = 0
+        if self.add_valid_action_penalty:
+            num_turn = data_i.non_tensor_batch["turns_stats"]
+            num_valid_action = data_i.non_tensor_batch["valid_action_stats"]
+            if num_valid_action > num_turn:
+                scores_i['score'] -= 0.25
+                scores_i['valid_action_penalty'] = 1
+            else:
+                scores_i['valid_action_penalty'] = 0
+        if self.add_unfinished_traj_penalty:
+            is_active = data_i.non_tensor_batch["active_mask"]
+            if is_active:
+                scores_i['score'] -= 0.25
+                scores_i['unfinished_traj_penalty'] = 1
+            else:
+                scores_i['unfinished_traj_penalty'] = 0
+        if self.add_no_tool_interact_penalty:
+            num_turn = data_i.non_tensor_batch["turns_stats"]
+            if num_turn == 0:
+                scores_i['score'] -= 0.25
+                scores_i['no_tool_interact_penalty'] = 1
+            else:
+                scores_i['no_tool_interact_penalty'] = 0
+        if self.add_code_exec_penalty:
+            keywords = ["ERROR:\nTraceback", "Execution timed out"]
+            if any(keyword in response for keyword in keywords):
+                scores_i['score'] -= 0.25
+                scores_i['exec_error'] = 1
+            else:
+                scores_i['exec_error'] = 0
+        
+        return scores_i
+    
     def __call__(self, data: DataProto, return_dict=False):
         """We will expand this function gradually based on the available datasets"""
         save_record = data.meta_info.get('save_record', True)
@@ -92,31 +146,9 @@ class ToRLRewardManager:
             ) # 1 or -1
             score['accuracy'] = 1 if torl_score > 0 else 0
             score['score'] = torl_score
-        
-            # # penalty to errored or timeout execution
-            # keywords = ["ERROR:\nTraceback", "Execution timed out"]
-            # if any(keyword in response_str for keyword in keywords):
-            #     score['exec_error'] = 1
-            #     score['score'] -= 0.5
-            # else:
-            #     score['exec_error'] = 0
-                
-            # execution penalty to do
-            if "turns_stats" in data_item.non_tensor_batch:
-                num_turn = data_item.non_tensor_batch["turns_stats"]
-                num_valid_action = data_item.non_tensor_batch["valid_action_stats"]
-                is_active = data_item.non_tensor_batch["active_mask"]
-                is_done = not is_active
-                # add penalty to wrong response but did not use tool
-                if score['accuracy'] == 0 and num_valid_action < 1:
-                    # score['score'] -= 0.5
-                    score['tool_use_penalty'] = 1
-                else:
-                    score['tool_use_penalty'] = 0
-            else:
-                num_turn = 0
-                num_valid_action = 0
-                is_done = True
+
+            # add additional penalty
+            score = self.add_additional_penalties(response_str, data_item, score)       
             
             if isinstance(score, dict):
                 reward = score["score"]
@@ -130,7 +162,6 @@ class ToRLRewardManager:
                     reward = score if score > 0 else 0.0
                 else:
                     reward = score
-                    
 
             reward_tensor[i, valid_response_length - 1] = reward 
 
@@ -157,12 +188,12 @@ class ToRLRewardManager:
                 'ground_truth': ground_truth,
                 'score': score,
                 'reward': reward,
-                'num_turn': num_turn,
-                'num_valid_action': num_valid_action,
-                'is_done': is_done,
                 'extra_info': data_item.non_tensor_batch.get('extra_info', None),
             })
-        
+            if "turns_stats" in data_item.non_tensor_batch:
+                to_save_records[i]['num_turn'] = data[i].non_tensor_batch["turns_stats"]
+                to_save_records[i]['num_valid_action'] = data[i].non_tensor_batch["valid_action_stats"]
+                to_save_records[i]['is_done'] = not data[i].non_tensor_batch["active_mask"]
         if save_record:
             # Save the records to a file
             if self.num_examine == 1:

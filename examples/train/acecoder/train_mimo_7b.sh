@@ -47,7 +47,7 @@ do_offload=True # control actor's fsdp.[param|optimizer]_offload and actor_rollo
 use_dynamic_bsz=False # faster
 ulysses_sequence_parallel_size=1 # set to 1 for normal verl behavior, otherwise it will cause OOM
 fsdp_size=-1
-additional_eos_token_ids=[151660] # <|fim_middle|> token id
+additional_eos_token_ids=[151645] # <|im_end|> token id
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
 run_name_postfix="-69k-sys2"
@@ -105,7 +105,6 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     +actor_rollout_ref.agent.min_action_num=$min_action_num \
     +actor_rollout_ref.agent.num_gpus=$n_gpus_per_node \
     +actor_rollout_ref.agent.action_stop_tokens=$action_stop_tokens_file \
-    +actor_rollout_ref.agent.additional_eos_token_ids=$additional_eos_token_ids \
     +actor_rollout_ref.agent.mask_observations=$mask_observations \
     actor_rollout_ref.rollout.tensor_model_parallel_size=$tensor_model_parallel_size \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=$log_prob_micro_batch_size_per_gpu \

@@ -47,7 +47,7 @@ do_offload=True # control actor's fsdp.[param|optimizer]_offload and actor_rollo
 use_dynamic_bsz=False # faster
 ulysses_sequence_parallel_size=1 # set to 1 for normal verl behavior, otherwise it will cause OOM
 fsdp_size=-1
-additional_eos_token_ids=[151660] # <|fim_middle|> token id
+additional_eos_token_ids=[151645] # <|im_end|> token id
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
 run_name_postfix="-69k-sys3-no-tool"
