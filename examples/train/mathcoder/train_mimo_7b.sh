@@ -51,7 +51,7 @@ echo "action_stop_tokens_file=$action_stop_tokens_file"
 host=$(hostname -I | awk '{print $1}')
 port=$(shuf -i 30000-31000 -n 1)
 tool_server_url=http://$host:$port/get_observation
-python -m verl_tool.servers.ray_serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 32 &
+python -m verl_tool.servers.serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 8 &
 server_pid=$!
 
 echo "Server (pid=$server_pid) started at $tool_server_url"
@@ -125,7 +125,7 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     +trainer.remove_previous_ckpt_in_save=True \
     trainer.save_freq=10 \
     trainer.test_freq=10 \
-    trainer.total_epochs=5
+    trainer.total_epochs=1
 
 
 pkill -P -9 $server_pid
