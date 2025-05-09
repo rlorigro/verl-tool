@@ -198,8 +198,7 @@ class AgentActorManager:
             else:
                 right_budget = max_len - left_len
                 right_ids_full = new_input_ids[:, left_len:]
-                right_ids = right_ids_full[:, -right_budget:] if right_budget < right_ids_full.size(
-                    1) else right_ids_full
+                right_ids = right_ids_full[:, -right_budget:] if right_budget < right_ids_full.size(1) else right_ids_full
                 final_input_ids = torch.cat([left_ids, right_ids], dim=1)
 
             final_attention_mask = self.tensor_fn.create_attention_mask(final_input_ids)
@@ -222,7 +221,13 @@ class AgentActorManager:
             )
         new_rollings.non_tensor_batch = rollings.non_tensor_batch.copy()
         new_rollings.meta_info.update(rollings.meta_info)
-
+        
+        # update raw_prompt_ids, required for vllm inference
+        ray_prompt_ids = []
+        for i in range(new_rollings.batch['input_ids'].size(0)):
+            non_pad_index = torch.nonzero(new_rollings.batch['input_ids'][i] != self.tokenizer.pad_token_id, as_tuple=False)[0][0]
+            ray_prompt_ids.append(new_rollings.batch['input_ids'][i][non_pad_index:].tolist())
+        new_rollings.non_tensor_batch['raw_prompt_ids'] = np.array(ray_prompt_ids, dtype=object)
 
         return new_rollings, available_context_budget
 
@@ -422,8 +427,6 @@ class AgentActorManager:
             print(f"Number of active trajectories: {active_mask.sum().item()}")
             print(f"Length of responses: {responses_ids.shape[1]}")
 
-            # print("responses_str", responses_str)
-            # print("turns_stats_extra",turns_stats_extra)
             idx = 0
             for i, active in enumerate(active_mask):
                 if active:
@@ -437,13 +440,14 @@ class AgentActorManager:
             active_uids = [traj_ids[i] for i in range(len(traj_ids)) if active_mask[i]]
             next_obs, dones, valid_action = self.interact_with_tool_server(
                 active_uids, responses_str, do_actions, active_mask,
-                extra_fields=rollings_active.non_tensor_batch.get('extra_info', None)
+                extra_fields=rollings_active.non_tensor_batch.get('extra_info', None),
+                is_last_step=(step == self.config.max_turns)
             )
 
             # # for debug
             # with open(f"temp-{step}.json", 'w') as f:
             #     json.dump([{
-            #         'prompt': self.tokenizer.decode(rollings_active.batch['input_ids'][i], skip_special_tokens=True),
+            #         'prompt': self.tokenizer.decode(rollings_active.batch['input_ids'][i], skip_special_tokens=False),
             #         'response': resp,
             #         'do_action': do_action,
             #         'traj_id': traj_id,
@@ -611,7 +615,8 @@ class AgentActorManager:
         responses: List[str],
         do_actions:List[bool],
         active_mask=None,
-        extra_fields=None
+        extra_fields=None,
+        is_last_step=False,
     ) -> List[str]:
         """
         Call tool server for queries.
@@ -630,6 +635,7 @@ class AgentActorManager:
             "trajectory_ids": active_uids,
             "actions": responses,
             "finish": finishs, # if do_action is False, then it is a finish action, finishing the trajectory,
+            "is_last_step": [is_last_step] * len(finishs)
         }
         if extra_fields is not None:
             batch_data['extra_fields'] = extra_fields.tolist() if isinstance(extra_fields, np.ndarray) else extra_fields
