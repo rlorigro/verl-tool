@@ -140,8 +140,8 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     trainer.n_gpus_per_node=$n_gpus_per_node \
     trainer.nnodes=$n_nodes \
     +trainer.remove_previous_ckpt_in_save=True \
-    trainer.save_freq=50 \
-    trainer.test_freq=50 \
+    trainer.save_freq=25 \
+    trainer.test_freq=25 \
     trainer.total_epochs=1
 
 

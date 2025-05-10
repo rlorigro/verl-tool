@@ -124,11 +124,13 @@ class AgentActorManager:
         )
         do_actions = []
         for i, resp in enumerate(responses_str):
+            # resp = resp.strip(' \n')
             if action_step >= self.config.min_action_num:
                 has_action = False
                 for j in range(len(self.action_stop_tokens)):
+                    if self.action_stop_tokens[j] in resp:
                     # if resp.endswith(self.action_stop_tokens[j]):
-                    if self.action_stop_tokens[j] in resp[-(len(self.action_stop_tokens[j]) + 3):]: # 5 for some action token tokens not indepdently decoded
+                    # if self.action_stop_tokens[j] in resp[-(len(self.action_stop_tokens[j]) + 3):]: # 5 for some action token tokens not indepdently decoded
                         has_action = True
                         responses_str[i] = resp.split(self.action_stop_tokens[j])[0] + self.action_stop_tokens[j]
                         break
