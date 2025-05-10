@@ -34,7 +34,7 @@ max_obs_length=512
 temperature=1.0
 top_p=1.0
 strategy="fsdp_agent" # remove _agent for normal verl behavior
-action_stop_tokens="\`\`\`output"
+action_stop_tokens="\n\`\`\`,\`\`\`output"
 max_turns=2
 min_action_num=1
 mask_observations=False # mask observations for kl loss and gradient descent
@@ -59,8 +59,6 @@ run_name_postfix="-69k-force-test-naive-new"
 run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 export VERL_RUN_ID=$run_name
 export NCCL_DEBUG=INFO
-export VLLM_USE_V1=0
-export VLLM_ATTENTION_BACKEND=XFORMERS
 
 # temp file for action tokens as verl cannot pass special strs as params
 mkdir -p $(pwd)/tmp

@@ -116,38 +116,66 @@ class AgentActorManager:
                 inputs.non_tensor_batch['traj_ids'][i*n+j] += f"_{j}"
         return inputs
 
-    def _postprocess_responses(self, responses: torch.Tensor, action_step: int, eos_token_id: Union[list, List[int]]) -> torch.Tensor:
+    def _postprocess_responses(self, responses: torch.Tensor, action_step: int) -> torch.Tensor:
         """Process responses to stop at python operation or answer operation."""
-        if isinstance(eos_token_id, int):
-            eos_token_id = [eos_token_id]
-        full_len = responses.shape[1]
-        effective_lens = self.tensor_fn.create_attention_mask(responses).sum(dim=1)
-        max_len = effective_lens.max()
-        responses = responses[:, :max_len]
-        responses_str = [self.tokenizer.decode(responses[i][:effective_lens[i]], skip_special_tokens=True) for i in range(responses.shape[0])]
-
-        if action_step < self.config.min_action_num:
-            # re-encode remove special tokens like eos
-            responses = self._batch_tokenize(responses_str).to(torch.int64)
-            # force do action for those effective len not equal to full len
-            do_actions = [effective_lens[i] != full_len for i in range(len(responses_str))]
-        else:
-            do_actions = [
-                not (responses[i, effective_lens[i]-1] in eos_token_id or effective_lens[i] == full_len) for i in range(responses.shape[0])
-            ] # consider stop (not do action) when meeting any eos token or the response meet the longest response length. 
-
-            for i in range(responses.shape[0]):
-                if do_actions[i]:
-                    resp = responses_str[i]
-                    # sometimes the model can generate pad_token as one of the eos token, then we check if it did not stop with any action stop tokens above, 
-                    # this is also a finished sequence
-                    if not any([action_stop_token in resp[-(len(action_stop_token)+3):] for action_stop_token in self.action_stop_tokens]):
-                        do_actions[i] = False
-        
+        responses_str = self.tokenizer.batch_decode(
+            responses,
+            skip_special_tokens=True
+        )
+        do_actions = []
+        for i, resp in enumerate(responses_str):
+            if action_step >= self.config.min_action_num:
+                has_action = False
+                for j in range(len(self.action_stop_tokens)):
+                    # if resp.endswith(self.action_stop_tokens[j]):
+                    if self.action_stop_tokens[j] in resp[-(len(self.action_stop_tokens[j]) + 3):]: # 5 for some action token tokens not indepdently decoded
+                        has_action = True
+                        responses_str[i] = resp.split(self.action_stop_tokens[j])[0] + self.action_stop_tokens[j]
+                        break
+            else:
+                has_action = True
+            do_actions.append(has_action)
+        responses = self._batch_tokenize(responses_str).to(torch.int64)
         # apply self.config.max_action_length
         if self.config.max_action_length is not None and self.config.max_action_length > 0:
             responses = responses[:, :self.config.max_action_length]
         return responses, responses_str, do_actions
+    
+    # def _postprocess_responses(self, responses: torch.Tensor, action_step: int, eos_token_id: Union[list, List[int]]=None) -> torch.Tensor:
+    #     """Process responses to stop at python operation or answer operation."""
+    #     if not eos_token_id:
+    #         eos_token_id = self.eos_token_id
+    #     if isinstance(eos_token_id, int):
+    #         eos_token_id = [eos_token_id]
+    #     eos_token_id += self.additional_eos_token_ids
+    #     full_len = responses.shape[1]
+    #     effective_lens = self.tensor_fn.create_attention_mask(responses).sum(dim=1)
+    #     max_len = effective_lens.max()
+    #     responses = responses[:, :max_len]
+    #     responses_str = [self.tokenizer.decode(responses[i][:effective_lens[i]], skip_special_tokens=True) for i in range(responses.shape[0])]
+
+    #     if action_step < self.config.min_action_num:
+    #         # re-encode remove special tokens like eos
+    #         responses = self._batch_tokenize(responses_str).to(torch.int64)
+    #         # force do action for those effective len not equal to full len
+    #         do_actions = [effective_lens[i] != full_len for i in range(len(responses_str))]
+    #     else:
+    #         do_actions = [
+    #             not (responses[i, effective_lens[i]-1] in eos_token_id or effective_lens[i] == full_len) for i in range(responses.shape[0])
+    #         ] # consider stop (not do action) when meeting any eos token or the response meet the longest response length. 
+
+    #         for i in range(responses.shape[0]):
+    #             if do_actions[i]:
+    #                 resp = responses_str[i]
+    #                 # sometimes the model can generate pad_token as one of the eos token, then we check if it did not stop with any action stop tokens above, 
+    #                 # this is also a finished sequence
+    #                 if not any([action_stop_token in resp[-(len(action_stop_token)+3):] for action_stop_token in self.action_stop_tokens]):
+    #                     do_actions[i] = False
+        
+    #     # apply self.config.max_action_length
+    #     if self.config.max_action_length is not None and self.config.max_action_length > 0:
+    #         responses = responses[:, :self.config.max_action_length]
+    #     return responses, responses_str, do_actions
 
     def _process_next_obs(self, next_obs: List[str]) -> torch.Tensor:
         """Process next observations from environment."""
@@ -429,7 +457,7 @@ class AgentActorManager:
             with self.actor_rollout_wg.rollout.update_sampling_params(**agent_sampling_params):
                 gen_output = self.actor_rollout_wg.rollout.generate_sequences(rollings_active) # [active_size, response_length]
 
-            responses_ids, responses_str, do_actions = self._postprocess_responses(gen_output.batch['responses'], step, eos_token_id) # [active_size, ...]
+            responses_ids, responses_str, do_actions = self._postprocess_responses(gen_output.batch['responses'], step) # [active_size, ...]
             responses_ids, _ = self.tensor_fn._example_level_pad(responses_ids, responses_str, active_mask) # [bs*n, response_length]
 
             print(f"Number of active trajectories: {active_mask.sum().item()}")

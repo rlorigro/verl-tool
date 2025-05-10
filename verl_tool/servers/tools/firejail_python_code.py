@@ -275,7 +275,10 @@ class FirejailPythonCodeTool(BaseTool):
             elif action.endswith("</python>") or "</python>" in action:
                 observation = "\n<output>\n" + observation + "\n</output>\n"
             elif action.strip(' \n').endswith("```") or "```python" in action:
-                observation = "\n```output\n" + observation + "\n```\n"
+                if action.count("```") % 2 == 0:
+                    observation = "\n```output\n" + observation + "\n```\n"
+                else:
+                    observation = "output\n" + observation + "\n```\n"
             else:
                 observation = "\n" + observation + "\n"
             
