@@ -357,6 +357,7 @@ class AgentActorManager:
             "include_stop_str_in_output": True,
             "detokenize": True,
             "stop_token_ids": self.additional_eos_token_ids,
+            # "allowed_token_ids": list(range(self.tokenizer.vocab_size)) # see vllm issue: # 1398
         }
 
         if self.config.call_tool_first:

@@ -59,6 +59,8 @@ run_name_postfix="-69k-force-test-naive-new"
 run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 export VERL_RUN_ID=$run_name
 export NCCL_DEBUG=INFO
+export VLLM_USE_V1=0
+export VLLM_ATTENTION_BACKEND=XFORMERS
 
 # temp file for action tokens as verl cannot pass special strs as params
 mkdir -p $(pwd)/tmp
