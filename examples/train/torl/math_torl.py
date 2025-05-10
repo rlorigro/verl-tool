@@ -37,6 +37,9 @@ system_prompt3 = '''A conversation between User and Assistant. The user asks a q
 
 system_prompt4 = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please put your final answer within \\boxed{}.'''
 
+system_prompt5 = """\
+A conversation between user and assistant. The user asks a question, and the assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., <think> reasoning process here </think> <answer> answer here </answer>. Please integrate natural language reasoning with programs to solve the problem. That means during the thinking, the assistant can run any python code by writing in the python markdown code block, then the stdout and stderr result will be appended in an output code block like "```python\nyou code here\n```\n```output\nresult here\n```". Please put your final answer within \\boxed{}."""
+
 def main(
     data_source='DigitalLearningGmbH/MATH-lighteval',
     local_dir='~/data/math_torl',
@@ -56,6 +59,8 @@ def main(
         system_prompt = system_prompt3
     elif sys_prompt_version == 'v4':
         system_prompt = system_prompt4
+    elif sys_prompt_version == 'v5':
+        system_prompt = system_prompt5
     else:
         system_prompt = system_prompt
     
@@ -218,4 +223,5 @@ python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-l
 python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl_v2 --sys_prompt_version v2
 python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl_v3 --sys_prompt_version v3
 python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl_v4 --sys_prompt_version v4
+python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl_v5 --sys_prompt_version v5
 """

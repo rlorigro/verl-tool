@@ -144,15 +144,13 @@ class BaseTool:
             dones: The list of done flags
             valids: The list of valid flags
         """
-        # results = [
-        #     self.conduct_action(trajectory_id, action, extra_field)
-        #     for trajectory_id, action, extra_field in tqdm(zip(trajectory_ids, actions, extra_fields),
-        # ]
         with ThreadPoolExecutor(max_workers=min(self.num_workers, len(trajectory_ids))) as executor:
             results = list(tqdm(executor.map(self.conduct_action, trajectory_ids, actions, extra_fields),
                                             total=len(trajectory_ids), desc=f"Getting observations using tool {self.tool_type}", 
                                             disable=False))
-            
+        for i in range(len(trajectory_ids)):
+            if extra_fields[i].get('is_last_step', False):
+                self.delete_env(trajectory_ids[i])
         observations, dones, valids = zip(*results)
         return observations, dones, valids
 

@@ -227,6 +227,8 @@ python examples/data_preprocess/acecoder.py --dataset_path VerlTool/AceCoderV2-6
 python examples/data_preprocess/acecoder.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_long --add_execution_prompt --propmt_type complex --add_public_tests True --add_r1 True
 python examples/data_preprocess/acecoder.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_long --add_execution_prompt --propmt_type naive --add_public_tests True --add_r1 True
 
+python examples/data_preprocess/acecoder.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_long --add_execution_prompt --propmt_type naive --add_public_tests True --add_r1 False
+
 
 python examples/data_preprocess/acecoder.py --dataset_path VerlTool/AceCoderV2-122K --local_dir data/acecoderv2 --add_execution_prompt True --propmt_type complex
 python examples/data_preprocess/acecoder.py --dataset_path VerlTool/AceCoderV2-122K --local_dir data/acecoderv2 --add_execution_prompt True --propmt_type naive

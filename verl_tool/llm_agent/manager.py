@@ -124,18 +124,25 @@ class AgentActorManager:
         effective_lens = self.tensor_fn.create_attention_mask(responses).sum(dim=1)
         max_len = effective_lens.max()
         responses = responses[:, :max_len]
-        responses_str = [self.tokenizer.decode(responses[i][:effective_lens[i]], skip_special_tokens=False) for i in range(responses.shape[0])]
-        do_actions = [
-            not (responses[i, effective_lens[i]-1] in eos_token_id or effective_lens[i] == full_len) for i in range(responses.shape[0])
-        ] # consider stop (not do action) when meeting any eos token or the response meet the longest response length. 
-        
-        for i in range(responses.shape[0]):
-            if do_actions[i]:
-                resp = responses_str[i]
-                # sometimes the model can generate pad_token as one of the eos token, then we check if it did not stop with any action stop tokens above, 
-                # this is also a finished sequence
-                if not any([action_stop_token in resp[-(len(action_stop_token)+3):] for action_stop_token in self.action_stop_tokens]):
-                    do_actions[i] = False
+        responses_str = [self.tokenizer.decode(responses[i][:effective_lens[i]], skip_special_tokens=True) for i in range(responses.shape[0])]
+
+        if action_step < self.config.min_action_num:
+            # re-encode remove special tokens like eos
+            responses = self._batch_tokenize(responses_str).to(torch.int64)
+            # force do action for those effective len not equal to full len
+            do_actions = [effective_lens[i] != full_len for i in range(len(responses_str))]
+        else:
+            do_actions = [
+                not (responses[i, effective_lens[i]-1] in eos_token_id or effective_lens[i] == full_len) for i in range(responses.shape[0])
+            ] # consider stop (not do action) when meeting any eos token or the response meet the longest response length. 
+
+            for i in range(responses.shape[0]):
+                if do_actions[i]:
+                    resp = responses_str[i]
+                    # sometimes the model can generate pad_token as one of the eos token, then we check if it did not stop with any action stop tokens above, 
+                    # this is also a finished sequence
+                    if not any([action_stop_token in resp[-(len(action_stop_token)+3):] for action_stop_token in self.action_stop_tokens]):
+                        do_actions[i] = False
         
         # apply self.config.max_action_length
         if self.config.max_action_length is not None and self.config.max_action_length > 0:

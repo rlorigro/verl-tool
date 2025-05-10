@@ -28,22 +28,29 @@ system_prompt2 = """A conversation between User and Assistant. The user asks a q
 system_prompt3 = """A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please solve the coding problems below and put your final answer in a markdown code block like this: python\nyour code here\n``` without appending anything.
 """
 
-system_prompt4 = """A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the coding problems below. If the you want to run any python code, execution result will be in the output markdown block like "```output\nexecution result here\n```" following the code block. Please put your final answer in a markdown code block like this: python\nyour code here\n``` without appending anything. make sure you also write test cases for the code you write so you can get meaningful execution results for debugging.
+system_prompt4 = """A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the coding problems below. If the you want to run any python code, execution result will be in the output markdown block like "```output\nstdout and stderr\n```" following the code block. Please put your final answer in a markdown code block like this: python\nyour code here\n``` without appending anything. make sure you also write test cases for the code you write so you can get meaningful execution results for debugging.
 """
 
-system_prompt5 = """A conversation between user and assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. If the you want to run any python code during your thinking process, format the code you want to run as follows:
-
-[your previous thinking about the solution code and its potential tests here]
+system_prompt5 = """A conversation between user and assistant. The user asks a question, and the assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., <think> reasoning process here </think> <answer> answer here </answer>. During the thinking, the assistant can test its solution code with self-written test cases in the following format:
 ```python
-[solution code here]
-[your self-written tests here]
+solution code and test cases here
 ```
 ```output
-[execution result here]
+execution stdout and stderr result
 ```
-[Your continual thinking and analysis based on the execution result]
-
-Make sure you also write test cases for the code you write so you can get meaningful execution results for debugging. Please put your final solution code ready to submit in the last markdown code block without appending anything. 
+Make sure you always append test cases for the code you write so you can get meaningful execution results. Please put your final solution code ready to submit in the last markdown code block like ```python\nyour code here\n``` without appending anything. 
+"""
+    
+system_prompt6 = """A conversation between user and assistant. The user asks a question, and the assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., <think> reasoning process here </think> <answer> answer here </answer>. During the thinking, the assistant can test its solution code with self-written test cases in the following format:
+```
+<python>
+solution code and test cases here
+</python>
+<output>
+execution stdout and stderr result
+</output>
+```
+Make sure you always append test cases for the code you write so you can get meaningful execution results. Please put your final solution code ready to submit in the last markdown code block like ```python\nyour code here\n``` without appending anything. 
 """
     
 
@@ -67,10 +74,11 @@ def main(
     dataset = datasets.load_dataset(dataset_path, split='train')
 
     # 500 examples for testing
-    
     dataset = dataset.train_test_split(test_size=500, seed=42)
     train_dataset = dataset['train']
     test_dataset = dataset['test']
+    
+    system_instruction = eval(f'system_prompt{system_prompt_idx}')
 
     # add a row to each data item that represents a unique id
     def make_map_fn(split):
@@ -78,8 +86,6 @@ def main(
         def process_fn(example, idx):
             question_raw = example.pop('question')
 
-            system_instruction = eval(f'system_prompt{system_prompt_idx}')
-                    
             tests = example.pop('tests')
             data = {
                 "data_source": dataset_path,
@@ -134,6 +140,7 @@ python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCo
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_custom --system_prompt_idx 3
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_custom --system_prompt_idx 4
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_custom --system_prompt_idx 5
+python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_custom --system_prompt_idx 6
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-122K --local_dir data/acecoder_custom --system_prompt_idx 1
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-122K --local_dir data/acecoder_custom --system_prompt_idx 2
 """

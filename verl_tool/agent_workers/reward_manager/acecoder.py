@@ -109,7 +109,7 @@ class AceCoderRewardManager:
         self.add_format_answer_penalty = False # -0.5 if not having <answer> </answer>
         self.add_valid_action_penalty = True # -0.25 if num turns > 0 not action not valid
         self.add_unfinished_traj_penalty = True # -0.25 if the traj is not finished
-        self.add_no_tool_interact_penalty = False # -0.25 if the traj's num turn is 0, no interaction at all
+        self.add_no_tool_interact_penalty = True # -0.25 if the traj's num turn is 0, no interaction at all
         self.add_code_exec_penalty = False # -0.25 if the execution has an error.
         
         try:
@@ -213,7 +213,7 @@ class AceCoderRewardManager:
                 scores_i['answer_format_penalty'] = 1
             else:
                 scores_i['answer_format_penalty'] = 0
-        if "turn_stats" in data_i.non_tensor_batch:
+        if "turns_stats" in data_i.non_tensor_batch:
             if self.add_valid_action_penalty:
                     num_turn = data_i.non_tensor_batch["turns_stats"]
                     num_valid_action = data_i.non_tensor_batch["valid_action_stats"]

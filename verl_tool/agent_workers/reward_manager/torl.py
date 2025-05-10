@@ -56,7 +56,7 @@ class ToRLRewardManager:
                 scores_i['answer_format_penalty'] = 1
             else:
                 scores_i['answer_format_penalty'] = 0
-        if "turn_stats" in data_i.non_tensor_batch:
+        if "turns_stats" in data_i.non_tensor_batch:
             if self.add_valid_action_penalty:
                 num_turn = data_i.non_tensor_batch["turns_stats"]
                 num_valid_action = data_i.non_tensor_batch["valid_action_stats"]
