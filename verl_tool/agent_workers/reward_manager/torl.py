@@ -34,8 +34,8 @@ class ToRLRewardManager:
         self.torl_compute_score = torl_compute_score
         self.reward_fn_key = reward_fn_key
         self.step = 0
-        self.add_format_think_penalty = False # -0.5 if not begines with <think> and end with </think>
-        self.add_format_answer_penalty = False # -0.5 if not having <answer> </answer>
+        self.add_format_think_penalty = True # -0.5 if not begines with <think> and end with </think>
+        self.add_format_answer_penalty = True # -0.5 if not having <answer> </answer>
         self.add_valid_action_penalty = True # -0.25 if num turns > 0 not action not valid
         self.add_unfinished_traj_penalty = True # -0.25 if the traj is not finished
         self.add_no_tool_interact_penalty = False # -0.25 if the traj's num turn is 0, no interaction at all
@@ -45,14 +45,14 @@ class ToRLRewardManager:
         # 1.4 format penalty
         if self.add_format_think_penalty:
             match = re.search(r"<think>(.*?)</think>", response, re.DOTALL)
-            if not match:
+            if not match or not response.startswith("<think>") or response.count("<think>") != 1 or response.count("</think>") != 1:
                 scores_i['score'] -= 0.5
                 scores_i['think_format_penalty'] = 1
             else:
                 scores_i['think_format_penalty'] = 0
         if self.add_format_answer_penalty:
             match = re.search(r"<answer>(.*?)</answer>", response, re.DOTALL)
-            if not match:
+            if not match or not response.endswith("</answer>") or response.count("<answer>") != 1 or response.count("</answer>") != 1:
                 scores_i['score'] -= 0.5
                 scores_i['answer_format_penalty'] = 1
             else:

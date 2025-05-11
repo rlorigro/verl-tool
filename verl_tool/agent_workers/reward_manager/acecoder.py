@@ -201,14 +201,14 @@ class AceCoderRewardManager:
         # 1.4 format penalty
         if self.add_format_think_penalty:
             match = re.search(r"<think>(.*?)</think>", response, re.DOTALL)
-            if not match:
+            if not match or not response.startswith("<think>") or response.count("<think>") != 1 or response.count("</think>") != 1:
                 scores_i['score'] -= 0.5
                 scores_i['think_format_penalty'] = 1
             else:
                 scores_i['think_format_penalty'] = 0
         if self.add_format_answer_penalty:
             match = re.search(r"<answer>(.*?)</answer>", response, re.DOTALL)
-            if not match:
+            if not match or not response.endswith("</answer>") or response.count("<answer>") != 1 or response.count("</answer>") != 1:
                 scores_i['score'] -= 0.5
                 scores_i['answer_format_penalty'] = 1
             else:

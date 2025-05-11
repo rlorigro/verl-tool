@@ -1,3 +1,8 @@
+"""
+add-apt-repository ppa:deki/firejail
+apt-get update
+DEBIAN_FRONTEND=noninteractive apt-get -y install firejail firejail-profiles
+"""
 from .base import BaseTool, register_tool
 import regex as re
 import subprocess
@@ -146,7 +151,7 @@ def execute_python_in_firejail(code: str, timeout: int=TIMEOUT, stdin: Optional[
 class FirejailPythonCodeTool(BaseTool):
     tool_type = "firejail_python_code"
     timeout = TIMEOUT
-    stop_tokens = ["```output", "<output>"]
+    stop_tokens = ["```output", "<output>", "<tool_call>"]
     enable_history_code_execution = False
     enable_mannual_reflection = False
     force_run_test_cases = False
@@ -171,6 +176,9 @@ class FirejailPythonCodeTool(BaseTool):
         if not all_valid_python_code:
             all_valid_python_code = re.findall(r"```python(.*?)```", action, re.DOTALL)
         
+        if not all_valid_python_code:
+            all_valid_python_code = re.findall(r"<tool_call>(.*?)</tool_call>", action, re.DOTALL)
+
         if len(all_valid_python_code) == 0:
             return "", False
         
@@ -270,6 +278,8 @@ class FirejailPythonCodeTool(BaseTool):
             
             if action.endswith("```output"):
                 observation = "\n" + observation + "\n```\n"
+            elif action.endswith("</tool_call>"):
+                observation = "\n```output\n" + observation + "\n```\n"
             elif action.endswith("<output>"):
                 observation = "\n" + observation + "\n</output>\n"
             elif action.endswith("</python>") or "</python>" in action:
