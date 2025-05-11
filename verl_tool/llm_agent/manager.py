@@ -428,12 +428,10 @@ class AgentActorManager:
     def run_llm_loop(self, gen_batch: DataProto) -> Tuple[Dict, Dict]:
         """Run main LLM generation loop."""
         ori_meta_info = gen_batch.meta_info
-        if self.additional_eos_token_ids:
-            if isinstance(ori_meta_info['eos_token_id'], list):
-                ori_meta_info['eos_token_id'].extend(self.additional_eos_token_ids)
-            else:
-                ori_meta_info['eos_token_id'] = [ori_meta_info['eos_token_id']] + self.additional_eos_token_ids
-        eos_token_id = ori_meta_info['eos_token_id']
+        if isinstance(ori_meta_info['eos_token_id'], list):
+            stop_token_ids = ori_meta_info['eos_token_id'] + self.additional_eos_token_ids
+        else:
+            stop_token_ids = [ori_meta_info['eos_token_id']] + self.additional_eos_token_ids
         gen_batch = self._preprocess_inputs(gen_batch)
 
         initial_input_ids = gen_batch.batch['input_ids'][:, -self.config.max_start_length:].clone()
@@ -459,7 +457,7 @@ class AgentActorManager:
             "stop": self.action_stop_tokens,  # stop when generated an end of action
             "include_stop_str_in_output": True,
             "detokenize": True,
-            "stop_token_ids": self.additional_eos_token_ids,
+            "stop_token_ids": stop_token_ids,
             # "allowed_token_ids": list(range(self.tokenizer.vocab_size)) # see vllm issue: # 1398
         }
         if self.config.max_action_length is not None and self.config.max_action_length > 0:
