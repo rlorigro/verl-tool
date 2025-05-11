@@ -48,9 +48,6 @@ fsdp_size=-1
 additional_eos_token_ids=[151645] # <|im_end|> token id
 enable_mtrl=True # enable multi-turn training
 max_action_length=1536
-# mtrl_action_keywords="'<|calling system for feedback|>'"
-# conv_template="\n<|im_start|>system\n{obs}<|im_end|>\n<|im_start|>assistant\n"
-# turn_end_token="<|im_end|>"
 
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
