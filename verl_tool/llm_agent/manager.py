@@ -122,6 +122,7 @@ class AgentActorManager:
             responses,
             skip_special_tokens=True
         )
+        effective_lens = self.tensor_fn.create_attention_mask(responses).sum(dim=1)
         do_actions = []
         for i, resp in enumerate(responses_str):
             if action_step >= self.config.min_action_num:
@@ -135,6 +136,9 @@ class AgentActorManager:
             else:
                 has_action = True
             do_actions.append(has_action)
+        for i in range(len(responses_str)):
+            if not do_actions[i]:
+                responses_str[i] = self.tokenizer.decode(responses[i][:effective_lens[i]], skip_special_tokens=False) # preserve eos token
         responses = self._batch_tokenize(responses_str).to(torch.int64)
         # apply self.config.max_action_length
         if self.config.max_action_length is not None and self.config.max_action_length > 0:
