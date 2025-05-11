@@ -14,6 +14,7 @@
 import os
 import time
 import json
+import regex as re
 from pathlib import Path
 from verl import DataProto
 from .reward_score import _default_compute_score
@@ -60,7 +61,7 @@ class ToRLRewardManager:
             if self.add_valid_action_penalty:
                 num_turn = data_i.non_tensor_batch["turns_stats"]
                 num_valid_action = data_i.non_tensor_batch["valid_action_stats"]
-                if num_valid_action > num_turn:
+                if num_valid_action < num_turn:
                     scores_i['score'] -= 0.25
                     scores_i['valid_action_penalty'] = 1
                 else:

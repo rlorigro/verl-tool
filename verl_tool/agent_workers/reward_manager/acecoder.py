@@ -215,13 +215,13 @@ class AceCoderRewardManager:
                 scores_i['answer_format_penalty'] = 0
         if "turns_stats" in data_i.non_tensor_batch:
             if self.add_valid_action_penalty:
-                    num_turn = data_i.non_tensor_batch["turns_stats"]
-                    num_valid_action = data_i.non_tensor_batch["valid_action_stats"]
-                    if num_valid_action > num_turn:
-                        scores_i['score'] -= 0.25
-                        scores_i['valid_action_penalty'] = 1
-                    else:
-                        scores_i['valid_action_penalty'] = 0
+                num_turn = data_i.non_tensor_batch["turns_stats"]
+                num_valid_action = data_i.non_tensor_batch["valid_action_stats"]
+                if num_valid_action < num_turn:
+                    scores_i['score'] -= 0.25
+                    scores_i['valid_action_penalty'] = 1
+                else:
+                    scores_i['valid_action_penalty'] = 0
             if self.add_unfinished_traj_penalty:
                 is_active = data_i.non_tensor_batch["active_mask"]
                 if is_active:
