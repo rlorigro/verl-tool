@@ -218,7 +218,7 @@ class AgentActorManager:
     #         responses = responses[:, :self.config.max_action_length]
     #     return responses, responses_str, do_actions
 
-    def _process_next_obs(self, next_obs: List[str], dones: List[bool], valid_action: List[bool]) -> torch.Tensor:
+    def _process_next_obs(self, next_obs: List[str], dones: List[bool], valid_action: List[bool], finishs: List[bool]) -> torch.Tensor:
         """Process next observations from environment."""
         mtrl_sep = self.config.mtrl_sep
         if self.config.truncate_obs_side == 'left':
@@ -252,11 +252,14 @@ class AgentActorManager:
             )
             processed_next_obs = []
             for i in range(len(next_obs)):
-                if dones[i] or valid_action[i]:
+                if finishs[i]:
+                    # do action is false
+                    assert next_obs[i] == "", f"next_obs should be empty when finishs is True, but got {next_obs[i]}"
+                    processed_next_obs.append("")
+                elif valid_action[i]:
                     processed_next_obs.append(mtrl_sep.format(obs=next_obs[i]))
-                    # processed_next_obs.append(mtrl_sep.format(obs=next_obs[i]) if not next_obs[i].strip(' \n') else next_obs[i])
                 else:
-                    processed_next_obs.append(mtrl_sep.format(obs="Your action is not valid, please check the format and try again." + next_obs[i]) if not next_obs[i].strip(' \n') else next_obs[i])
+                    processed_next_obs.append(mtrl_sep.format(obs="Your action is not valid, please check the format and try again." + next_obs[i]))
             next_obs = processed_next_obs
             next_obs_ids = self.tokenizer(
                 next_obs,
@@ -468,7 +471,7 @@ class AgentActorManager:
             responses_str = [''] * len(traj_ids)
             responses_ids = torch.zeros((len(traj_ids), 1), dtype=torch.int64)
             active_uids = [traj_ids[i] for i in range(len(traj_ids)) if active_mask[i]]
-            next_obs, dones, valid_action = self.interact_with_tool_server(
+            next_obs, dones, valid_action, finishs = self.interact_with_tool_server(
                 active_uids, responses_str, do_actions, active_mask,
                 extra_fields=rollings.non_tensor_batch.get('extra_info', None)
             )
@@ -477,7 +480,7 @@ class AgentActorManager:
             active_num_list.append(active_mask.sum().item())
             # turns_stats[curr_active_mask] += 1
             valid_action_stats += torch.tensor(valid_action, dtype=torch.int)
-            next_obs_ids = self._process_next_obs(next_obs, dones, valid_action)
+            next_obs_ids = self._process_next_obs(next_obs, dones, valid_action, finishs) # [active_size, obs_length]
 
             obs_idx = 0
             for i, active in enumerate(active_mask):
@@ -548,7 +551,7 @@ class AgentActorManager:
 
             # Execute in environment and process observations
             active_uids = [traj_ids[i] for i in range(len(traj_ids)) if active_mask[i]]
-            next_obs, dones, valid_action = self.interact_with_tool_server(
+            next_obs, dones, valid_action, finishs = self.interact_with_tool_server(
                 active_uids, responses_str, do_actions, active_mask,
                 extra_fields=rollings_active.non_tensor_batch.get('extra_info', None),
                 is_last_step=(step == self.config.max_turns)
@@ -572,7 +575,7 @@ class AgentActorManager:
             turns_stats[curr_active_mask] += 1
             valid_action_stats += torch.tensor(valid_action, dtype=torch.int)
 
-            next_obs_ids = self._process_next_obs(next_obs, dones, valid_action) # [active_size, obs_length]
+            next_obs_ids = self._process_next_obs(next_obs, dones, valid_action, finishs) # [active_size, obs_length]
 
             obs_idx = 0
             for i, active in enumerate(active_mask):
@@ -765,16 +768,18 @@ class AgentActorManager:
         # else:
         #     print("No non-empty observations.")
 
-        next_obs, dones, valid_action = [], [], []
+        next_obs, dones, valid_action, _finishs = [], [], [], []
         for i, active in enumerate(active_mask):
             if active:
                 next_obs.append(active_observations.pop(0))
-                dones.append(active_dones.pop(0))
+                dones.append(active_dones.pop(0)) # whether the trajectory is finished for eos or considered done by the remote server
                 valid_action.append(active_valid_actions.pop(0))
+                _finishs.append(finishs.pop(0)) # whether the trajectory is finished for eos
             else:
                 next_obs.append('')
                 dones.append(1)
                 valid_action.append(0)
+                _finishs.append(1)
 
         assert len(active_observations) == 0
-        return next_obs, dones, valid_action
+        return next_obs, dones, valid_action, _finishs

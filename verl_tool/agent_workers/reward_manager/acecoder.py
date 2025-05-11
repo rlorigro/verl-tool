@@ -104,7 +104,7 @@ class AceCoderRewardManager:
         self.step_idx = 0
         self.n_workers = 64
         self.binary = True
-        self.parse_code_mode = "all" # "all", "first", "last"
+        self.parse_code_mode = "last" # "all", "first", "last"
         self.add_format_think_penalty = False # -0.5 if not begines with <think> and end with </think>
         self.add_format_answer_penalty = False # -0.5 if not having <answer> </answer>
         self.add_valid_action_penalty = True # -0.25 if num turns > 0 not action not valid
