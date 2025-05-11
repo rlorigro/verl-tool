@@ -79,7 +79,7 @@ class AgentActorManager:
             else:
                 raise ValueError(f"action_stop_tokens file not found: {self.config.action_stop_tokens}")
         else:
-            self.action_stop_tokens = [] 
+            self.action_stop_tokens = []
         self.additional_eos_token_ids = self.config.additional_eos_token_ids
         if isinstance(self.additional_eos_token_ids, str):
             self.additional_eos_token_ids = [int(x) for x in self.additional_eos_token_ids.split(',')]
@@ -87,6 +87,9 @@ class AgentActorManager:
             self.additional_eos_token_ids = [int(x) for x in self.additional_eos_token_ids]
         elif self.additional_eos_token_ids is None:
             self.additional_eos_token_ids = []
+        if self.config.mtrl_sep is None:
+            messages = [{"role": "system", "content": "{obs}"}]
+            self.mtrl_sep = "\n" + self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
 
     def _batch_tokenize(self, responses: List[str]) -> torch.Tensor:
         """Tokenize a batch of responses."""
@@ -118,33 +121,65 @@ class AgentActorManager:
 
     def _postprocess_responses(self, responses: torch.Tensor, action_step: int) -> torch.Tensor:
         """Process responses to stop at python operation or answer operation."""
-        responses_str = self.tokenizer.batch_decode(
-            responses,
-            skip_special_tokens=True
-        )
+        
         effective_lens = self.tensor_fn.create_attention_mask(responses).sum(dim=1)
         do_actions = []
-        for i, resp in enumerate(responses_str):
-            # resp = resp.strip(' \n')
-            if action_step >= self.config.min_action_num:
-                has_action = False
-                for j in range(len(self.action_stop_tokens)):
-                    if self.action_stop_tokens[j] in resp:
-                    # if resp.endswith(self.action_stop_tokens[j]):
-                    # if self.action_stop_tokens[j] in resp[-(len(self.action_stop_tokens[j]) + 3):]: # 5 for some action token tokens not indepdently decoded
-                        has_action = True
-                        responses_str[i] = resp.split(self.action_stop_tokens[j])[0] + self.action_stop_tokens[j]
-                        break
-            else:
-                has_action = True
-            do_actions.append(has_action)
-        for i in range(len(responses_str)):
-            if not do_actions[i]:
-                responses_str[i] = self.tokenizer.decode(responses[i][:effective_lens[i]], skip_special_tokens=False) # preserve eos token
+        if self.config.enable_mtrl:
+            responses_str = [self.tokenizer.decode(responses[i][:effective_lens[i]], skip_special_tokens=False) for i in range(responses.shape[0])]
+            for i in range(len(responses_str)):
+                if action_step >= self.config.min_action_num:
+                    if not responses_str[i].endswith(self.config.turn_end_token):
+                        responses_str[i] += self.config.turn_end_token
+                    # always do action, decided by the server about whether an action stops
+                    if self.action_stop_tokens:
+                        if any([action_stop_token in responses_str[i] for action_stop_token in self.action_stop_tokens]):
+                            do_action = True
+                            # replace other action stop tokens with the first one
+                            for j in range(1, len(self.action_stop_tokens)):
+                                if self.action_stop_tokens[j] in responses_str[i]:
+                                    responses_str[i] = responses_str[i].replace(self.action_stop_tokens[j], self.action_stop_tokens[0])
+                        else:
+                            do_action = False
+                    else:
+                        do_action = True
+                else:
+                    for j in range(1, len(self.action_stop_tokens)):
+                        if self.action_stop_tokens[j] in responses_str[i]:
+                            responses_str[i] = responses_str[i].replace(self.action_stop_tokens[j], self.action_stop_tokens[0])
+                    turn_end_token_idx = responses_str[i].rfind(self.config.turn_end_token)
+                    if not self.action_stop_tokens[0] in responses_str[i]:
+                        if turn_end_token_idx != -1:
+                            responses_str[i] = responses_str[i][:turn_end_token_idx] + self.action_stop_tokens[0] + self.config.turn_end_token
+                        else:
+                            responses_str[i] = responses_str[i] + self.action_stop_tokens[0] + self.config.turn_end_token
+                    else:
+                        if turn_end_token_idx == -1:
+                            responses_str[i] += self.config.turn_end_token
+                    do_action = True
+                do_actions.append(do_action)
+        else:
+            responses_str = self.tokenizer.batch_decode(
+                responses,
+                skip_special_tokens=True
+            )
+            for i, resp in enumerate(responses_str):
+                # resp = resp.strip(' \n')
+                if action_step >= self.config.min_action_num:
+                    has_action = False
+                    for j in range(len(self.action_stop_tokens)):
+                        if self.action_stop_tokens[j] in resp:
+                        # if resp.endswith(self.action_stop_tokens[j]):
+                        # if self.action_stop_tokens[j] in resp[-(len(self.action_stop_tokens[j]) + 3):]: # 5 for some action token tokens not indepdently decoded
+                            has_action = True
+                            responses_str[i] = resp.split(self.action_stop_tokens[j])[0] + self.action_stop_tokens[j]
+                            break
+                else:
+                    has_action = True
+                do_actions.append(has_action)
+            for i in range(len(responses_str)):
+                if not do_actions[i]:
+                    responses_str[i] = self.tokenizer.decode(responses[i][:effective_lens[i]], skip_special_tokens=False) # preserve eos token
         responses = self._batch_tokenize(responses_str).to(torch.int64)
-        # apply self.config.max_action_length
-        if self.config.max_action_length is not None and self.config.max_action_length > 0:
-            responses = responses[:, :self.config.max_action_length]
         return responses, responses_str, do_actions
     
     # def _postprocess_responses(self, responses: torch.Tensor, action_step: int, eos_token_id: Union[list, List[int]]=None) -> torch.Tensor:
@@ -183,23 +218,60 @@ class AgentActorManager:
     #         responses = responses[:, :self.config.max_action_length]
     #     return responses, responses_str, do_actions
 
-    def _process_next_obs(self, next_obs: List[str]) -> torch.Tensor:
+    def _process_next_obs(self, next_obs: List[str], dones: List[bool], valid_action: List[bool]) -> torch.Tensor:
         """Process next observations from environment."""
+        mtrl_sep = self.config.mtrl_sep
         next_obs_ids = self.tokenizer(
             next_obs,
             padding='longest',
             return_tensors='pt',
             add_special_tokens=False,  # Prevents adding special tokens
         )['input_ids'].to(torch.int64)
-
+        # truncate obs
         if next_obs_ids.shape[1] > self.config.max_obs_length:
             print(f"[WARNING] OBSERVATION TOO LONG, CONSIDER CHANGING YOUR CONFIG, {next_obs_ids.shape[1]} & {self.config.max_obs_length}")
             if self.config.truncate_obs_side == 'left':
+                next_obs_ids = self.tokenizer(
+                    next_obs,
+                    padding='longest',
+                    return_tensors='pt',
+                    add_special_tokens=False,  # Prevents adding special tokens
+                    padding_side='left',
+                )['input_ids'].to(torch.int64)
                 next_obs_ids = next_obs_ids[:, -self.config.max_obs_length:]
             elif self.config.truncate_obs_side == 'right':
+                next_obs_ids = self.tokenizer(
+                    next_obs,
+                    padding='longest',
+                    return_tensors='pt',
+                    add_special_tokens=False,  # Prevents adding special tokens
+                    padding_side='right',
+                )['input_ids'].to(torch.int64)
                 next_obs_ids = next_obs_ids[:, :self.config.max_obs_length]
             else:
                 raise ValueError(f"Invalid truncate_obs_side: {self.config.truncate_obs_side}")
+        
+        if self.config.enable_mtrl:
+            next_obs = self.tokenizer.batch_decode(
+                next_obs,
+                skip_special_tokens=True
+            )
+            processed_next_obs = []
+            for i in range(len(next_obs)):
+                if dones[i]:
+                    processed_next_obs.append(next_obs[i])
+                if valid_action[i]:
+                    processed_next_obs.append(mtrl_sep.format(obs=next_obs[i]))
+                    # processed_next_obs.append(mtrl_sep.format(obs=next_obs[i]) if not next_obs[i].strip(' \n') else next_obs[i])
+                else:
+                    processed_next_obs.append(mtrl_sep.format(obs="Your action is not valid, please check the format and try again." + next_obs[i]) if not next_obs[i].strip(' \n') else next_obs[i])
+            next_obs = processed_next_obs
+            next_obs_ids = self.tokenizer(
+                next_obs,
+                padding='longest',
+                return_tensors='pt',
+                add_special_tokens=False,  # Prevents adding special tokens
+            )['input_ids'].to(torch.int64)
 
         return next_obs_ids
 
@@ -225,6 +297,8 @@ class AgentActorManager:
         # max_len = min(self.config.max_prompt_length, effective_len)
         max_len = min(self.config.max_prompt_length+self.config.max_response_length, effective_len)
         available_context_budget = max(0, self.config.max_prompt_length+self.config.max_response_length - min_effective_len)
+        if self.config.max_action_length is not None and self.config.max_action_length > 0:
+            available_context_budget = min(available_context_budget, self.config.max_action_length)
         if getattr(self.config, "rolling_with_prompt", False):
             # Added Zhiheng, if rolling_with_prompt is True, then we need to keep the system prompt
             if isinstance(left_side, dict):
@@ -393,6 +467,8 @@ class AgentActorManager:
             "stop_token_ids": self.additional_eos_token_ids,
             # "allowed_token_ids": list(range(self.tokenizer.vocab_size)) # see vllm issue: # 1398
         }
+        if self.config.max_action_length is not None and self.config.max_action_length > 0:
+            agent_sampling_params['max_tokens'] = self.config.max_action_length
 
         if self.config.call_tool_first:
             # Added Zhiheng: Add initial observation to the prompt from server, use response=""
@@ -409,7 +485,7 @@ class AgentActorManager:
             active_num_list.append(active_mask.sum().item())
             # turns_stats[curr_active_mask] += 1
             valid_action_stats += torch.tensor(valid_action, dtype=torch.int)
-            next_obs_ids = self._process_next_obs(next_obs)
+            next_obs_ids = self._process_next_obs(next_obs, dones, valid_action)
 
             obs_idx = 0
             for i, active in enumerate(active_mask):
@@ -504,7 +580,7 @@ class AgentActorManager:
             turns_stats[curr_active_mask] += 1
             valid_action_stats += torch.tensor(valid_action, dtype=torch.int)
 
-            next_obs_ids = self._process_next_obs(next_obs) # [active_size, obs_length]
+            next_obs_ids = self._process_next_obs(next_obs, dones, valid_action) # [active_size, obs_length]
 
             obs_idx = 0
             for i, active in enumerate(active_mask):

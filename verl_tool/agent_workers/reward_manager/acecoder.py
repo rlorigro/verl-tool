@@ -104,7 +104,7 @@ class AceCoderRewardManager:
         self.step_idx = 0
         self.n_workers = 64
         self.binary = True
-        self.parse_code_mode = "last" # "all", "first", "last"
+        self.parse_code_mode = "all" # "all", "first", "last"
         self.add_format_think_penalty = False # -0.5 if not begines with <think> and end with </think>
         self.add_format_answer_penalty = False # -0.5 if not having <answer> </answer>
         self.add_valid_action_penalty = True # -0.25 if num turns > 0 not action not valid
@@ -281,6 +281,7 @@ class AceCoderRewardManager:
 
         # retrieve the list of response ids and their valid length
         response_ids = data.batch['responses']
+        valid_prompt_length = data.batch['attention_mask'][:, :prompt_length].sum(dim=-1)
         valid_response_length = data.batch['attention_mask'][:, prompt_length:].sum(dim=-1)
         
         # with open("test.json", 'w') as f:
@@ -375,6 +376,8 @@ class AceCoderRewardManager:
                     "data_source": data[i].non_tensor_batch['data_source'],
                     "prompt": prompt_str[i],
                     "response": response_str[i],
+                    "prompt_full": self.tokenizer.decode(prompt_ids[i][-valid_prompt_length[i].item():], skip_special_tokens=False),
+                    "response_full": self.tokenizer.decode(response_ids[i][:valid_response_length[i].item()], skip_special_tokens=False),
                     "extracted_code": extracted_answers[i],
                     "ground_truth": "",
                     "score": scores[i],

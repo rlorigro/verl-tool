@@ -52,6 +52,12 @@ execution stdout and stderr result
 ```
 Make sure you always append test cases for the code you write so you can get meaningful execution results. Please put your final solution code ready to submit in the last markdown code block like ```python\nyour code here\n``` without appending anything. 
 """
+
+system_prompt7 = """A conversation between user and assistant. The user asks a question, and the assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., <think> reasoning process here </think> <answer> answer here </answer>. During the thinking, the assistant can call a python interpreter tool by writing code in "<tool_call> code here </tool_call>", then the standard output and error will be given in the a markdown block. You can use this to check if your code is correct in terms of syntax, logic, and your self-written test cases. Please put your final solution code ready to submit in the <answer> </answer> tags, where you write a markdown code block like "<answer>```python\nyour code here\n```</answer>" without appending anything.
+"""
+
+system_prompt8 = """A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the coding problems below. Make sure you also write test cases for the code you write so you can get meaningful execution results for debugging. If you want to test the code of your solution, include "<|calling system for feedback|>" at the end of your response for the current turn. Then the result will be provided by the system. If you think the solution is complete and don't need to testPlease put your final answer in a markdown code block like this: python\nyour code here\n``` without appending anything. 
+"""
     
 
 public_test_template = """\
@@ -141,6 +147,8 @@ python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCo
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_custom --system_prompt_idx 4
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_custom --system_prompt_idx 5
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_custom --system_prompt_idx 6
+python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_custom --system_prompt_idx 7
+python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_custom --system_prompt_idx 8
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-122K --local_dir data/acecoder_custom --system_prompt_idx 1
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-122K --local_dir data/acecoder_custom --system_prompt_idx 2
 """

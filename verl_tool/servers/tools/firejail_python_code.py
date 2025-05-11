@@ -155,7 +155,7 @@ class FirejailPythonCodeTool(BaseTool):
     enable_history_code_execution = False
     enable_mannual_reflection = False
     force_run_test_cases = False
-    
+    done_without_error = False
     def get_usage_inst(self):
         return "You are able to write and execute Python code securely inside a Firejail sandbox."
     
@@ -176,8 +176,8 @@ class FirejailPythonCodeTool(BaseTool):
         if not all_valid_python_code:
             all_valid_python_code = re.findall(r"```python(.*?)```", action, re.DOTALL)
         
-        if not all_valid_python_code:
-            all_valid_python_code = re.findall(r"<tool_call>(.*?)</tool_call>", action, re.DOTALL)
+        # if not all_valid_python_code:
+        #     all_valid_python_code = re.findall(r"<tool_call>(.*?)</tool_call>", action, re.DOTALL)
 
         if len(all_valid_python_code) == 0:
             return "", False
@@ -284,6 +284,13 @@ class FirejailPythonCodeTool(BaseTool):
                 observation = "\n" + observation + "\n</output>\n"
             elif action.endswith("</python>") or "</python>" in action:
                 observation = "\n<output>\n" + observation + "\n</output>\n"
+            elif "<|calling system for feedback|>" in action:
+                if "```python" in action:
+                    observation = "\n```output\n" + observation + "\n```\n"
+                elif "<python>" in action:
+                    observation = "\n<output>\n" + observation + "\n</output>\n"
+                else:
+                    observation = "\n" + observation + "\n"
             elif action.strip(' \n').endswith("```") or "```python" in action:
                 if action.count("```") % 2 == 0:
                     observation = "\n```output\n" + observation + "\n```\n"
@@ -356,8 +363,14 @@ class FirejailPythonCodeTool(BaseTool):
                     # observation = f"Execution result:\n{execution_result}"
                     idx = random.randint(0, len(heuristic_sentences["success"]) - 1)
                     observation += heuristic_sentences["success"][idx]
-                    
-            done = False
+
+            if self.done_without_error:
+                if "error:" in observation.lower() or "execution timed out" in observation.lower():
+                    done = False
+                else:
+                    done = True
+            else: 
+                done = False
             valid = True
         
         self.update_env(trajectory_id, env, parsed_action, is_valid, extra_field, execution_result)

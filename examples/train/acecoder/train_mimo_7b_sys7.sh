@@ -1,4 +1,4 @@
-ppset -x
+tppset -x
 dataset_name1=acecoder_long/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference-with-execution-prompt-complex
 dataset_name2=deepcoder/all-with-execution-prompt-complex
 dataset_name3=acecoderv2/AceCoderV2-122K-processed-filtered-with-execution-prompt-complex
@@ -8,13 +8,15 @@ dataset_name6=acecoder_custom/AceCoderV2-69K-system-prompt-2
 dataset_name7=acecoder_custom/AceCoderV2-69K-system-prompt-3
 dataset_name8=acecoder_custom/AceCoderV2-69K-system-prompt-4
 dataset_name9=acecoder_custom/AceCoderV2-69K-system-prompt-5
+dataset_name10=acecoder_custom/AceCoderV2-69K-system-prompt-6
+dataset_name11=acecoder_custom/AceCoderV2-69K-system-prompt-7
 # train_data=[$(pwd)/data/${dataset_name1}/train.parquet,\
 # $(pwd)/data/${dataset_name2}/train.parquet]
 # val_data=[$(pwd)/data/${dataset_name1}/test.parquet,\
 # $(pwd)/data/${dataset_name2}/test.parquet]
 
-train_data=[$(pwd)/data/${dataset_name9}/train.parquet]
-val_data=[$(pwd)/data/${dataset_name9}/test.parquet]
+train_data=[$(pwd)/data/${dataset_name11}/train.parquet]
+val_data=[$(pwd)/data/${dataset_name11}/test.parquet]
 
 model_name=XiaomiMiMo/MiMo-7B-Base
 # model_name=VerlTool/Qwen2.5-Coder-1B-TIR-SFT-new-Interpreter-Thinking
@@ -30,8 +32,7 @@ max_obs_length=512
 temperature=1.0
 top_p=1.0
 strategy="fsdp_agent" # remove _agent for normal verl behavior
-action_stop_tokens="\`\`\`output"
-# action_stop_tokens="</python>"
+action_stop_tokens='</tool_call>'
 max_turns=2
 min_action_num=0
 mask_observations=True # mask observations for kl loss and gradient descent
@@ -46,13 +47,13 @@ log_prob_micro_batch_size_per_gpu=8
 tensor_model_parallel_size=1
 gpu_memory_utilization=0.7 # higher gpu_memory_utilization will likely cause the vllm to OOM and get stuck, so set it to a lower value like 0.4 or 0.5
 do_offload=True # control actor's fsdp.[param|optimizer]_offload and actor_rollout_ref.rollout.fsdp.[param|optimizer]_offload; if gpu_memory_utilization is set to > 0.6, then do_offload should be set to True otherwise it will cause OOM
-use_dynamic_bsz=False # faster
+use_dynamic_bsz=True # faster
 ulysses_sequence_parallel_size=1 # set to 1 for normal verl behavior, otherwise it will cause OOM
 fsdp_size=-1
 additional_eos_token_ids=[151645] # <|im_end|> token id
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
-run_name_postfix="-69k-2turn-sys5"
+run_name_postfix="-69k-2turn-sys7"
 run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 export VERL_RUN_ID=$run_name
 export NCCL_DEBUG=INFO

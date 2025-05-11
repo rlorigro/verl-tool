@@ -104,9 +104,19 @@ class ModelService:
                 "valids": [False for _ in range(len(trajectory_ids))]
             }
     
-    async def post_process_observations(self, observations: List[str]):
+    async def post_process_observations(self, observations: List[str], dones: List[bool], valid_action: List[bool]):
         """Process observations using the tokenizer with proper async locks"""
         async with self.encode_lock:
+            conv_template = self.tool_config.conv_template
+            if self.tool_config.enable_mtrl:
+                processed_next_obs = []
+                for i in range(len(next_obs)):
+                    if valid_action[i]:
+                        processed_next_obs.append(conv_template.format(obs=next_obs[i]))
+                        # processed_next_obs.append(conv_template.format(obs=next_obs[i]) if not next_obs[i].strip(' \n') else next_obs[i])
+                    else:
+                        processed_next_obs.append(conv_template.format(obs="Your action is not valid, please check the format and try again." + next_obs[i]) if not next_obs[i].strip(' \n') else next_obs[i])
+                next_obs = processed_next_obs
             next_obs_ids = self.tokenizer(
                 observations,
                 padding='longest',

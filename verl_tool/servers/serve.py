@@ -229,6 +229,7 @@ class AsyncToolManager:
             for idx in indices:
                 # all_observations[idx] = usage_instructions
                 all_observations[idx] = "" # no observation
+                # all_observations[idx] = "\nNo valid action found\n" # no observation
                 all_dones[idx] = False
                 all_valids[idx] = False
         
