@@ -47,9 +47,12 @@ class ModelService:
         self.model_config = model_config
         self.tool_config = tool_config
         self.model = None
-        self.tokenizer = None
         self.session = None
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_config.model)
         self.encode_lock = asyncio.Lock()
+        if self.config.mtrl_sep is None:
+            messages = [{"role": "system", "content": "{obs}"}]
+            self.config.mtrl_sep = "\n" + self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     
     def call_tool_server(self, trajectory_ids: List[str], actions: List[str], finish: List[bool], **kwargs: Dict[str, List[Any]]) -> Dict[str, Any]:
         """querying the tool server for the observation and done flag"""
@@ -107,15 +110,15 @@ class ModelService:
     async def post_process_observations(self, observations: List[str], dones: List[bool], valid_action: List[bool]):
         """Process observations using the tokenizer with proper async locks"""
         async with self.encode_lock:
-            conv_template = self.tool_config.conv_template
+            mtrl_sep = self.tool_config.mtrl_sep
             if self.tool_config.enable_mtrl:
                 processed_next_obs = []
                 for i in range(len(next_obs)):
                     if valid_action[i]:
-                        processed_next_obs.append(conv_template.format(obs=next_obs[i]))
-                        # processed_next_obs.append(conv_template.format(obs=next_obs[i]) if not next_obs[i].strip(' \n') else next_obs[i])
+                        processed_next_obs.append(mtrl_sep.format(obs=next_obs[i]))
+                        # processed_next_obs.append(mtrl_sep.format(obs=next_obs[i]) if not next_obs[i].strip(' \n') else next_obs[i])
                     else:
-                        processed_next_obs.append(conv_template.format(obs="Your action is not valid, please check the format and try again." + next_obs[i]) if not next_obs[i].strip(' \n') else next_obs[i])
+                        processed_next_obs.append(mtrl_sep.format(obs="Your action is not valid, please check the format and try again." + next_obs[i]) if not next_obs[i].strip(' \n') else next_obs[i])
                 next_obs = processed_next_obs
             next_obs_ids = self.tokenizer(
                 observations,
@@ -143,7 +146,6 @@ class ModelService:
     def load_model(self):
         """load the model using VLLM backend"""
         print(f"Loading Model using VLLM: {self.model_config.model}...")
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_config.model)
         # start a VLLM server using vllm.serve
         vllm_args = [f"--{k.replace('_', '-')}" for k in self.model_config.__dict__.keys() if k not in ["model", "api_key", "num_models", "host", "port"]]
         vllm_args = []

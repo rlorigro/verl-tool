@@ -18,7 +18,7 @@ class ToolConfig:
     action_stop_tokens: str = None
     max_obs_length: int = 512  # maximum length of observation
     enable_mtrl: bool=False
-    conv_template: str="\n<|im_start|>system\n{obs}<|im_end|>\n<|im_start|>assistant\n"
+    mtrl_sep: str=None # "\n<|im_start|>system\n{obs}<|im_end|>\n<|im_start|>assistant\n"
     turn_end_token: str="<|im_end|>"
     
     def post_init(self):

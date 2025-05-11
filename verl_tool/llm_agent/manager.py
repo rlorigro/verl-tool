@@ -89,7 +89,7 @@ class AgentActorManager:
             self.additional_eos_token_ids = []
         if self.config.mtrl_sep is None:
             messages = [{"role": "system", "content": "{obs}"}]
-            self.mtrl_sep = "\n" + self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            self.config.mtrl_sep = "\n" + self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
 
     def _batch_tokenize(self, responses: List[str]) -> torch.Tensor:
         """Tokenize a batch of responses."""
@@ -221,46 +221,38 @@ class AgentActorManager:
     def _process_next_obs(self, next_obs: List[str], dones: List[bool], valid_action: List[bool]) -> torch.Tensor:
         """Process next observations from environment."""
         mtrl_sep = self.config.mtrl_sep
-        next_obs_ids = self.tokenizer(
-            next_obs,
-            padding='longest',
-            return_tensors='pt',
-            add_special_tokens=False,  # Prevents adding special tokens
-        )['input_ids'].to(torch.int64)
-        # truncate obs
-        if next_obs_ids.shape[1] > self.config.max_obs_length:
-            print(f"[WARNING] OBSERVATION TOO LONG, CONSIDER CHANGING YOUR CONFIG, {next_obs_ids.shape[1]} & {self.config.max_obs_length}")
-            if self.config.truncate_obs_side == 'left':
-                next_obs_ids = self.tokenizer(
-                    next_obs,
-                    padding='longest',
-                    return_tensors='pt',
-                    add_special_tokens=False,  # Prevents adding special tokens
-                    padding_side='left',
-                )['input_ids'].to(torch.int64)
+        if self.config.truncate_obs_side == 'left':
+            next_obs_ids = self.tokenizer(
+                next_obs,
+                padding='longest',
+                return_tensors='pt',
+                add_special_tokens=False,  # Prevents adding special tokens
+                padding_side='left',
+            )['input_ids'].to(torch.int64)
+            if next_obs_ids.shape[1] > self.config.max_obs_length:
+                print(f"[WARNING] OBSERVATION TOO LONG, CONSIDER CHANGING YOUR CONFIG, {next_obs_ids.shape[1]} & {self.config.max_obs_length}")
                 next_obs_ids = next_obs_ids[:, -self.config.max_obs_length:]
-            elif self.config.truncate_obs_side == 'right':
-                next_obs_ids = self.tokenizer(
-                    next_obs,
-                    padding='longest',
-                    return_tensors='pt',
-                    add_special_tokens=False,  # Prevents adding special tokens
-                    padding_side='right',
-                )['input_ids'].to(torch.int64)
+        elif self.config.truncate_obs_side == 'right':
+            next_obs_ids = self.tokenizer(
+                next_obs,
+                padding='longest',
+                return_tensors='pt',
+                add_special_tokens=False,  # Prevents adding special tokens
+                padding_side='right',
+            )['input_ids'].to(torch.int64)
+            if next_obs_ids.shape[1] > self.config.max_obs_length:
+                print(f"[WARNING] OBSERVATION TOO LONG, CONSIDER CHANGING YOUR CONFIG, {next_obs_ids.shape[1]} & {self.config.max_obs_length}")
                 next_obs_ids = next_obs_ids[:, :self.config.max_obs_length]
-            else:
-                raise ValueError(f"Invalid truncate_obs_side: {self.config.truncate_obs_side}")
-        
+        else:
+            raise ValueError(f"Invalid truncate_obs_side: {self.config.truncate_obs_side}")
         if self.config.enable_mtrl:
             next_obs = self.tokenizer.batch_decode(
-                next_obs,
+                next_obs_ids,
                 skip_special_tokens=True
             )
             processed_next_obs = []
             for i in range(len(next_obs)):
-                if dones[i]:
-                    processed_next_obs.append(next_obs[i])
-                if valid_action[i]:
+                if dones[i] or valid_action[i]:
                     processed_next_obs.append(mtrl_sep.format(obs=next_obs[i]))
                     # processed_next_obs.append(mtrl_sep.format(obs=next_obs[i]) if not next_obs[i].strip(' \n') else next_obs[i])
                 else:
