@@ -230,5 +230,5 @@ python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-l
 python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl_v3 --sys_prompt_version v3
 python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl_v4 --sys_prompt_version v4
 python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl_v5 --sys_prompt_version v5
-python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl_v5 --sys_prompt_version v6
+python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl_v6 --sys_prompt_version v6
 """
