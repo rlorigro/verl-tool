@@ -142,6 +142,24 @@ class ModelService:
                 skip_special_tokens=True,
             )
             return next_obs
+    
+    async def _postprocess_responses(self, outputs: torch.Tensor, action_step: int) -> torch.Tensor:
+        """Process responses to stop at python operation or answer operation."""
+        active_responses = [outputs.choices[i].text for i in range(len(outputs.choices))]
+        active_finish_reasons = [outputs.choices[i].finish_reason for i in range(len(outputs.choices))]
+        
+        finishes = []
+        for i in range(len(active_responses)):
+            finish = True
+            if active_finish_reasons[i] == "stop" and outputs.choices[i].stop_reason is not None or \
+                self.tool_config.min_action_num >= action_step:
+                active_responses[i] = active_responses[i] + outputs.choices[i].stop_reason
+                if self.tool_config.enable_mtrl:
+                    active_responses[i] += self.tool_config.turn_end_token
+                finish = False
+            finishes.append(finish)
+            
+        return active_responses, finishes, active_finish_reasons
         
     def load_model(self):
         """load the model using VLLM backend"""
@@ -274,16 +292,7 @@ class ModelService:
                 model,
                 sampling_params
             )
-            active_responses = [outputs.choices[i].text for i in range(len(outputs.choices))]
-            active_finish_reasons = [outputs.choices[i].finish_reason for i in range(len(outputs.choices))]
-            
-            finishes = []
-            for i in range(len(active_contexts)):
-                finish = True
-                if active_finish_reasons[i] == "stop" and outputs.choices[i].stop_reason is not None:
-                    active_responses[i] = active_responses[i] + outputs.choices[i].stop_reason
-                    finish = False
-                finishes.append(finish)
+            active_responses, finishes, active_finish_reasons = await self._postprocess_responses(outputs, action_step)
             
             # Use async tool server call if possible
             if hasattr(self, 'call_tool_server_async'):

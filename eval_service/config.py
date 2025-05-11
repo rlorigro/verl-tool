@@ -20,6 +20,7 @@ class ToolConfig:
     enable_mtrl: bool=False
     mtrl_sep: str=None # "\n<|im_start|>system\n{obs}<|im_end|>\n<|im_start|>assistant\n"
     turn_end_token: str="<|im_end|>"
+    min_action_num: int=0
     
     def post_init(self):
         """
