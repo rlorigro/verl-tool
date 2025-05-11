@@ -40,8 +40,8 @@ system_prompt4 = '''A conversation between User and Assistant. The user asks a q
 system_prompt5 = """\
 A conversation between user and assistant. The user asks a question, and the assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., <think> reasoning process here </think> <answer> answer here </answer>. Please integrate natural language reasoning with programs to solve the problem. That means during the thinking, the assistant can run any python code by writing in the python markdown code block, then the stdout and stderr result will be appended in an output code block like "```python\nyou code here\n```\n```output\nresult here\n```". Please put your final answer within \\boxed{}."""
 
-system_prompt6 = """\
-A conversation between user and assistant. The user asks a question, and the assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., <think> reasoning process here </think> <answer> answer here </answer>. Please integrate natural language reasoning with programs to solve the problem. That means during the thinking, the assistant can run any python code by writing in the python markdown code block, then the stdout and stderr result will be appended in an output code block like "<tool_call>you code here</tool_call>\n```output\nresult here\n```". Please put your final answer within \\boxed{}."""
+system_prompt6 = """A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem above. If you want to test the code of your solution, include "<|calling system for feedback|>" at the end of your response for the current turn. Then the result will be provided by the system. Please put your final answer within \\boxed{}. 
+"""
 
 def main(
     data_source='DigitalLearningGmbH/MATH-lighteval',
@@ -56,6 +56,7 @@ def main(
     train_dataset = dataset['train']
     test_dataset = dataset['test']
     
+    global system_prompt
     if sys_prompt_version == 'v2':
         system_prompt = system_prompt2
     elif sys_prompt_version == 'v3':
@@ -64,6 +65,8 @@ def main(
         system_prompt = system_prompt4
     elif sys_prompt_version == 'v5':
         system_prompt = system_prompt5
+    elif sys_prompt_version == 'v6':
+        system_prompt = system_prompt6
     else:
         system_prompt = system_prompt
     
