@@ -28,6 +28,7 @@ bash scripts/run_vt_eval.sh $PROMPT_TYPE $MODEL_NAME_OR_PATH # set vt_base_url i
 ### Install
 ```bash
 git clone https://github.com/jdf-prog/bigcodebench.git
+cd bigcodebench
 git checkout verltool
 uv venv --python 3.10
 source .venv/bin/activate
@@ -57,6 +58,7 @@ bigcodebench.evaluate \
 ### Install
 ```bash
 git clone https://github.com/jdf-prog/evalplus.git
+cd evalplus
 git checkout verltool
 uv venv --python 3.10
 source .venv/bin/activate
@@ -85,6 +87,7 @@ evalplus.evaluate --model "VerlTool/acecoder-fsdp-qwen_qwen2.5-coder-1.5b-grpo-n
 ### Install
 ```bash
 git clone https://github.com/jdf-prog/LiveCodeBench
+cd LiveCodeBench
 git checkout verltool
 uv venv --python 3.10
 source .venv/bin/activate

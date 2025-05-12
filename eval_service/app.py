@@ -116,7 +116,7 @@ def create_app(server_config: ServerConfig, model_config: ModelConfig, tool_conf
 async def main_async():
     # Set up command line argument parsing
     hf_parser = HfArgumentParser((ServerConfig, ModelConfig, ToolConfig))
-    server_config, model_config, tool_config = hf_parser.parse_args_into_dataclasses()
+    server_config, model_config, tool_config = hf_parser.parse_args_into_dataclasses()    
     tool_config.post_init()
     
     # Create and run the application
