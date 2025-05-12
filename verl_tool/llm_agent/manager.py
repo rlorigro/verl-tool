@@ -221,6 +221,7 @@ class AgentActorManager:
     def _process_next_obs(self, next_obs: List[str], dones: List[bool], valid_action: List[bool], finishs: List[bool]) -> torch.Tensor:
         """Process next observations from environment."""
         mtrl_sep = self.config.mtrl_sep
+        next_obs = [obs if not done else "" for obs, done in zip(next_obs, dones)]
         if self.config.truncate_obs_side == 'left':
             next_obs_ids = self.tokenizer(
                 next_obs,
