@@ -62,6 +62,8 @@ system_prompt8 = """A conversation between User and Assistant. The user asks a q
 system_prompt9 = """A conversation between user and assistant. The user asks a question, and the assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., <think> reasoning process here </think> <answer> answer here </answer>. You can test your solution by appending "<|calling system for feedback|>" after your solution. Then the system will execute the code in the markdown block and provide the standard output and error. Make sure you also write test cases for the code you write so you can get non-empty execution results for debugging. Don't "<|calling system for feedback|>" if the system confirms the solution passes all test cases, and then put your final solution like this ```python\nyour code here\n``` without appending anything. 
 """
     
+system_prompt10 = """A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the coding problems below. If you want to test the code of your solution, include "<|calling system for feedback|>" at the end of your response for the current turn. Then the system will execute the code in the markdown block and provide the standard output and error. If there is an error, then you debug it. If there is no error, finalize your solution in a markdown code block ```python\nyour code here\n``` without appending anything or any other analysis.
+"""
 
 public_test_template = """\
 ### Public Test Cases
@@ -153,6 +155,7 @@ python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCo
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_custom --system_prompt_idx 7
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_custom --system_prompt_idx 8
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_custom --system_prompt_idx 9
+python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_custom --system_prompt_idx 10
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-122K --local_dir data/acecoder_custom --system_prompt_idx 1
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-122K --local_dir data/acecoder_custom --system_prompt_idx 2
 """
