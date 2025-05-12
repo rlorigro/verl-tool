@@ -109,7 +109,8 @@ def execute_python_in_firejail(code: str, timeout: int=TIMEOUT, stdin: Optional[
         "--rlimit-as=1096m",
     ]
     # set cwd to be a temp dir
-    cwd = os.path.join(os.getcwd(), "/tmp/firejail")
+    # cwd = os.path.join(os.getcwd(), "/tmp/firejail")
+    cwd = "/tmp/firejail"
     if not os.path.exists(cwd):
         os.makedirs(cwd, exist_ok=True)
     # write code to a temp file
@@ -117,8 +118,8 @@ def execute_python_in_firejail(code: str, timeout: int=TIMEOUT, stdin: Optional[
     file_path = os.path.join(cwd, file_name)
     with open(file_path, "w") as f:
         f.write(code)
-    command.extend(["python3", "-c", code])
-    # command.extend(["python3", file_path])
+    # command.extend(["python3", "-c", code])
+    command.extend(["python3", file_path])
     try:
         # Execute the command
         result = subprocess.run(
