@@ -50,9 +50,9 @@ class ModelService:
         self.session = None
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_config.model)
         self.encode_lock = asyncio.Lock()
-        if self.config.mtrl_sep is None:
+        if self.tool_config.mtrl_sep is None:
             messages = [{"role": "system", "content": "{obs}"}]
-            self.config.mtrl_sep = "\n" + self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            self.tool_config.mtrl_sep = "\n" + self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     
     def call_tool_server(self, trajectory_ids: List[str], actions: List[str], finish: List[bool], **kwargs: Dict[str, List[Any]]) -> Dict[str, Any]:
         """querying the tool server for the observation and done flag"""
