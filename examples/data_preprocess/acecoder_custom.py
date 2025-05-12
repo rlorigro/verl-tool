@@ -65,6 +65,9 @@ system_prompt9 = """A conversation between user and assistant. The user asks a q
 system_prompt10 = """A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the coding problems below. If you want to test the code of your solution, include "<|calling system for feedback|>" at the end of your response for the current turn. Then the system will execute the code in the markdown block and provide the standard output and error. If there is an error, then you debug it. If there is no error, finalize your solution in a markdown code block ```python\nyour code here\n``` without appending anything or any other analysis.
 """
 
+system_prompt11 = """A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. Please integrate natural language reasoning to solve the coding problems below. **For every code solution, you should also write test cases to assert that the solution actually works as you expected**. To run the code adn test cases, include "<|calling system for feedback|>" at the end of your response for the current turn. Then the system will execute the code in the markdown block and provide the standard output and error. If there is an error, then you debug it. If there is no error, finalize your solution in a markdown code block ```python\nyour code here\n``` without appending anything or any other analysis.
+"""
+
 public_test_template = """\
 ### Public Test Cases
 Here are some public test cases where you can use to test your program.
@@ -76,6 +79,7 @@ def main(
     dataset_path: str = 'VerlTool/AceCoderV2-122K',
     local_dir: str = 'data/acecoder',
     system_prompt_idx: int = 1,
+    add_public_tests: bool = False,
 ):
     local_dir = Path(local_dir)
     local_dir_post_fix = f"-system-prompt-{system_prompt_idx}"
@@ -120,7 +124,7 @@ def main(
                     'index': idx,
                     'id': str(example['id']),
                     "question": question_raw,
-                    "public_tests": None,
+                    "public_tests": example.get('public_tests', None) if add_public_tests else None,
                     "test_cases": tests,
                     "inputs_outputs": None,
                 }
@@ -156,6 +160,7 @@ python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCo
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_custom --system_prompt_idx 8
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_custom --system_prompt_idx 9
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_custom --system_prompt_idx 10
+python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-69K --local_dir data/acecoder_custom --system_prompt_idx 11 --add_public_tests True
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-122K --local_dir data/acecoder_custom --system_prompt_idx 1
 python examples/data_preprocess/acecoder_custom.py --dataset_path VerlTool/AceCoderV2-122K --local_dir data/acecoder_custom --system_prompt_idx 2
 """
