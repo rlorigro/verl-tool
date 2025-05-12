@@ -374,10 +374,8 @@ class AceCoderRewardManager:
                 {
                     "id": data[i].non_tensor_batch['extra_info']['id'] if 'id' in data[i].non_tensor_batch['extra_info'] else None,
                     "data_source": data[i].non_tensor_batch['data_source'],
-                    "prompt": prompt_str[i],
-                    "response": response_str[i],
-                    "prompt_full": self.tokenizer.decode(prompt_ids[i][-valid_prompt_length[i].item():], skip_special_tokens=False),
-                    "response_full": self.tokenizer.decode(response_ids[i][:valid_response_length[i].item()], skip_special_tokens=False),
+                    "prompt": self.tokenizer.decode(prompt_ids[i][-valid_prompt_length[i].item():], skip_special_tokens=False),
+                    "response": self.tokenizer.decode(response_ids[i][:valid_response_length[i].item()], skip_special_tokens=False),
                     "extracted_code": extracted_answers[i],
                     "ground_truth": "",
                     "score": scores[i],

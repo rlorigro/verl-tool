@@ -3,7 +3,7 @@ dataset_name1=acecoder_long/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference-
 dataset_name2=deepcoder/all-with-execution-prompt-complex
 dataset_name3=acecoderv2/AceCoderV2-122K-processed-filtered-with-execution-prompt-complex
 dataset_name4=acecoder_long/AceCoderV2-69K-with-execution-prompt-with-public-tests-complex
-dataset_name5=acecoder_custom/AceCoderV2-69K-system-prompt-8
+dataset_name5=acecoder_custom/AceCoderV2-69K-system-prompt-10
 # train_data=[$(pwd)/data/${dataset_name1}/train.parquet,\
 # $(pwd)/data/${dataset_name2}/train.parquet]
 # val_data=[$(pwd)/data/${dataset_name1}/test.parquet,\
@@ -28,7 +28,7 @@ strategy="fsdp_agent" # remove _agent for normal verl behavior
 action_stop_tokens="<|calling system for feedback|>"
 # action_stop_tokens="</python>"
 max_turns=2
-min_action_num=0
+min_action_num=1
 mask_observations=True # mask observations for kl loss and gradient descent
 kl_loss_coef=0.0
 kl_coef=0
@@ -49,7 +49,7 @@ max_action_length=1536
 
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
-run_name_postfix="-69k-mtrl-sys8"
+run_name_postfix="-69k-mtrl-sys10"
 run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 export VERL_RUN_ID=$run_name
 export NCCL_DEBUG=INFO
