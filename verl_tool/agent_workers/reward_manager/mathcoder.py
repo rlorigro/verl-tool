@@ -80,10 +80,9 @@ class MathCoderRewardManager:
                         step_idx = int(file[:-len(".json")].split("-")[-1])
                         if step_idx > last_step_idx:
                             last_step_idx = step_idx
-            if last_step_idx == 0:
-                self.step = 0
-            else:
-                self.step = last_step_idx + 1
+            self.step = last_step_idx + 1
+        if data.meta_info.get('global_step', None) is not None:
+            self.step = data.meta_info['global_step']
 
         to_save_records = []
         reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32)
