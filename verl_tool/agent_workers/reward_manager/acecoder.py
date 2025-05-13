@@ -101,7 +101,7 @@ class AceCoderRewardManager:
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
         self.compute_score = compute_score or _default_compute_score
-        self.step_idx = 0
+        self.step_idx = None
         self.n_workers = 64
         self.binary = True
         self.parse_code_mode = "last" # "all", "first", "last"
@@ -257,6 +257,25 @@ class AceCoderRewardManager:
             else:
                 self.record_dir = Path(__file__).parent.parent.parent.parent / "verl_step_records" / f"acecoder-{time.strftime('%Y-%m-%d-%H-%M-%S')}"
                 self.record_dir.mkdir(parents=True, exist_ok=True)
+        
+        # check the last step index
+        if self.step_idx is None:
+            last_step_idx = 0
+            for file in os.listdir(self.record_dir):
+                if self.num_examine == 1:
+                    if re.search(r"step-val-\d+\.json", file):
+                        step_idx = int(file[:-len(".json")].split("-")[-1])
+                        if step_idx > last_step_idx:
+                            last_step_idx = step_idx
+                else:
+                    if re.search(r"step-\d+\.json", file):
+                        step_idx = int(file[:-len(".json")].split("-")[-1])
+                        if step_idx > last_step_idx:
+                            last_step_idx = step_idx
+            if last_step_idx == 0:
+                self.step_idx = 0
+            else:
+                self.step_idx = last_step_idx + 1
                 
         # If there is rm score, we directly return rm score. Otherwise, we compute via rm_score_fn
         if 'rm_scores' in data.batch.keys():
