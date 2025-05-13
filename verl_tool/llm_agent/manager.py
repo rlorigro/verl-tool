@@ -253,7 +253,7 @@ class AgentActorManager:
             )
             processed_next_obs = []
             for i in range(len(next_obs)):
-                if finishs[i]:
+                if finishs[i] or dones[i]:
                     # do action is false
                     assert next_obs[i] == "", f"next_obs should be empty when finishs is True, but got {next_obs[i]}"
                     processed_next_obs.append("")

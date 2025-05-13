@@ -326,9 +326,9 @@ class FirejailPythonCodeTool(BaseTool):
                             if not test_execution_result:
                                 test_result += "\nAll public test cases passed!\n"
                             elif has_error:
-                                test_result += "Some test cases did not pass, I will first think and then fix them with a new program and test again.\n"
+                                test_result += "Some test cases did not pass, now think and then fix them with a new program and test again.\n"
                             else:
-                                test_result += "I'll check the test cases and see if they are correct.\n"
+                                test_result += "Now check the test cases and see if they are correct.\n"
                     elif isinstance(test_cases, dict):
                         assert "inputs" in test_cases and "outputs" in test_cases, f"Invalid test cases format: {test_cases.keys()}"
                         test_result = ""
