@@ -128,7 +128,6 @@ class AgentActorManager:
             responses_str = [self.tokenizer.decode(responses[i][:effective_lens[i]], skip_special_tokens=False) for i in range(responses.shape[0])]
             for i in range(len(responses_str)):
                 if action_step >= self.config.min_action_num:
-                    # always do action, decided by the server about whether an action stops
                     if self.action_stop_tokens:
                         if any([action_stop_token in responses_str[i] for action_stop_token in self.action_stop_tokens]):
                             do_action = True
@@ -136,13 +135,14 @@ class AgentActorManager:
                             for j in range(1, len(self.action_stop_tokens)):
                                 if self.action_stop_tokens[j] in responses_str[i]:
                                     responses_str[i] = responses_str[i].replace(self.action_stop_tokens[j], self.action_stop_tokens[0])
-                                if not responses_str[i].endswith(self.config.turn_end_token):
-                                    responses_str[i] += self.config.turn_end_token
+                            if not responses_str[i].endswith(self.config.turn_end_token):
+                                responses_str[i] += self.config.turn_end_token
                         else:
                             do_action = False
                     else:
                         do_action = True
                 else:
+                    # always do action, decided by the server about whether an action stops
                     for j in range(1, len(self.action_stop_tokens)):
                         if self.action_stop_tokens[j] in responses_str[i]:
                             responses_str[i] = responses_str[i].replace(self.action_stop_tokens[j], self.action_stop_tokens[0])
@@ -179,6 +179,11 @@ class AgentActorManager:
             for i in range(len(responses_str)):
                 if not do_actions[i]:
                     responses_str[i] = self.tokenizer.decode(responses[i][:effective_lens[i]], skip_special_tokens=False) # preserve eos token
+        # with open(f"temp-{action_step}.json", 'w') as f:
+        #     json.dump([{
+        #         "responses_str": responses_str[i],
+        #         "do_action": do_actions[i],
+        #     } for i in range(len(responses_str))], f, indent=4)
         responses = self._batch_tokenize(responses_str).to(torch.int64)
         return responses, responses_str, do_actions
     
@@ -411,7 +416,7 @@ class AgentActorManager:
 
         max_len = min(self.config.max_response_length, effective_len)
 
-        overlong_dones = effective_lens > self.config.max_response_length
+        overlong_dones = effective_lens >= self.config.max_response_length
 
         # return the updated responses along with its masked version
         if self.config.truncate_response_side == 'left':

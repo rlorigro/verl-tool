@@ -161,7 +161,7 @@ class FirejailPythonCodeTool(BaseTool):
     stop_tokens = ["```output", "<output>", "<tool_call>"]
     enable_history_code_execution = False
     enable_mannual_reflection = False
-    force_run_test_cases = False
+    force_run_test_cases = True
     done_without_error = True
     def get_usage_inst(self):
         return "You are able to write and execute Python code securely inside a Firejail sandbox."

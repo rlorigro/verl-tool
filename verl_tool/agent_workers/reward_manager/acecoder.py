@@ -35,6 +35,7 @@ import subprocess
 import time
 import ast
 from pathlib import Path
+from collections import Counter
 
 def hash_string(s):
     return hashlib.sha256(s.encode()).hexdigest()
@@ -81,13 +82,8 @@ def parse_code(action: str, mode="all"):
     elif mode == "all_in_last_turn":
         # parse all the code blocks only in the last assistant turn
         # find the last assistant turn
-        start_idx = action.rfind("<|im_start|>assistant")
-        if start_idx == -1:
-            start_idx = 0
-        end_idx = action.find("<|im_end|>", start_idx)
-        if end_idx == -1:
-            end_idx = len(action)
-        last_turn = action[start_idx:end_idx]
+        last_turn = re.findall(r"<\|im_start\|>assistant(.*?)<\|im_end\|>", action, re.DOTALL)
+        last_turn = last_turn[-1] if last_turn else ""
         all_valid_python_code = re.findall(r"<python>(.*?)</python>", last_turn, re.DOTALL)
         if not all_valid_python_code:
             all_valid_python_code = re.findall(r"```python(.*?)```", last_turn, re.DOTALL)
@@ -171,7 +167,23 @@ class AceCoderRewardManager:
         with open(output_file, "r") as f:
             all_samples_results = [json.loads(x) for x in f]
         pass_rates = [x['eval_results']['pass_rate'] for x in all_samples_results]
+        # print the error statistics
+        # syntax error
+        code_error = [x['eval_results']['code_error'] for x in all_samples_results]
         # remove the temp_file and output_file after finish code pass rate computation and result extraction
+        test_case_error = [[x['eval_results']['details'][i]['reason'] for i in range(len(x['eval_results']['details']))] for x in all_samples_results]
+        print(f"Step {self.step_idx}: acecoder evaluation script error statistics for {len(samples)} samples.")
+        num_empty = sum([1 for code in extracted_answers if code.strip(' \n') == ''])
+        print(f" - Empty code: {num_empty} ({num_empty / len(extracted_answers) * 100:.2f}%)")
+        print(f" - Syntax error: {sum([1 for x in code_error if x])} ({len([x for x in code_error if x]) / len(code_error) * 100:.2f}%)")
+        print(" - Test case error:")    
+        counter = Counter()
+        for i in range(len(test_case_error)):
+            if test_case_error[i]:
+                counter.update(test_case_error[i])
+        for k, v in counter.items():
+            print(f"   - {k}: {v} ({v / len(test_case_error) * 100:.2f}%)")
+        # print the pass rate statistics
         try:
             os.remove(temp_file)
             os.remove(output_file)
@@ -435,6 +447,7 @@ class AceCoderRewardManager:
             self.step_idx += 1
             with open(temp_file, "w") as f:
                 json.dump(to_save_records, f, indent=4)
+            print(f"Step {self.step_idx}: saved {len(to_save_records)} records to {temp_file}")
         
         if return_dict: 
             return {
