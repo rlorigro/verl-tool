@@ -31,6 +31,20 @@ uv pip install dill==0.4.0
 uv pip install fsspec==2025.3.2
 uv pip install protobuf==5.29.4
 ```
+### Conda Version
+```bash
+git submodule update --init --recursive
+conda create --name verl-tool-env python=3.10
+conda activate verl-tool-env
+pip install -e .
+pip install -e verl
+pip install vllm==0.8.4
+pip install flash-attn --no-build-isolation
+pip install -e ".[acecoder,torl]"
+pip install dill==0.4.0
+pip install fsspec==2025.3.2
+pip install protobuf==5.29.4
+```
 
 ## Features
 1. Fully separated the tool server and the training logic. By passing a list of `action_stop_tokens` to the training script, each action ending with any of the tokens will be passed to the tool server and further processed by identifying the tool type based on the custom pasing logic in each tool (`parse_action` function). 
