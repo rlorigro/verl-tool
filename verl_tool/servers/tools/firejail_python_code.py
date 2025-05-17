@@ -163,6 +163,8 @@ class FirejailPythonCodeTool(BaseTool):
     enable_mannual_reflection = False
     force_run_test_cases = True
     done_without_error = False
+    force_run_test_cases = False
+    done_without_error = False
     def get_usage_inst(self):
         return "You are able to write and execute Python code securely inside a Firejail sandbox."
     
