@@ -87,7 +87,6 @@ def parse_code(action: str, mode="all"):
             last_turn = action
         else:
             last_turn = action[last_turn_start_idx:]
-        last_turn = last_turn[-1] if last_turn else ""
         all_valid_python_code = re.findall(r"<python>(.*?)</python>", last_turn, re.DOTALL)
         if not all_valid_python_code:
             all_valid_python_code = re.findall(r"```\n?python(.*?)```", last_turn, re.DOTALL)
