@@ -66,7 +66,7 @@ def parse_code(action: str, mode="all"):
     all_valid_python_code = re.findall(r"<python>(.*?)</python>", action, re.DOTALL)
     
     if not all_valid_python_code:
-        all_valid_python_code = re.findall(r"```python(.*?)```", action, re.DOTALL)
+        all_valid_python_code = re.findall(r"```\n?python(.*?)```", action, re.DOTALL)
     
     if len(all_valid_python_code) == 0:
         return ""
@@ -82,11 +82,15 @@ def parse_code(action: str, mode="all"):
     elif mode == "all_in_last_turn":
         # parse all the code blocks only in the last assistant turn
         # find the last assistant turn
-        last_turn = re.findall(r"<\|im_start\|>assistant(.*?)<\|im_end\|>", action, re.DOTALL)
+        last_turn_start_idx = action.rfind('<|im_start|>assistant')
+        if last_turn_start_idx == -1:
+            last_turn = action
+        else:
+            last_turn = action[last_turn_start_idx:]
         last_turn = last_turn[-1] if last_turn else ""
         all_valid_python_code = re.findall(r"<python>(.*?)</python>", last_turn, re.DOTALL)
         if not all_valid_python_code:
-            all_valid_python_code = re.findall(r"```python(.*?)```", last_turn, re.DOTALL)
+            all_valid_python_code = re.findall(r"```\n?python(.*?)```", last_turn, re.DOTALL)
         if len(all_valid_python_code) == 0:
             return ""
         parsed_code = "\n".join([code for code in all_valid_python_code if check_syntax(code)])
@@ -120,9 +124,9 @@ class AceCoderRewardManager:
         self.parse_code_mode = "all_in_last_turn" # "all", "first", "last"
         self.add_format_think_penalty = False # -0.5 if not begines with <think> and end with </think>
         self.add_format_answer_penalty = False # -0.5 if not having <answer> </answer>
-        self.add_valid_action_penalty = True # -0.25 if num turns > 0 not action not valid
+        self.add_valid_action_penalty = True # -1.0 if num turns > 0 not action not valid
         self.add_unfinished_traj_penalty = True # -0.25 if the traj is not finished
-        self.add_no_tool_interact_penalty = False # -0.25 if the traj's num turn is 0, no interaction at all
+        self.add_no_tool_interact_penalty = True # -1.0 if the traj's num turn is 0, no interaction at all
         self.add_code_exec_penalty = False # -0.25 if the execution has an error.
         
         try:
@@ -247,7 +251,7 @@ class AceCoderRewardManager:
                 num_turn = data_i.non_tensor_batch["turns_stats"]
                 num_valid_action = data_i.non_tensor_batch["valid_action_stats"]
                 if num_valid_action < num_turn:
-                    scores_i['score'] -= 0.25
+                    scores_i['score'] -= 1.0 
                     scores_i['valid_action_penalty'] = 1
                 else:
                     scores_i['valid_action_penalty'] = 0
@@ -259,9 +263,9 @@ class AceCoderRewardManager:
                 else:
                     scores_i['unfinished_traj_penalty'] = 0
             if self.add_no_tool_interact_penalty:
-                num_turn = data_i.non_tensor_batch["turns_stats"]
-                if num_turn == 0:
-                    scores_i['score'] -= 0.25
+                num_valid_action = data_i.non_tensor_batch["valid_action_stats"]
+                if num_valid_action == 0:
+                    scores_i['score'] -= 1.0
                     scores_i['no_tool_interact_penalty'] = 1
                 else:
                     scores_i['no_tool_interact_penalty'] = 0

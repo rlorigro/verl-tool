@@ -53,6 +53,7 @@ class ModelService:
         if self.tool_config.mtrl_sep is None:
             messages = [{"role": "system", "content": "{obs}"}]
             self.tool_config.mtrl_sep = "\n" + self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            # self.tool_config.mtrl_sep = self.tool_config.mtrl_sep.replace("system", "user")
     
     def call_tool_server(self, trajectory_ids: List[str], actions: List[str], finish: List[bool], **kwargs: Dict[str, List[Any]]) -> Dict[str, Any]:
         """querying the tool server for the observation and done flag"""
@@ -109,6 +110,7 @@ class ModelService:
     
     async def post_process_observations(self, next_obs: List[str], dones: List[bool], valid_action: List[bool], finishs: List[bool]):
         """Process observations using the tokenizer with proper async locks"""
+        next_obs = [obs if not done else "" for obs, done in zip(next_obs, dones)]
         async with self.encode_lock:
             mtrl_sep = self.tool_config.mtrl_sep
             if self.tool_config.truncate_obs_side == 'left':
@@ -142,7 +144,7 @@ class ModelService:
                 )
                 processed_next_obs = []
                 for i in range(len(next_obs)):
-                    if finishs[i]:
+                    if finishs[i] or dones[i]:
                         # do action is false
                         assert next_obs[i] == "", f"next_obs should be empty when finishs is True, but got {next_obs[i]}"
                         processed_next_obs.append("")
@@ -176,10 +178,10 @@ class ModelService:
                 if self.tool_config.enable_mtrl:
                     active_responses[i] += self.tool_config.turn_end_token
                 finish = False
-            if finish and self.tool_config.min_action_num < action_step:
-                finish = True
+            if finish and self.tool_config.min_action_num > action_step:
+                finish = False
                 if self.tool_config.enable_mtrl:
-                    if self.tool_config.action_stop_tokens is not None:
+                    if self.tool_config.action_stop_tokens:
                         # add action stop tokens
                         active_responses[i] += self.tool_config.action_stop_tokens[0]
                     active_responses[i] += self.tool_config.turn_end_token
@@ -336,6 +338,7 @@ class ModelService:
                     finishes
                 )
                 
+            # print(f"Active observations (preprocess): {tool_responses['observations']}")
             observations = await self.post_process_observations(tool_responses["observations"], tool_responses["dones"], tool_responses["valids"], finishes)
             dones = tool_responses["dones"]
             valids = tool_responses["valids"]
@@ -344,7 +347,9 @@ class ModelService:
             # print(f"Active responses: {active_responses}")
             # print(f"Active observations: {observations}")
             # print(f"Active dones: {dones}")
+            # print(f"Active valids: {valids}")
             # print(f"Active traj_ids: {active_traj_ids}")
+            # print(f"Active finishs: {finishes}")
             # print(f"Active finish_reasons: {active_finish_reasons}")
             active_idx = 0
             for i in range(len(contexts)):

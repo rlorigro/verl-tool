@@ -74,7 +74,7 @@ class AgentActorManager:
         if self.config.action_stop_tokens is not None:
             if os.path.exists(self.config.action_stop_tokens):
                 with open(self.config.action_stop_tokens, 'r') as f:
-                    self.action_stop_tokens = f.read().split(',')
+                    self.action_stop_tokens = [x for x in f.read().split(',') if x]
                 print(f"Using action stop tokens: {self.action_stop_tokens}")
             else:
                 raise ValueError(f"action_stop_tokens file not found: {self.config.action_stop_tokens}")
