@@ -19,6 +19,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from multiprocessing import cpu_count
 from tqdm import tqdm
 
+
+# {"trajectory_id": "6d8d07eb-598c-4823-bce7-fd24e26e0d5d", "metadata": {"turns": 3}, "previous_obs": [{"action": "def find_least_recent_backup(files: List[Tuple[str, str]]) -> Tuple[str, str]:", "is_valid": true, "observation": "Error:\nFile \"<string>\", line 2\n    def find_least_recent_backup(files: List[Tuple[str, str]]) -> Tuple[str, str]:\n                                                                                  ^\nIndentationError: expected an indented block after function definition on line 2", "extra_field": {"finish": false}}, {"action": "Input: files = [\n    ('file1.txt', '2023-01-01 10:00:00'),\n    ('file2.txt', '2023-01-02 09:00:00'),\n    ('file3.txt', '2022-12-31 23:59:59')\n]\nOutput: ('file3.txt', '2022-12-31 23:59:59')\n\nInput: files = [\n    ('file1.txt', '2023-01-01 10:00:00'),\n    ('file2.txt', '2023-01-02 09:00:00'),\n    ('file3.txt', '2023-01-01 10:00:00')\n]\nOutput: ('file3.txt', '2023-01-01 10:00:00')\n\nInput: files = [\n    ('file1.txt', '2023-01-01 10:00:00'),\n    ('file2.txt', '2023-01-02 09:00:00'),\n    ('file3.txt', '2023-01-02 09:00:00')\n]\nOutput: ('file2.txt', '2023-01-02 09:00:00')", "is_valid": true, "observation": "Error:\nFile \"<string>\", line 2\n    Input: files = [\n    ^\nIndentationError: expected an indented block after function definition on line 1", "extra_field": {"finish": false}}, {"action": "Input: files = [\n    ('file1.txt', '2023-01-01 10:00:00'),\n    ('file2.txt', '2023-01-02 09:00:00'),\n    ('file3.txt', '2022-12-31 23:59:59')\n]\nOutput: ('file3.txt', '2022-12-31 23:59:59')\n\nInput: files = [\n    ('file1.txt', '2023-01-01 10:00:00'),\n    ('file2.txt', '2023-01-02 09:00:00'),\n    ('file3.txt', '2023-01-01 10:00:00')\n]\nOutput: ('file3.txt', '2023-01-01 10:00:00')\n\nInput: files = [\n    ('file1.txt', '2023-01-01 10:00:00'),\n    ('file2.txt', '2023-01-02 09:00:00'),\n    ('file3.txt', '2023-01-02 09:00:00')\n]\nOutput: ('file2.txt', '2023-01-02 09:00:00')", "is_valid": true, "observation": "", "extra_field": {"finish": false}}]}
+
 # Add parent directory to path to import FirejailPythonCodeTool
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ..tools.firejail_python_code import FirejailPythonCodeTool
@@ -33,9 +36,77 @@ def test_firejail_python(
     """Test Firejail Python code execution with various test cases"""
     
     print("--- Test 1: Basic Hello World ---")
-    action = """<python>print('Hello from Firejail Python!')</python>"""
+    action = '```\npython\nimport smtplib\nfrom email.message import EmailMessage\nimport getpass\nimport socket\n\nSERVER_ADDRESS = "localhost"\nSERVER_PORT = 25\nBUFFER_SIZE = 1024\nSMTP_SERVER = "smtp.gmail.com"\nSMTP_PORT = 587\n\ndef task_func(client_socket):\n    """\n    Receive a message from a client socket and send it as an email via an SMTP server.\n\n    Parameters:\n    client_socket (socket.socket): The client socket from which the message is received.\n\n    Returns:\n    - None\n\n    Note:\n    - Requires a working internet connection and access to an SMTP server.\n    - The function asks for the sender\'s email, recipient\'s email,\n    and sender\'s email password for authentication.\n\n    Requirements:\n    - smtplib\n    - email.message.EmailMessage\n    - getpass\n\n    Example:\n    >>> import socket\n    >>> server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n    >>> server_socket.bind((SERVER_ADDRESS, SERVER_PORT))\n    >>> server_socket.listen(5)\n    >>> client_socket, addr = server_socket.accept()\n    >>> task_func(client_socket)\n    """\n    # Receive the message from the client\n    message = client_socket.recv(BUFFER_SIZE).decode(\'utf-8\')\n    \n    # Create an email message\n    msg = EmailMessage()\n    msg.set_content(message)\n    msg[\'Subject\'] = \'Client Message\'\n    msg[\'From\'] = input("Enter your email: ")\n    msg[\'To\'] = input("Enter recipient\'s email: ")\n\n    # Set up the SMTP server\n    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:\n        server.starttls()  # Secure the connection\n        server.login(msg[\'From\'], getpass.getpass("Enter your email password: "))\n        \n        # Send the email\n        server.send_message(msg)\n\n# Example usage\nif __name__ == "__main__":\n    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n    server_socket.bind((SERVER_ADDRESS, SERVER_PORT))\n    server_socket.listen(5)\n    print(f"Server listening on {SERVER_ADDRESS}:{SERVER_PORT}")\n    client_socket, addr = server_socket.accept()\n    print(f"Connected by {addr}")\n    task_func(client_socket)\n    client_socket.close()\n    server_socket.close()\n```<|im_end|>'
     print(_send_test_request(url, trajectory_id, action, "Hello World"))
-    exit(1)
+    
+    print("--- Test 1.1: History code running ---")
+    action = """### Problem Title: Find the Least Recently Backed Up File
+
+### Problem Description:
+You are given a list of files, where each file is represented as a tuple containing the filename and its last backup timestamp. Your task is to identify the file that was backed up the least recently (i.e., with the oldest backup timestamp) and return its filename along with the corresponding timestamp.
+
+If there are multiple files with the same oldest timestamp, return the filename that comes first in lexicographical order.
+
+### Function Signature:
+```python
+def find_least_recent_backup(files: List[Tuple[str, str]]) -> Tuple[str, str]:
+```
+"""
+    print(_send_test_request(url, trajectory_id, action, "Hello World"))
+    
+    action = """Oops, the code crashed. I'll analyze the error message and see if I can fix it. Based on the error, I think the issue is with the indentation of the function definition. Let me try fixing it and see if that resolves the problem. Ok, I've fixed the indentation issue. Now, let's see if the code runs without any errors. Ok, the code seems to be working fine now. Let's test it with some example inputs to make sure it's giving the correct output. Ok, here are some example inputs and their expected outputs:
+
+```python
+Input: files = [
+    ('file1.txt', '2023-01-01 10:00:00'),
+    ('file2.txt', '2023-01-02 09:00:00'),
+    ('file3.txt', '2022-12-31 23:59:59')
+]
+Output: ('file3.txt', '2022-12-31 23:59:59')
+
+Input: files = [
+    ('file1.txt', '2023-01-01 10:00:00'),
+    ('file2.txt', '2023-01-02 09:00:00'),
+    ('file3.txt', '2023-01-01 10:00:00')
+]
+Output: ('file3.txt', '2023-01-01 10:00:00')
+
+Input: files = [
+    ('file1.txt', '2023-01-01 10:00:00'),
+    ('file2.txt', '2023-01-02 09:00:00'),
+    ('file3.txt', '2023-01-02 09:00:00')
+]
+Output: ('file2.txt', '2023-01-02 09:00:00')
+```
+"""
+    print(_send_test_request(url, trajectory_id, action, "Hello World"))
+    
+    action = """Wait, I got some errors of my previous code, I'll double-check code logic and try to fix the root cause. Based on the error, I think the issue is with the indentation of the function definition. Let me try fixing it and see if that resolves the problem. Ok, I've fixed the indentation issue. Now, let's see if the code runs without any errors. Ok, the code seems to be working fine now. Let's test it with some example inputs to make sure it's giving the correct output. Ok, here are some example inputs and their expected outputs:
+
+```python
+Input: files = [
+    ('file1.txt', '2023-01-01 10:00:00'),
+    ('file2.txt', '2023-01-02 09:00:00'),
+    ('file3.txt', '2022-12-31 23:59:59')
+]
+Output: ('file3.txt', '2022-12-31 23:59:59')
+
+Input: files = [
+    ('file1.txt', '2023-01-01 10:00:00'),
+    ('file2.txt', '2023-01-02 09:00:00'),
+    ('file3.txt', '2023-01-01 10:00:00')
+]
+Output: ('file3.txt', '2023-01-01 10:00:00')
+
+Input: files = [
+    ('file1.txt', '2023-01-01 10:00:00'),
+    ('file2.txt', '2023-01-02 09:00:00'),
+    ('file3.txt', '2023-01-02 09:00:00')
+]
+Output: ('file2.txt', '2023-01-02 09:00:00')
+```
+"""
+    print(_send_test_request(url, trajectory_id, action, "Hello World"))
     
     print("--- Test 2: Multiple Print Statements ---")
     action = """```python
@@ -353,7 +424,7 @@ except ImportError:
 def main():
     """Main entry point for the test script
     Run with:
-        python -m verl_tool.servers.tests.test_firejail_python_code_tool firejail --url=http://localhost:5000/get_observation
+        python -m verl_tool.servers.tests.test_firejail_python_code_tool firejail --url=http://localhost:5001/get_observation
         python -m verl_tool.servers.tests.test_firejail_python_code_tool direct
         python -m verl_tool.servers.tests.test_firejail_python_code_tool matplotlib
         python -m verl_tool.servers.tests.test_firejail_python_code_tool timeout

@@ -19,3 +19,9 @@ class AgentActorConfig:
     call_tool_first: bool=False
     min_action_num: int=0
     action_stop_tokens: list=None
+    additional_eos_token_ids: list=None
+    mask_observations: bool=True
+    force_finish_for_last_turn: bool=False
+    enable_mtrl: bool=False
+    mtrl_sep: str=None # "\n<|im_start|>system\n{obs}<|im_end|>\n<|im_start|>assistant\n"
+    turn_end_token: str="<|im_end|>"

@@ -13,7 +13,7 @@ Server is managed by `app.py`, while the main tool-calling logic is implemented 
 Start the Python code execution tool server and API Service:
 
 ```bash
-bash eval_service/scripts/start_api_service.sh
+bash eval_service/scripts/start_api_service.sh &
 ```
 
 > You can set your own params in `start_api_service.sh`
@@ -35,13 +35,27 @@ How to convert megatron/vllm model ckpt to huggingface ckpt:
 - `local_dir` is the model path that training started from
 - `target_dir` is the local hugging face model that you want to save to
 
+## Upload VTModels
+
 ```bash
 backend=fsdp
-checkpoint_path=checkpoints/acecoder/acecoder-fsdp_agent-qwen_qwen2.5-coder-7b-grpo-n16-b128-t1.0-lr1e-6/global_step_340/actor
-hf_upload_path=VerlTool/acecoder-fsdp_agent-qwen_qwen2.5-coder-7b-grpo-n16-b128-t1.0-lr1e-6-340-step
-python3 verl/scripts/model_merger.py --backend $backend --hf_model_path $checkpoint_path/huggingface --hf_upload_path $hf_upload_path --local_dir $checkpoint_path --target_dir $checkpoint_path/huggingface
+checkpoint_path=checkpoints/acecoder/acecoder-fsdp-xiaomimimo_mimo-7b-base-grpo-n16-b128-t1.0-lr1e-6-69k-sys3-no-tool/global_step_110/actor
+hf_upload_path=VerlTool/acecoder-fsdp-xiaomimimo_mimo-7b-base-grpo-n16-b128-t1.0-lr1e-6-69k-sys3-no-tool-110-step
+python3 verl/scripts/model_merger.py --backend $backend --hf_model_path $checkpoint_path/huggingface --hf_upload_path "$hf_upload_path" --local_dir $checkpoint_path --target_dir $checkpoint_path/huggingface
 
 # optional: also upload the step records to the model
-step_records_dir=verl_step_records/acecoder-fsdp_agent-qwen_qwen2.5-coder-7b-grpo-n16-b128-t1.0-lr1e-6
-huggingface-cli upload --repo-type model $hf_upload_path $step_records_dir step_records
+step_records_dir=verl_step_records/acecoder-fsdp-xiaomimimo_mimo-7b-base-grpo-n16-b128-t1.0-lr1e-6-69k-sys3-no-tool
+zip -r $step_records_dir/step_records.zip $step_records_dir 
+huggingface-cli upload --repo-type model $hf_upload_path $step_records_dir/step_records.zip 
+
+
+backend=fsdp
+checkpoint_path=checkpoints/torl/torl-fsdp_agent-qwen_qwen2.5-math-7b-grpo-n16-b128-t1.0-lr1e-6-mtrl-v6/global_step_330/actor
+hf_upload_path=VerlTool/torl-fsdp_agent-qwen_qwen2.5-math-7b-grpo-n16-b128-t1.0-lr1e-6-mtrl-v6-330-step
+python3 verl/scripts/model_merger.py --backend $backend --hf_model_path $checkpoint_path/huggingface --hf_upload_path "$hf_upload_path" --local_dir $checkpoint_path --target_dir $checkpoint_path/huggingface
+
+# optional: also upload the step records to the model
+step_records_dir=verl_step_records/torl-fsdp_agent-qwen_qwen2.5-math-7b-grpo-n16-b128-t1.0-lr1e-6-mtrl-v6
+zip -r $step_records_dir/step_records.zip $step_records_dir 
+huggingface-cli upload --repo-type model $hf_upload_path $step_records_dir/step_records.zip 
 ```

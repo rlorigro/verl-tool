@@ -27,20 +27,43 @@ from verl.utils.reward_score import prime_math
 def extract_solution(solution_str):
     return remove_boxed(last_boxed_only_string(solution_str))
 
-system_prompot = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem above, and put your final answer within \\boxed{}.:
+system_prompt1 = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem above, and put your final answer within \\boxed{}.:
 '''
+
+system_prompt2 = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem above. If you want to test any python code, writing it inside <python> and  </python> tags following with <output>. Please put your final answer within \\boxed{}.:
+'''
+
+system_prompt3 = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem above. If you want to run any python code, write code in the python markdown code block and the execution will be appended in an output code block like "```python\nyou code here\n```\n```output\nresult here\n```". Please put your final answer within \\boxed{}.'''
+
+system_prompt4 = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please put your final answer within \\boxed{}.'''
+
+system_prompt5 = """\
+A conversation between user and assistant. The user asks a question, and the assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., <think> reasoning process here </think> <answer> answer here </answer>. Please integrate natural language reasoning with programs to solve the problem. That means during the thinking, the assistant can run any python code by writing in the python markdown code block, then the stdout and stderr result will be appended in an output code block like "```python\nyou code here\n```\n```output\nresult here\n```". Please put your final answer within \\boxed{}."""
+
+system_prompt6 = """A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem above. If you want to run any code, include "<|calling system for feedback|>" at the end of your response for the current turn. Then the system will execute the code in the markdown block and provide the standard output and error. If you think the solution is complete and don't need to test, don't include "<|calling system for feedback|>" in the response and put your final answer within \\boxed{}. 
+"""
+
+system_prompt7 = """A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem. That means during the thinking, the assistant can run any python code by writing in the python markdown code block, then the stdout and stderr result will be appended in an output code block like "```python\nyou code here\n```\n```output\nresult here\n```". Please put your final answer within \\boxed{}.
+"""
 
 def main(
     data_source='DigitalLearningGmbH/MATH-lighteval',
     local_dir='~/data/math_torl',
     hdfs_dir=None,
     level:str = 'hard',
+    sys_prompt_version: str = 'v1',
 ):
     
     print(f"Loading the {data_source} dataset from huggingface...", flush=True)
     dataset = datasets.load_dataset(data_source, trust_remote_code=True)
     train_dataset = dataset['train']
     test_dataset = dataset['test']
+    
+    global system_prompt
+    v_idx = sys_prompt_version.split('v')[-1]
+    system_prompt_version = int(v_idx)
+    system_prompt = eval(f'system_prompt{system_prompt_version}')
+    print(f"Using system prompt version {system_prompt_version}...", flush=True)
     
     # easy: level 1
     # medium: level 1-4
@@ -71,7 +94,7 @@ def main(
                 "prompt": [
                 {
                     "role": "system",
-                    "content": system_prompot
+                    "content": system_prompt
                 },
                 {
                     "role": "user",
@@ -118,7 +141,7 @@ def main(
                 "prompt": [
                 {
                     "role": "system",
-                    "content": system_prompot
+                    "content": system_prompt
                 },
                 {
                     "role": "user",
@@ -161,7 +184,7 @@ def main(
                 "prompt": [
                 {
                     "role": "system",
-                    "content": system_prompot
+                    "content": system_prompt
                 },
                 {
                     "role": "user",
@@ -198,4 +221,10 @@ if __name__ == '__main__':
     
 """
 python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl
+python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl_v2 --sys_prompt_version v2
+python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl_v3 --sys_prompt_version v3
+python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl_v4 --sys_prompt_version v4
+python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl_v5 --sys_prompt_version v5
+python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl_v6 --sys_prompt_version v6
+python examples/train/torl/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl_v7 --sys_prompt_version v7
 """

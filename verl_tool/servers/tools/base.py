@@ -88,7 +88,10 @@ class BaseTool:
         """
         Delete the environment for the given trajectory_id
         """
+        # import json
         if trajectory_id in self.env_cache:
+            # with open(f"env_cache/{trajectory_id}.json", "w") as f:
+                # json.dump(self.env_cache[trajectory_id], f)
             del self.env_cache[trajectory_id]
     
     def parse_action(self, action:str):
@@ -141,15 +144,13 @@ class BaseTool:
             dones: The list of done flags
             valids: The list of valid flags
         """
-        # results = [
-        #     self.conduct_action(trajectory_id, action, extra_field)
-        #     for trajectory_id, action, extra_field in tqdm(zip(trajectory_ids, actions, extra_fields),
-        # ]
         with ThreadPoolExecutor(max_workers=min(self.num_workers, len(trajectory_ids))) as executor:
             results = list(tqdm(executor.map(self.conduct_action, trajectory_ids, actions, extra_fields),
                                             total=len(trajectory_ids), desc=f"Getting observations using tool {self.tool_type}", 
                                             disable=False))
-            
+        for i in range(len(trajectory_ids)):
+            if extra_fields[i].get('is_last_step', False):
+                self.delete_env(trajectory_ids[i])
         observations, dones, valids = zip(*results)
         return observations, dones, valids
 

@@ -1,3 +1,12 @@
 [submodule "verl"]
 	path = verl
 	url = https://github.com/volcengine/verl.git
+[submodule "LiveCodeBench"]
+	path = eval_service/benchmarks/LiveCodeBench
+	url = https://github.com/jdf-prog/LiveCodeBench
+[submodule "bigcodebench"]
+	path = eval_service/benchmarks/bigcodebench
+	url =https://github.com/jdf-prog/bigcodebench
+[submodule "evalplus"]
+	path = eval_service/benchmarks/evalplus
+	url = https://github.com/jdf-prog/evalplus

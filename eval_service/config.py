@@ -9,13 +9,18 @@ class ModelConfig:
     tensor_parallel_size: int = 1
     trust_remote_code: bool = True
     num_models: int = 1
+    max_model_len: int = 4096
 @dataclass
 class ToolConfig:
     tool_server_url: str = "http://localhost:30150/get_observation"
     max_turns: int = 5  # max generation turns
     truncate_obs_side: str = "left"  # "left" or "right", which side to truncate when the observation is too long
     action_stop_tokens: str = None
-    max_obs_length: int = None  # maximum length of observation
+    max_obs_length: int = 512  # maximum length of observation
+    enable_mtrl: bool=False
+    mtrl_sep: str=None # "\n<|im_start|>system\n{obs}<|im_end|>\n<|im_start|>assistant\n"
+    turn_end_token: str="<|im_end|>"
+    min_action_num: int=0
     
     def post_init(self):
         """
@@ -38,3 +43,7 @@ class ToolConfig:
 class ServerConfig:
     host: str = "0.0.0.0"
     port: int = 8000
+    workers: int = 32
+    ws_max_queue: int = 1000
+    log_level: str = "error"
+    timeout_keep_alive: int = 60
