@@ -117,7 +117,7 @@ The training step records are automatically saved in [`verl_step_records`](verl_
 Currently, we provide a comprehensive benchmark to evaluate both math and code models in [`benchmarks`](benchmarks).  
 Support for more tasks will be added in the future.
 
-## ToDos # TODO: update more servers 
+## ToDos  
 - [ ] Async VLLM
 - [ ] Add VLM servers and example training scripts
 
