@@ -32,6 +32,9 @@ uv pip install fsspec==2025.3.2
 uv pip install protobuf==5.29.4
 ```
 
+## News
++ [2025/05/31] We release the training/eval code and our blog. We are working on the paper and will release it very soon.
+
 ## Features
 1. Fully separated the tool server and the training logic. By passing a list of `action_stop_tokens` to the training script, each action ending with any of the tokens will be passed to the tool server and further processed by identifying the tool type based on the custom pasing logic in each tool (`parse_action` function). 
 2. Fast Tool Server: We use [ray serve](https://docs.ray.io/en/latest/serve/index.html) to serve the tool servers, which is fully asynchronous and compatible with the verl training.
