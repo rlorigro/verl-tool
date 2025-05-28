@@ -3,9 +3,9 @@
 Here are all the benchmarks we have tested with the evaluation service.
 You need to use `verl_tool` env to launch the eval service first, and get the vt_base_url (set in the script, default is `http://0.0.0.0:5000)
 ```bash
-bash eval_service/scripts/start_api_service.sh &
+bash eval_service/scripts/start_api_service.sh
 ```
-Then you run the eval script in different envs for each benchmark. (see instructions below)
+Then you can run the eval script in different envs for each benchmark. (see instructions below)
 
 ## MathEvalHarness
 ### Install
@@ -51,9 +51,9 @@ bigcodebench.evaluate \
   --base_url http://0.0.0.0:5000 
 ```
 
-- modify system prompt in `bigcodebench/gen/util/openai_request.py`
+- Note: you may want to modify system prompt in `bigcodebench/gen/util/openai_request.py`.
 
-## evalplus
+## evalplus (`humaneval` and `mbpp`)
 
 ### Install
 ```bash
@@ -81,7 +81,7 @@ evalplus.evaluate --model "Qwen/Qwen2.5-Coder-7B-Instruct"             \
                   --backend openai --greedy
 ```
 
-- modify system prompt in `evalplus/gen/util/openai_request.py`
+- Note: you may want to modify system prompt in `evalplus/gen/util/openai_request.py`
 
 ## LiveCodeBench
 ### Install
@@ -103,4 +103,4 @@ python -m lcb_runner.runner.main --model "VerlTool/acecoder-fsdp-qwen_qwen2.5-co
 python -m lcb_runner.runner.main --model "VerlTool/acecoder-fsdp-qwen_qwen2.5-coder-1.5b-grpo-n16-b128-t1.0-lr1e-6-69k-sys3-250-step"  --scenario codegeneration --evaluate  --release_version release_v4 --multiprocess 64 --n 1  --temperature 0 --max_tokens 4096 --top_p 0.95 --num_process_evaluate 32
 ```
 
-- modify system prompt in `lcb_runner/runner/oai_runner.py`
+- Note: you may want to modify system prompt in `lcb_runner/runner/oai_runner.py`
