@@ -1,11 +1,11 @@
-# tset -x
-dataset_name=deep_math # or math_torl_offical to use torl training data
+set -x
+dataset_name=deep_math_tool_v9 # or math_torl_offical to use torl training data
 train_data=$(pwd)/data/${dataset_name}/train.parquet
 val_data=[$(pwd)/data/${dataset_name}/test.parquet,\
 $(pwd)/data/${dataset_name}/math500_test.parquet,\
 $(pwd)/data/${dataset_name}/aime24_test.parquet,\
 $(pwd)/data/${dataset_name}/aime25_test.parquet]
-model_name=/map-vepfs/models/Qwen2.5-Math-7B
+model_name=/map-vepfs/models/Qwen2.5-Math-1.5B
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
 n_gpus_per_node=8
 n_nodes=1
@@ -13,12 +13,12 @@ n=16
 batch_size=128
 ppo_mini_batch_size=$batch_size
 max_prompt_length=1024
-max_response_length=2048
+max_response_length=3072
 max_obs_length=512
 temperature=1.0
 top_p=1.0
 strategy="fsdp_agent" # remove _agent for normal verl behavior
-action_stop_tokens='<|calling system for feedback|>,```output'
+action_stop_tokens='```output'
 max_turns=1
 kl_loss_coef=0.0
 kl_coef=0
@@ -29,18 +29,17 @@ reward_manager=torl
 ppo_micro_batch_size_per_gpu=1
 log_prob_micro_batch_size_per_gpu=8
 tensor_model_parallel_size=2
-gpu_memory_utilization=0.8 # higher gpu_memory_utilization will likely cause the vllm to OOM and get stuck, so set it to a lower value like 0.4 or 0.5
+gpu_memory_utilization=0.6 # higher gpu_memory_utilization will likely cause the vllm to OOM and get stuck, so set it to a lower value like 0.4 or 0.5
 do_offload=True # control actor's fsdp.[param|optimizer]_offload and actor_rollout_ref.rollout.fsdp.[param|optimizer]_offload; if gpu_memory_utilization is set to > 0.6, then do_offload should be set to True otherwise it will cause OOM
 use_dynamic_bsz=True # faster
 ulysses_sequence_parallel_size=1 # set to 1 for normal verl behavior, otherwise it will cause OOM
 fsdp_size=-1
 additional_eos_token_ids=[151645] # <|im_end|> token id
 mask_observations=True # mask observations for kl loss and gradient descent
-enable_mtrl=True # enable multi-turn training
-max_action_length=1536
+enable_mtrl=False # enable multi-turn training
+max_action_length=2048
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
-run_name_postfix="-mtrl-v7"
 run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 export VERL_RUN_ID=$run_name
 export NCCL_DEBUG=INFO
@@ -59,7 +58,7 @@ server_pid=$!
 
 echo "Server (pid=$server_pid) started at $tool_server_url"
 
-python3 -m verl_tool.trainer.main_ppo \
+PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     algorithm.adv_estimator=$rl_alg \
     data.train_files=$train_data \
     data.val_files=$val_data \
@@ -72,6 +71,7 @@ python3 -m verl_tool.trainer.main_ppo \
     actor_rollout_ref.model.path=$model_name \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.actor.optim.lr=$lr \
+    actor_rollout_ref.actor.optim.lr_warmup_steps=10 \
     actor_rollout_ref.model.use_remove_padding=True \
     +actor_rollout_ref.model.trust_remote_code=True \
     actor_rollout_ref.actor.checkpoint.contents=['model','optimizer','extra','hf_model'] \
@@ -129,13 +129,11 @@ python3 -m verl_tool.trainer.main_ppo \
     trainer.default_hdfs_dir=null \
     trainer.n_gpus_per_node=$n_gpus_per_node \
     trainer.nnodes=$n_nodes \
-    +trainer.remove_previous_ckpt_in_save=True \
+    +trainer.remove_previous_ckpt_in_save=False \
     trainer.save_freq=10 \
     trainer.test_freq=10 \
-    trainer.total_epochs=10 2>&1 | tee verl_demo.log
+    trainer.total_epochs=10
 
-ls
-sleep 10
 
 # pkill -P -9 $server_pid
 # kill -9 $kill $server_pid

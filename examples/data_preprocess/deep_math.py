@@ -46,9 +46,15 @@ system_prompt6 = """A conversation between User and Assistant. The user asks a q
 system_prompt7 = """A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem. That means during the thinking, the assistant can run any python code by writing in the python markdown code block, then the stdout and stderr result will be appended in an output code block like "```python\nyou code here\n```\n```output\nresult here\n```". Please put your final answer within \\boxed{}.
 """
 
+system_prompt8 = """Please reason step by step, and put your final answer within \\boxed{}.
+"""
+
+system_prompt9 = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. Please integrate natural language reasoning with programs to solve the problem above, and put your final answer within \\boxed{}.:
+'''
+
 def main(
     data_source='zwhe99/DeepMath-103K',
-    local_dir='~/data/deep_math',
+    local_dir='~/data/deep_math_wo_tool',
     hdfs_dir=None,
     sys_prompt_version: str = 'v1',
 ):
@@ -68,7 +74,6 @@ def main(
     math500_test_dataset = datasets.load_dataset('HuggingFaceH4/MATH-500', split='test')
     
     # add a row to each data item that represents a unique id
-    # TODO: update here 
     def make_train_map_fn(split, data_source):
 
         def process_fn(example, idx):
@@ -142,7 +147,6 @@ def main(
     print(train_dataset)
     print(train_dataset[0])
     
-
     train_dataset.to_parquet(os.path.join(local_dir, 'train.parquet'))
     test_dataset.to_parquet(os.path.join(local_dir, 'test.parquet'))
     math500_test_dataset.to_parquet(os.path.join(local_dir, 'math500_test.parquet'))
@@ -240,5 +244,10 @@ if __name__ == '__main__':
     fire.Fire(main)
     
 """
+# tool 
+python examples/data_preprocess/deep_math.py --data_source zwhe99/DeepMath-103K --local_dir data/deep_math_tool_v9 --sys_prompt_version v9
+# multi-turn tool
 python examples/data_preprocess/deep_math.py --data_source zwhe99/DeepMath-103K --local_dir data/deep_math --sys_prompt_version v6
+# without tool
+python examples/data_preprocess/deep_math.py --data_source zwhe99/DeepMath-103K --local_dir data/deep_math_wo_tool --sys_prompt_version v8
 """
