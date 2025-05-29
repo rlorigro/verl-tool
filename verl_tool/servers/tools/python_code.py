@@ -164,7 +164,7 @@ class PythonCodeTool(BaseTool):
         all_valid_python_code = re.findall(r"<python>(.*?)</python>", action, re.DOTALL)
         
         if not all_valid_python_code:
-            all_valid_python_code = re.findall(r"```python(.*?)```", action, re.DOTALL)
+            all_valid_python_code = re.findall(r"```\n?python(.*?)```", action, re.DOTALL)
         
         # if not all_valid_python_code:
         #     all_valid_python_code = re.findall(r"<tool_call>(.*?)</tool_call>", action, re.DOTALL)

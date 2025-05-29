@@ -37,7 +37,7 @@ class AgentResponse(BaseModel):
 class AsyncToolManager:
     """Manages all tools and their execution using asyncio"""
     
-    def __init__(self, tool_types: Tuple[str], num_workers_per_tool: int = 4, use_tqdm: bool = False):
+    def __init__(self, tool_types: Tuple[str], num_workers_per_tool: int = 4, use_tqdm: bool = False, done_if_invalid: bool = False):
         """
         Initialize the tool manager with specified tools
         
@@ -47,6 +47,7 @@ class AsyncToolManager:
         """
         self.tools: Dict[str, Any] = {}
         self.use_tqdm = use_tqdm
+        self.done_if_invalid = done_if_invalid
         self._initialize_tools(tool_types, num_workers_per_tool)
         
     def _initialize_tools(self, tool_types: Tuple[str], num_workers: int) -> None:
@@ -230,8 +231,11 @@ class AsyncToolManager:
                 # all_observations[idx] = usage_instructions
                 all_observations[idx] = "" # no observation
                 # all_observations[idx] = "\nNo valid action found\n" # no observation
-                all_dones[idx] = False
                 all_valids[idx] = False
+                if self.done_if_invalid:
+                    all_dones[idx] = True
+                else:
+                    all_dones[idx] = False
         
         # Await all tool processing tasks
         for tool_type, task in tasks:
@@ -260,6 +264,7 @@ class AsyncToolServer:
         workers_per_tool: int = 32,
         max_concurrent_requests: int = 64,
         use_tqdm: bool = False,
+        done_if_invalid: bool = False,
     ):
         """
         Initialize the tool server
@@ -276,7 +281,7 @@ class AsyncToolServer:
         self.max_concurrent_requests = max_concurrent_requests
         
         # Initialize async tool manager
-        self.tool_manager = AsyncToolManager(tool_types, workers_per_tool, use_tqdm)
+        self.tool_manager = AsyncToolManager(tool_types, workers_per_tool, use_tqdm, done_if_invalid)
         
         # Create FastAPI app
         self.app = FastAPI(
@@ -367,7 +372,7 @@ class AsyncToolServer:
                             valids=valids
                         )
                         # import json
-                        # with open("request_response.json", "w") as f:
+                        # with open(f"tmp_requests/request_response_{data_hash_str}.json", "w") as f:
                         #     json.dump([
                         #         {
                         #             "trajectory_id": trajectory_ids[i],
@@ -425,6 +430,7 @@ def main(
     use_tqdm: bool = True,
     log_level: str = "info",
     slient=False,
+    done_if_invalid=False,
 ):
     """
     Start the async tool server
@@ -460,6 +466,7 @@ def main(
         workers_per_tool=workers_per_tool,
         max_concurrent_requests=max_concurrent_requests,
         use_tqdm=use_tqdm,
+        done_if_invalid=done_if_invalid,
     )
     if slient:
         import sys

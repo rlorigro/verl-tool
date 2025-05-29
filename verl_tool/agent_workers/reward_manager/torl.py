@@ -74,8 +74,8 @@ class ToRLRewardManager:
                 else:
                     scores_i['unfinished_traj_penalty'] = 0
             if self.add_no_tool_interact_penalty:
-                num_turn = data_i.non_tensor_batch["turns_stats"]
-                if num_turn == 0:
+                num_valid_action = data_i.non_tensor_batch["valid_action_stats"]
+                if num_valid_action == 0:
                     scores_i['score'] -= 0.25
                     scores_i['no_tool_interact_penalty'] = 1
                 else:

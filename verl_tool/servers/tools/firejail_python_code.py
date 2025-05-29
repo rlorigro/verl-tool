@@ -19,6 +19,7 @@ import random
 
 # Timeout for code execution in seconds
 TIMEOUT = 5
+PRE_IMPORT_LIBS = "from string import *\nfrom re import *\nfrom datetime import *\nfrom collections import *\nfrom heapq import *\nfrom bisect import *\nfrom copy import *\nfrom math import *\nfrom random import *\nfrom statistics import *\nfrom itertools import *\nfrom functools import *\nfrom operator import *\nfrom io import *\nfrom sys import *\nfrom json import *\nfrom builtins import *\nfrom typing import *\nimport string\nimport re\nimport datetime\nimport collections\nimport heapq\nimport bisect\nimport copy\nimport math\nimport random\nimport statistics\nimport itertools\nimport functools\nimport operator\nimport io\nimport sys\nimport json\nsys.setrecursionlimit(6*10**5)\n\n"
 
 def check_forbidden_imports(code: str) -> bool:
     """
@@ -53,7 +54,7 @@ def check_forbidden_imports(code: str) -> bool:
     
     return False
     
-def execute_python_in_firejail(code: str, timeout: int=TIMEOUT, stdin: Optional[str] = None) -> Tuple[str, bool]:
+def execute_python_in_firejail(code: str, timeout: int=TIMEOUT, stdin: Optional[str] = None, python_path: str = None, pre_import_lib: bool = False) -> Tuple[str, bool]:
     """
     Execute Python code in a Firejail sandbox with a timeout.
     
@@ -120,8 +121,15 @@ def execute_python_in_firejail(code: str, timeout: int=TIMEOUT, stdin: Optional[
     file_path = os.path.join(cwd, file_name)
     with open(file_path, "w") as f:
         f.write(code)
+    if pre_import_lib:
+        code = PRE_IMPORT_LIBS + code
     # command.extend(["python3", "-c", code])
-    command.extend(["python3", file_path])
+    # command.extend(["python3", file_path])
+    if not python_path:
+        python_path = "python3"
+    else:
+        assert os.path.exists(python_path), f"Python path {python_path} does not exist."
+    command.extend([python_path, file_path])
     has_error = False
     try:
         # Execute the command
@@ -164,7 +172,10 @@ class FirejailPythonCodeTool(BaseTool):
     force_run_test_cases = True
     done_without_error = False
     force_run_test_cases = False
-    done_without_error = False
+    done_without_error = True
+    python_path = None
+    pre_import_lib = False
+    
     def get_usage_inst(self):
         return "You are able to write and execute Python code securely inside a Firejail sandbox."
     
@@ -183,7 +194,7 @@ class FirejailPythonCodeTool(BaseTool):
         all_valid_python_code = re.findall(r"<python>(.*?)</python>", action, re.DOTALL)
         
         if not all_valid_python_code:
-            all_valid_python_code = re.findall(r"```python(.*?)```", action, re.DOTALL)
+            all_valid_python_code = re.findall(r"```\n?python(.*?)```", action, re.DOTALL)
         
         # if not all_valid_python_code:
         #     all_valid_python_code = re.findall(r"<tool_call>(.*?)</tool_call>", action, re.DOTALL)
@@ -260,7 +271,7 @@ class FirejailPythonCodeTool(BaseTool):
                 # Execute the code
                 previous_parsed_code = [obs["action"] for obs in env["previous_obs"] if obs["is_valid"] and "error:" not in obs["observation"].lower()]
                 code_to_execute = "\n".join(previous_parsed_code) + "\n" + parsed_action
-                execution_result, has_error = execute_python_in_firejail(code_to_execute, self.timeout, stdin)
+                execution_result, has_error = execute_python_in_firejail(code_to_execute, self.timeout, stdin, self.python_path, self.pre_import_lib)
                 # print("------")
                 # print(code_to_execute)
                 # print("------")
@@ -275,7 +286,7 @@ class FirejailPythonCodeTool(BaseTool):
                         execution_result = execution_result.replace(previous_obs["observation"], "", 1)
             else:
                 code_to_execute = parsed_action
-                execution_result, has_error = execute_python_in_firejail(code_to_execute, self.timeout, stdin)
+                execution_result, has_error = execute_python_in_firejail(code_to_execute, self.timeout, stdin, self.python_path, self.pre_import_lib)
                 
             execution_result = execution_result.lstrip(' \n')
                         
@@ -322,7 +333,7 @@ class FirejailPythonCodeTool(BaseTool):
                             test_result = ""
                         else:
                             test_codes = code_to_execute + "\n" + test_cases_code
-                            test_execution_result, has_error = execute_python_in_firejail(test_codes, self.timeout, stdin)
+                            test_execution_result, has_error = execute_python_in_firejail(test_codes, self.timeout, stdin, self.python_path, self.pre_import_lib)
                             test_execution_result = test_execution_result.replace(execution_result, "", 1)
                             test_result = f"Testing the above code with the following test cases:\n```python\n{test_cases_code}\n```\n\nTest result:\n```output\n{test_execution_result}\n```\n"
                             if not test_execution_result:
@@ -340,7 +351,7 @@ class FirejailPythonCodeTool(BaseTool):
                             output_case = test_cases["outputs"][i]
                             test_codes = code_to_execute
                             test_stdin = (stdin + "\n" + input_case)
-                            test_execution_result, has_error = execute_python_in_firejail(test_codes, self.timeout, test_stdin)
+                            test_execution_result, has_error = execute_python_in_firejail(test_codes, self.timeout, test_stdin, self.python_path, self.pre_import_lib)
                             test_execution_result = test_execution_result.replace(execution_result, "", 1)
                             test_case_output_match = test_execution_result == output_case
                             if not test_case_output_match:

@@ -20,7 +20,7 @@ n=16
 batch_size=128
 ppo_mini_batch_size=$batch_size
 max_prompt_length=1536
-max_response_length=2048
+max_response_length=3072
 max_obs_length=512
 temperature=1.0
 top_p=1.0
@@ -38,7 +38,7 @@ lr=1e-6
 reward_manager=acecoder
 ppo_micro_batch_size_per_gpu=1
 log_prob_micro_batch_size_per_gpu=8
-tensor_model_parallel_size=4
+tensor_model_parallel_size=2
 gpu_memory_utilization=0.5 # higher gpu_memory_utilization will likely cause the vllm to OOM and get stuck, so set it to a lower value like 0.4 or 0.5
 do_offload=True # control actor's fsdp.[param|optimizer]_offload and actor_rollout_ref.rollout.fsdp.[param|optimizer]_offload; if gpu_memory_utilization is set to > 0.6, then do_offload should be set to True otherwise it will cause OOM
 use_dynamic_bsz=True # faster
@@ -49,7 +49,7 @@ max_action_length=1536
 
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
-run_name_postfix="-69k-mtrl-sys8-new2"
+run_name_postfix="-69k-mtrl-sys8-new2-d1fo"
 run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 export VERL_RUN_ID=$run_name
 export NCCL_DEBUG=INFO
