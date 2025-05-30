@@ -1,11 +1,10 @@
 # LLM Math Evaluation Harness
 ## How to add new prompt?
-You can directly search for `torl` and check where it has been modified.
++ **Step 1**: Add your prompt in `./utils.py`.
 
-+ Step 1: Add your prompt in ./utils.py.
++ **Step 2**: Add your model's stop words in `./math_eval.py`.  
 
-+ Step 2: Add your model's stop word in ./math_eval.py.
-(Note: If your model is Qwen, make sure to include "qwen" in the prompt so that Qwen-specific stop words will be enabled.)
+As an example, you can search for `torl` to see how it has been integrated and modified.
 
 ## Overview
 A unified, precise, and extensible toolkit to benchmark LLMs on various mathematical tasks 🧮✨.
