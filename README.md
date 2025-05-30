@@ -107,8 +107,7 @@ ray start --address='head_node_ip:6379' --block # start ray worker node
 The training step records are automatically saved in [`verl_step_records`](verl_step_records).
 
 ## Evaluation
-Currently, we provide a comprehensive benchmark to evaluate both math and code models in [`benchmarks`](benchmarks).  
-Support for more tasks will be added in the future.
+**We provide a comprehensive benchmark to evaluate both math and code models in [`benchmarks`](benchmarks).**  We will add more task benchmarks in the future.
 
 ## ToDos  
 - [ ] Async VLLM
