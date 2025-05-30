@@ -15,8 +15,8 @@ VerlTool: An unified and easy-to-extend tool-agent training framework based on v
 
 ## Table of Contents
 - [News](#news)
-- [Main Results](#Main-Results)
-- [Model Checkpoints](#Model-Checkpoints)
+- [Main Results](#main-results)
+- [Model Checkpoints](#model-checkpoints)
 - [Features](#features)
 - [Installation](#installation)
 - [Training](#training)
@@ -40,7 +40,7 @@ VerlTool: An unified and easy-to-extend tool-agent training framework based on v
 ## Main Results
 ### Verl-tool on Math 
 **1.5B Model Performance across challenging mathematical benchmarks:**
-| Model Name                                 | Inference | GSM8K | MATH 500 | Minerva Math | Olympiad Bench | AIME24 (Pass@1) | AMC23 | Avg   |
+| Model Name                                 | Tool | GSM8K | MATH 500 | Minerva Math | Olympiad Bench | AIME24 (Pass@1) | AMC23 | Avg   |
 |--------------------------------------------|-----------|--------|-----------|---------------|------------------|------------------|--------|--------|
 | Qwen2.5-Math-1.5B                           | ❌        | 39.50  | 34.80     | 8.10          | 23.00            | 13.30            | 35.00  | 25.62 |
 | Qwen2.5-Math-1.5B-Instruct                  | ❌        | 84.90  | 74.20     | 26.80         | 39.00            | 10.00            | 57.50  | 48.70 |
@@ -51,7 +51,7 @@ VerlTool: An unified and easy-to-extend tool-agent training framework based on v
 
 
 **7B Model Performance across challenging mathematical benchmarks:**
-|Model Name                                 |Inference|GSM8K|MATH 500|Minerva  Math|Olympiad  Bench|AIME24  (Pass@1)|AMC23|Avg  |
+|Model Name                                 |Tool|GSM8K|MATH 500|Minerva  Math|Olympiad  Bench|AIME24  (Pass@1)|AMC23|Avg  |
 |-------------------------------------------|---------|-----|--------|-------------|---------------|----------------|-----|-----|
 |Qwen-2.5-Math-7B                           |❌        |65.50|63.60   |12.50        |25.80          |13.30           |42.50|37.20|
 |Qwen2.5-Math-7B-Instruct                   |❌        |95.20|83.00   |37.10        |41.60          |16.70           |70.00|57.27|
