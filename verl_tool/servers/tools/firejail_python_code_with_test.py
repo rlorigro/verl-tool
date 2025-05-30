@@ -14,7 +14,6 @@ import uuid
 import hashlib
 import textwrap
 from typing import Tuple, Dict, Any, Optional, Union, List
-from ..utils import kill_python_subprocess_processes
 
 import random
 
@@ -253,14 +252,14 @@ def execute_python_in_firejail(code: Union[str, List[str]], timeout: int=TIMEOUT
     return result, has_error
 
 @register_tool
-class FirejailPythonCodeTool(BaseTool):
-    tool_type = "firejail_python_code"
+class FirejailPythonCodeWithTestTool(BaseTool):
+    tool_type = "firejail_python_code_with_test"
     timeout = TIMEOUT
     stop_tokens = ["```output", "<output>", "<tool_call>"]
-    enable_history_code_execution = False
+    enable_history_code_execution = True
     enable_mannual_reflection = False
-    force_run_test_cases = False
-    done_without_error = True
+    force_run_test_cases = True
+    done_without_error = False
     python_path = None
     pre_import_lib = False
     
@@ -417,7 +416,7 @@ class FirejailPythonCodeTool(BaseTool):
                 test_cases = extra_field.get("public_tests", None) if extra_field else None
                 if test_cases:
                     if isinstance(test_cases, str):
-                        test_cases = json.loads(test_cases)
+                        test_cases = json.loads(test_cases)[:10] # debug
                     # execute the public test cases
                     if isinstance(test_cases, list):
                         # list of assert
