@@ -33,7 +33,39 @@ VerlTool: An unified and easy-to-extend tool-agent training framework based on v
 
 
 ## News
-+ [2025/05/31] We release the training/eval code and our blog. We are working on the paper and will release it very soon.
++ [2025/05/31] We release the Verl-tool training/eval code. We are working on the paper and will release it very soon.
+
+## Main Results
+### Verl-tool on Math 
+**1.5B Model Performance across challenging mathematical benchmarks:**
+| Model Name                                 | Inference | GSM8K | MATH 500 | Minerva Math | Olympiad Bench | AIME24 (Pass@1) | AMC23 | Avg   |
+|--------------------------------------------|-----------|--------|-----------|---------------|------------------|------------------|--------|--------|
+| Qwen2.5-Math-1.5B                           | ❌        | 39.50  | 34.80     | 8.10          | 23.00            | 13.30            | 35.00  | 25.62 |
+| Qwen2.5-Math-1.5B-Instruct                  | ❌        | 84.90  | 74.20     | 26.80         | 39.00            | 10.00            | 57.50  | 48.70 |
+| Qwen2.5-Math-1.5B-Instruct + SimpleRL-Zoo   | ❌        | 81.90  | 70.20     | 20.60         | 33.90            | 20.00            | 55.00  | 46.90 |
+| Qwen-2.5-Math-1.5B-Insturct-TIR             | ✅        | 83.70  | 76.20     | 24.30         | 41.30            | 26.70            | 55.00  | 51.20 |
+| ToRL-1.5B                                   | ✅        | 85.60  | 77.80     | 29.80         | 44.00            | 26.70            | 67.50  | 55.23 |
+| **Qwen-2.5-Math-1.5B + Verl-Tool**          | ✅        | **85.10** | **77.40** | **28.30**     | **44.00**        | **33.30**        | **65.00** | **55.52** |
+
+
+**7B Model Performance across challenging mathematical benchmarks:**
+|Model Name                                 |Inference|GSM8K|MATH 500|Minerva  Math|Olympiad  Bench|AIME24  (Pass@1)|AMC23|Avg  |
+|-------------------------------------------|---------|-----|--------|-------------|---------------|----------------|-----|-----|
+|Qwen-2.5-Math-7B                           |❌        |65.50|63.60   |12.50        |25.80          |13.30           |42.50|37.20|
+|Qwen2.5-Math-7B-Instruct                   |❌        |95.20|83.00   |37.10        |41.60          |16.70           |70.00|57.27|
+|Qwen-2.5-Math-7B + SimpleRL-Zoo            |❌        |88.80|80.20   |26.80        |41.60          |30.00           |52.50|53.30|
+|Qwen-2.5-Math-7B-Insturct-TIR              |✅        |94.60|82.40   |29.00        |50.50          |30.00           |62.50|58.17|
+|TORL-7B    |✅        |92.70|82.20   |33.50        |49.90          |43.30           |65.00|61.10|
+|**Qwen-2.5-Math-7B + Verl-Tool**           |✅        |**91.40**|**83.40**|**29.80**    |**50.20**      |**40.00**       |**72.50**|**61.22**|
+
+
+
+## Model Checkpoints 
+All these models are also in our [Huggingface Collection](https://huggingface.co/VerlTool). 
+|Model|Link|
+|-|-|
+|Qwen-2.5-Math-1.5B-Verl-tool|[🤗](https://huggingface.co/VerlTool/torl-deep_math-fsdp_agent-qwen2.5-math-1.5b-grpo-n16-b128-t1.0-lr1e-6-320-step)|
+|Qwen-2.5-Math-7B-Verl-tool|[🤗](https://huggingface.co/VerlTool/torl-deep_math-fsdp_agent-qwen2.5-math-7b-grpo-n16-b128-t1.0-lr1e-6-310-step)|
 
 
 ## Features
@@ -71,13 +103,6 @@ pip install fsspec==2025.3.2
 pip install protobuf==5.29.4
 ```
 
-## Features
-1. Fully separated the tool server and the training logic. By passing a list of `action_stop_tokens` to the training script, each action ending with any of the tokens will be passed to the tool server and further processed by identifying the tool type based on the custom pasing logic in each tool (`parse_action` function). 
-2. Fast Tool Server: We use [ray serve](https://docs.ray.io/en/latest/serve/index.html) to serve the tool servers, which is fully asynchronous and compatible with the verl training.
-3. Multiple tool types, see [./verl_tool/servers/tools](./verl_tool/servers/tools) for all the avaiable tools. Each python file is a tool type we support.
-4. Natural multi-turn RL with tool calling support by specifying the `max_turns` in the script.
-5. We make [verl](https://github.com/volcengine/verl) as a submodule of this repo, and only add additional logics by inheriting the `ActorRolloutRefWorker` and `RayPPOTrainer`, making it easy to extend and maintain.
-
 ## Training
 We will take torl (Tool-Integrated RL for Math) as an example. Check [examples](examples) for more examples. 
 
@@ -114,8 +139,7 @@ ray start --address='head_node_ip:6379' --block # start ray worker node
 The training step records are automatically saved in [`verl_step_records`](verl_step_records).
 
 ## Evaluation
-Currently, we provide a comprehensive benchmark to evaluate both math and code models in [`benchmarks`](benchmarks).  
-Support for more tasks will be added in the future.
+**We provide a comprehensive benchmark to evaluate both math and code models in [`benchmarks`](benchmarks).**  We will add more task benchmarks in the future.
 
 ## ToDos  
 - [ ] Async VLLM
