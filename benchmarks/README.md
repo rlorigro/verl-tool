@@ -1,7 +1,7 @@
 # Benchmark 
 
 ## Math Benchmarks
-Please see [benchmarks/math-evaluation-harness/README.md](benchmarks/math-evaluation-harness/README.md) for more details. 
+Please see [math-evaluation-harness/README.md](math-evaluation-harness/README.md) for more details. 
 
 ## Code Benchmarks
 Here are all the benchmarks we have tested with the evaluation service.
