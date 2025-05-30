@@ -119,3 +119,6 @@ This project is still under active development. We welcome any contributions, in
 - https://github.com/openai/prm800k
 - https://github.com/wellecks/lm-evaluation-harness
 - https://github.com/deepseek-ai/DeepSeek-Math
+- 
+## Acknowledge
+The codebase is adapted from math-evaluation-harness.
