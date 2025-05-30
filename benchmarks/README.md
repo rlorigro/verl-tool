@@ -28,7 +28,7 @@ We provide a unified math benchmark that includes the following datasets: `GSM8K
 ## Coding Benchmarks
 We provide three coding benchmarks: `BigCodeBench`, `evalplus`, and `LiveCodeBench`.  These benchmarks have been adapted to support the `verl-tool` tool-calling API for model evaluation.
 
-**Before running evaluations, make sure to start the evaluation service using the `verl_tool` environment.** This will launch an OpenAI-compatible server to serve the model and provide the `vt_base_url`, which is set in the script (default: `http://0.0.0.0:5000`).
+**Before running evaluations, make sure to start the [eval_service](./eval_service) using the `verl_tool` environment.** This will launch an OpenAI-compatible server to serve the model and provide the `vt_base_url`, which is set in the script (default: `http://0.0.0.0:5000`).
 
 
 ```bash
