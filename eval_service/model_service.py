@@ -371,7 +371,7 @@ class ModelService:
         if not 'user' in [message["role"] for message in body["messages"]]:
             raise ValueError("No user message found in the request.")
         
-        assert body["model"] == self.model_config.model, f"model mismatch: {body['model']} != {self.model_config.model}"\
+        assert body["model"] == self.model_config.model, f"model mismatch: {body['model']} != {self.model_config.model}"
         
         async with self.encode_lock:
             prompt = self.tokenizer.apply_chat_template(body['messages'],
