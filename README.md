@@ -23,9 +23,8 @@ VerlTool: An unified and easy-to-extend tool-agent training framework based on v
   - [Single Node Training](#single-node-training)
   - [Multi Node Training](#multi-node-training)
 - [Evaluation](#evaluation)
-- [Test Tool Servers](#test-tool-servers)
 - [ToDos](#todos)
-- [Contribution](#contribution)
+- [Contribution](#contribute-your-own-tools)
   - [Contribution to tool libraries](#contribution-to-tool-libraries)
   - [New reward manager](#new-reward-manager)
 
@@ -108,7 +107,7 @@ pip install protobuf==5.29.4
 ## Training
 We will take verl-tool-math (Tool-Integrated RL for Math) as an example. Check [examples](examples) for more training examples. 
 
-### Data preprocess
+### Data Preprocess
 Prepare the data for training. You can use the provided script to preprocess the data. More examples can be found in [examples/data_preprocess](examples/data_preprocess).
 
 ```bash
@@ -148,11 +147,11 @@ The training step records are automatically saved in [`verl_step_records`](verl_
 - [ ] Add VLM servers and example training scripts
 - [ ] MCP server tool support
 
-## Contribute your own tools 
-### Contribution to tool libraries
+## Contribute Your Own Tools 
+### Contribution to Tool Libraries
 Go to the [./verl_tool/servers/tools](./verl_tool/servers/tools) directory. Each tool has a name (e.g. `base`, `python_code`), the name of tool is exactly the name of the python file that you should create in the directory. See [./verl_tool/servers/tools/python_code.py](./verl_tool/servers/tools/python_code.py) for an example.
 
-### New reward manager
+### New Reward Manager
 Go to the [`./verl_tool/agent_workers/reward_manager`](./verl_tool/agent_workers/reward_manager) directory and add your new reward manager.  
 Then, make sure update the `verl_tool/trainer/main_ppo.py` file to include your new reward manager.
 
