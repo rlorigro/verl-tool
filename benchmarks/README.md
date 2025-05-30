@@ -1,13 +1,5 @@
 # Benchmark 
-
-## Math Benchmarks
-We provide a unified math benchmark that includes the following datasets: `GSM8K`, `MATH 500`, `Minerva Math`, `Olympiad Bench`, `AIME24`, and `AMC23`. Please see [math-evaluation-harness](https://github.com/Zhuofeng-Li/math-evaluation-harness/tree/9271e69bece4d14b33340df050c469996f1d6ab1) for more details.
-
-
-## Coding Benchmarks
-We provide three coding benchmarks: `BigCodeBench`, `evalplus` and `LiveCodeBench` which has been adapted to support the verl-tool tool-calling API. If you want to add new benchmarks, please add new OpenAI API-compliant models in new benchmark repositories accordingly.
-
-All three adapted benchmarks have been added as submodules. Make sure you have run the following command to clone all of them:
+All benchmarks have been added as submodules. Make sure you have run the following command to clone all of them:
 
 ```bash
 git submodule update --init --recursive
@@ -16,6 +8,9 @@ git submodule update --init --recursive
 Specifically, to manually clone them, please run the following commands:
 
 ```bash
+# Adapted math-evaluation-harness
+git clone https://github.com/Zhuofeng-Li/math-evaluation-harness/tree/main
+
 # Adapted BigCodeBench
 git clone https://github.com/jdf-prog/bigcodebench.git
 
@@ -26,7 +21,15 @@ git clone https://github.com/jdf-prog/evalplus.git
 git clone https://github.com/jdf-prog/LiveCodeBench
 ```
 
-You need to use `verl_tool` env to launch the eval service first, and get the vt_base_url (set in the script, default is `http://0.0.0.0:5000)
+## Math Benchmarks
+We provide a unified math benchmark that includes the following datasets: `GSM8K`, `MATH 500`, `Minerva Math`, `Olympiad Bench`, `AIME24`, and `AMC23`. Please see [math-evaluation-harness](https://github.com/Zhuofeng-Li/math-evaluation-harness/tree/9271e69bece4d14b33340df050c469996f1d6ab1) for more details.
+
+
+## Coding Benchmarks
+We provide three coding benchmarks: `BigCodeBench`, `evalplus`, and `LiveCodeBench`.  These benchmarks have been adapted to support the `verl-tool` tool-calling API for model evaluation.
+
+**Before running evaluations, make sure to start the evaluation service using the `verl_tool` environment.** This will launch an OpenAI-compatible server to serve the model and provide the `vt_base_url`, which is set in the script (default: `http://0.0.0.0:5000`).
+
 
 ```bash
 bash eval_service/scripts/start_api_service.sh
