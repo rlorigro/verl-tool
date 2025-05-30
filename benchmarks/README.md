@@ -1,8 +1,7 @@
 # Benchmark 
 
 ## Math Benchmarks
-We provide a unified math benchmark that includes the following datasets: `GSM8K`, `MATH 500`, `Minerva Math`, `Olympiad Bench`, `AIME24`, and `AMC23`.  
-Please see [math-evaluation-harness/README.md](math-evaluation-harness/README.md) for more details.
+We provide a unified math benchmark that includes the following datasets: `GSM8K`, `MATH 500`, `Minerva Math`, `Olympiad Bench`, `AIME24`, and `AMC23`. Please see [math-evaluation-harness/README.md](math-evaluation-harness/README.md) for more details.
 
 
 ## Code Benchmarks
