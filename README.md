@@ -78,6 +78,7 @@ All these models are also in our [Huggingface Collection](https://huggingface.co
 
 
 ## Installation
+We highly recommend using uv to install verl-tool. 
 ```bash
 git submodule update --init --recursive
 pip install uv # if not installed
