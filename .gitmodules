@@ -10,3 +10,6 @@
 [submodule "evalplus"]
 	path = benchmarks/evalplus
 	url = https://github.com/jdf-prog/evalplus
+[submodule "benchmarks/math-evaluation-harness"]
+	path = benchmarks/math-evaluation-harness
+	url = https://github.com/Zhuofeng-Li/math-evaluation-harness.git
