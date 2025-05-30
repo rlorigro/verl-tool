@@ -23,7 +23,6 @@ A unified, precise, and extensible toolkit to benchmark LLMs on various mathemat
 
 ### ⚙️ Environment Setup
 ```
-git clone https://github.com/ZubinGou/math-evaluation-harness.git
 cd math-evaluation-harness
 pip install uv # if not install uv
 uv venv --python 3.11
