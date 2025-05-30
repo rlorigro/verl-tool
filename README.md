@@ -15,15 +15,16 @@ VerlTool: An unified and easy-to-extend tool-agent training framework based on v
 
 ## Table of Contents
 - [News](#news)
+- [Main Results](#main-results)
+- [Model Checkpoints](#model-checkpoints)
 - [Features](#features)
 - [Installation](#installation)
 - [Training](#training)
   - [Single Node Training](#single-node-training)
   - [Multi Node Training](#multi-node-training)
 - [Evaluation](#evaluation)
-- [Test Tool Servers](#test-tool-servers)
 - [ToDos](#todos)
-- [Contribution](#contribution)
+- [Contribution](#contribute-your-own-tools)
   - [Contribution to tool libraries](#contribution-to-tool-libraries)
   - [New reward manager](#new-reward-manager)
 
@@ -38,7 +39,7 @@ VerlTool: An unified and easy-to-extend tool-agent training framework based on v
 ## Main Results
 ### Verl-tool on Math 
 **1.5B Model Performance across challenging mathematical benchmarks:**
-| Model Name                                 | Inference | GSM8K | MATH 500 | Minerva Math | Olympiad Bench | AIME24 (Pass@1) | AMC23 | Avg   |
+| Model Name                                 | Tool | GSM8K | MATH 500 | Minerva Math | Olympiad Bench | AIME24 | AMC23 | Avg   |
 |--------------------------------------------|-----------|--------|-----------|---------------|------------------|------------------|--------|--------|
 | Qwen2.5-Math-1.5B                           | ❌        | 39.50  | 34.80     | 8.10          | 23.00            | 13.30            | 35.00  | 25.62 |
 | Qwen2.5-Math-1.5B-Instruct                  | ❌        | 84.90  | 74.20     | 26.80         | 39.00            | 10.00            | 57.50  | 48.70 |
@@ -49,7 +50,7 @@ VerlTool: An unified and easy-to-extend tool-agent training framework based on v
 
 
 **7B Model Performance across challenging mathematical benchmarks:**
-|Model Name                                 |Inference|GSM8K|MATH 500|Minerva  Math|Olympiad  Bench|AIME24  (Pass@1)|AMC23|Avg  |
+|Model Name                                 |Tool|GSM8K|MATH 500|Minerva  Math|Olympiad  Bench|AIME24 |AMC23|Avg  |
 |-------------------------------------------|---------|-----|--------|-------------|---------------|----------------|-----|-----|
 |Qwen-2.5-Math-7B                           |❌        |65.50|63.60   |12.50        |25.80          |13.30           |42.50|37.20|
 |Qwen2.5-Math-7B-Instruct                   |❌        |95.20|83.00   |37.10        |41.60          |16.70           |70.00|57.27|
@@ -73,7 +74,7 @@ All these models are also in our [Huggingface Collection](https://huggingface.co
 - **Native RL Framework for Training Tool-Calling Agents.** `verl-tool` natively supports **multi-turn interactive loops** between agents and their environments.
 - **Developer Friendly.** By integrating `verl` as a submodule, `verl-tool` abstracts away the complexity of RL training. Developers only need focus on building their tools following simple templates.
 - **Fast Tool Server with Multiple Tool Types.** `verl-tool` uses [Ray Serve](https://docs.ray.io/en/latest/serve/index.html) to asynchronously serve tools, ensuring full compatibility with verl agent training. See [./verl_tool/servers/tools](./verl_tool/servers/tools) for all available tools — each Python file represents a supported tool type.
-- **Comprehensive Evaluation Suite.** , See [benchmarks](benchmarks). `verl-tool` allows you to instantly evaluate your models’ capabilities. Currently, it supports benchmarks for math and code models, with more domains to be added in the future.
+- **Comprehensive Evaluation Suite.** See [benchmarks](benchmarks). `verl-tool` allows you to instantly evaluate your models’ capabilities. Currently, it supports benchmarks for math and code models, with more domains to be added in the future.
 
 
 ## Installation
@@ -104,9 +105,9 @@ pip install protobuf==5.29.4
 ```
 
 ## Training
-We will take torl (Tool-Integrated RL for Math) as an example. Check [examples](examples) for more examples. 
+We will take verl-tool-math (Tool-Integrated RL for Math) as an example. Check [examples](examples) for more training examples. 
 
-### Data preprocess
+### Data Preprocess
 Prepare the data for training. You can use the provided script to preprocess the data. More examples can be found in [examples/data_preprocess](examples/data_preprocess).
 
 ```bash
@@ -114,7 +115,7 @@ python examples/data_preprocess/math_torl.py --data_source DigitalLearningGmbH/M
 ```
 
 ### Single Node Training
-We train the **torl-1.5B-Math** model using the command below. The training configuration can be found in [verl_tool/trainer/config/ppo_trainer.yaml](verl_tool/trainer/config/ppo_trainer.yaml) and [verl_tool/llm_agent/config.py](verl_tool/llm_agent/config.py). For other model types, examples can be found in [`examples/train`](examples/train).
+We train the **Verl-Tool-1.5B-Math** model using the command below. The training configuration can be found in [verl_tool/trainer/config/ppo_trainer.yaml](verl_tool/trainer/config/ppo_trainer.yaml) and [verl_tool/llm_agent/config.py](verl_tool/llm_agent/config.py). For other model types, examples can be found in [`examples/train`](examples/train).
 
 ```bash
 bash examples/train/torl/torl_1.5b_math_hard.sh # train the model
@@ -139,18 +140,18 @@ ray start --address='head_node_ip:6379' --block # start ray worker node
 The training step records are automatically saved in [`verl_step_records`](verl_step_records).
 
 ## Evaluation
-**We provide a comprehensive benchmark to evaluate both math and code models in [`benchmarks`](benchmarks).**  We will add more task benchmarks in the future.
+**We provide comprehensive benchmarks to evaluate both math and code models in [`benchmarks`](benchmarks).**  We will add more task benchmarks in the future.
 
 ## ToDos  
 - [ ] Async VLLM
 - [ ] Add VLM servers and example training scripts
 - [ ] MCP server tool support
 
-## Contribute your own tools 
-### Contribution to tool libraries
+## Contribute Your Own Tools 
+### Contribution to Tool Libraries
 Go to the [./verl_tool/servers/tools](./verl_tool/servers/tools) directory. Each tool has a name (e.g. `base`, `python_code`), the name of tool is exactly the name of the python file that you should create in the directory. See [./verl_tool/servers/tools/python_code.py](./verl_tool/servers/tools/python_code.py) for an example.
 
-### New reward manager
+### New Reward Manager
 Go to the [`./verl_tool/agent_workers/reward_manager`](./verl_tool/agent_workers/reward_manager) directory and add your new reward manager.  
 Then, make sure update the `verl_tool/trainer/main_ppo.py` file to include your new reward manager.
 

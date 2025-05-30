@@ -1,7 +1,8 @@
 # Benchmark 
 
 ## Math Benchmarks
-Please see [benchmarks/math-evaluation-harness/README.md](benchmarks/math-evaluation-harness/README.md) for more details. 
+We provide a unified math benchmark that includes the following datasets: `GSM8K`, `MATH 500`, `Minerva Math`, `Olympiad Bench`, `AIME24`, and `AMC23`. Please see [math-evaluation-harness/README.md](math-evaluation-harness/README.md) for more details.
+
 
 ## Code Benchmarks
 Here are all the benchmarks we have tested with the evaluation service.
@@ -11,21 +12,6 @@ bash eval_service/scripts/start_api_service.sh
 ```
 Then you can run the eval script in different envs for each benchmark. (see instructions below)
 
-## MathEvalHarness
-### Install
-```bash
-cd math-evaluation-harness
-uv venv --python 3.10
-uv pip install -r requirements.txt
-```
-
-### Eval
-```bash
-bash scripts/run_eval.sh $PROMPT_TYPE $MODEL_NAME_OR_PATH
-bash scripts/run_vt_eval.sh $PROMPT_TYPE $MODEL_NAME_OR_PATH # set vt_base_url in the script
-```
-
-- see its `README.md` for how to modify system prompt
 
 ## BigCodeBench
 
