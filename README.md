@@ -71,13 +71,6 @@ pip install fsspec==2025.3.2
 pip install protobuf==5.29.4
 ```
 
-## Features
-1. Fully separated the tool server and the training logic. By passing a list of `action_stop_tokens` to the training script, each action ending with any of the tokens will be passed to the tool server and further processed by identifying the tool type based on the custom pasing logic in each tool (`parse_action` function). 
-2. Fast Tool Server: We use [ray serve](https://docs.ray.io/en/latest/serve/index.html) to serve the tool servers, which is fully asynchronous and compatible with the verl training.
-3. Multiple tool types, see [./verl_tool/servers/tools](./verl_tool/servers/tools) for all the avaiable tools. Each python file is a tool type we support.
-4. Natural multi-turn RL with tool calling support by specifying the `max_turns` in the script.
-5. We make [verl](https://github.com/volcengine/verl) as a submodule of this repo, and only add additional logics by inheriting the `ActorRolloutRefWorker` and `RayPPOTrainer`, making it easy to extend and maintain.
-
 ## Training
 We will take torl (Tool-Integrated RL for Math) as an example. Check [examples](examples) for more examples. 
 
