@@ -170,7 +170,7 @@ class FirejailPythonCodeTool(BaseTool):
     enable_history_code_execution = False
     enable_mannual_reflection = False
     force_run_test_cases = False
-    done_without_error = True
+    done_without_error = False
     python_path = None
     pre_import_lib = False
     

@@ -1,11 +1,12 @@
-tset -x
-dataset_name=math_torl_v7 # or math_torl_offical to use torl training data
+# no tool version 
+set -x
+dataset_name=deep_math_wo_tool # or math_torl_offical to use torl training data
 train_data=$(pwd)/data/${dataset_name}/train.parquet
 val_data=[$(pwd)/data/${dataset_name}/test.parquet,\
 $(pwd)/data/${dataset_name}/math500_test.parquet,\
 $(pwd)/data/${dataset_name}/aime24_test.parquet,\
 $(pwd)/data/${dataset_name}/aime25_test.parquet]
-model_name=XiaomiMiMo/MiMo-7B-Base
+model_name=/map-vepfs/models/Qwen2.5-Math-1.5B
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
 n_gpus_per_node=8
 n_nodes=1
@@ -13,11 +14,11 @@ n=16
 batch_size=128
 ppo_mini_batch_size=$batch_size
 max_prompt_length=1024
-max_response_length=2048
+max_response_length=3072
 max_obs_length=512
 temperature=1.0
 top_p=1.0
-strategy="fsdp_agent" # remove _agent for normal verl behavior
+strategy="fsdp" # remove _agent for normal verl behavior
 action_stop_tokens='<|calling system for feedback|>,```output'
 max_turns=1
 kl_loss_coef=0.0
@@ -40,7 +41,6 @@ enable_mtrl=True # enable multi-turn training
 max_action_length=1536
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
-run_name_postfix="-mtrl-v7"
 run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 export VERL_RUN_ID=$run_name
 export NCCL_DEBUG=INFO
@@ -51,13 +51,6 @@ action_stop_tokens_file="$(pwd)$(mktemp)"
 echo -e -n "$action_stop_tokens" | tee $action_stop_tokens_file
 echo "action_stop_tokens_file=$action_stop_tokens_file"
 
-host=$(hostname -I | awk '{print $1}')
-port=$(shuf -i 30000-31000 -n 1)
-tool_server_url=http://$host:$port/get_observation
-python -m verl_tool.servers.serve --host $host --port $port --tool_type "python_code" --workers_per_tool 8 &
-server_pid=$!
-
-echo "Server (pid=$server_pid) started at $tool_server_url"
 
 PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     algorithm.adv_estimator=$rl_alg \
@@ -72,6 +65,7 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     actor_rollout_ref.model.path=$model_name \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.actor.optim.lr=$lr \
+	actor_rollout_ref.actor.optim.lr_warmup_steps=10 \
     actor_rollout_ref.model.use_remove_padding=True \
     +actor_rollout_ref.model.trust_remote_code=True \
     actor_rollout_ref.actor.checkpoint.contents=['model','optimizer','extra','hf_model'] \
@@ -87,18 +81,6 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=$do_offload \
     actor_rollout_ref.actor.fsdp_config.fsdp_size=$fsdp_size \
     actor_rollout_ref.actor.ulysses_sequence_parallel_size=$ulysses_sequence_parallel_size \
-    +actor_rollout_ref.agent.tool_server_url=$tool_server_url \
-    +actor_rollout_ref.agent.max_prompt_length=$max_prompt_length \
-    +actor_rollout_ref.agent.max_response_length=$max_response_length \
-    +actor_rollout_ref.agent.max_start_length=$max_prompt_length \
-    +actor_rollout_ref.agent.max_obs_length=$max_obs_length \
-    +actor_rollout_ref.agent.max_turns=$max_turns \
-    +actor_rollout_ref.agent.num_gpus=$n_gpus_per_node \
-    +actor_rollout_ref.agent.additional_eos_token_ids=$additional_eos_token_ids \
-    +actor_rollout_ref.agent.mask_observations=$mask_observations \
-    +actor_rollout_ref.agent.action_stop_tokens=$action_stop_tokens_file \
-    +actor_rollout_ref.agent.enable_mtrl=$enable_mtrl \
-    +actor_rollout_ref.agent.max_action_length=$max_action_length \
     actor_rollout_ref.rollout.tensor_model_parallel_size=$tensor_model_parallel_size \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=$log_prob_micro_batch_size_per_gpu \
     actor_rollout_ref.rollout.enforce_eager=False \
@@ -129,11 +111,11 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     trainer.default_hdfs_dir=null \
     trainer.n_gpus_per_node=$n_gpus_per_node \
     trainer.nnodes=$n_nodes \
-    +trainer.remove_previous_ckpt_in_save=True \
     trainer.save_freq=10 \
     trainer.test_freq=10 \
-    trainer.total_epochs=10
+    trainer.total_epochs=10 \
+    2>&1 | tee tmp.log
 
 
-pkill -P -9 $server_pid
-kill -9 $kill $server_pid
+# pkill -P -9 $server_pid
+# kill -9 $kill $server_pid

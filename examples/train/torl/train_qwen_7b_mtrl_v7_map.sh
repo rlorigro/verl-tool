@@ -1,11 +1,11 @@
-tset -x
-dataset_name=math_torl_v7 # or math_torl_offical to use torl training data
+# tset -x
+dataset_name=deep_math # or math_torl_offical to use torl training data
 train_data=$(pwd)/data/${dataset_name}/train.parquet
 val_data=[$(pwd)/data/${dataset_name}/test.parquet,\
 $(pwd)/data/${dataset_name}/math500_test.parquet,\
 $(pwd)/data/${dataset_name}/aime24_test.parquet,\
 $(pwd)/data/${dataset_name}/aime25_test.parquet]
-model_name=XiaomiMiMo/MiMo-7B-Base
+model_name=/map-vepfs/models/Qwen2.5-Math-7B
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
 n_gpus_per_node=8
 n_nodes=1
@@ -59,7 +59,7 @@ server_pid=$!
 
 echo "Server (pid=$server_pid) started at $tool_server_url"
 
-PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
+python3 -m verl_tool.trainer.main_ppo \
     algorithm.adv_estimator=$rl_alg \
     data.train_files=$train_data \
     data.val_files=$val_data \
@@ -132,8 +132,10 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     +trainer.remove_previous_ckpt_in_save=True \
     trainer.save_freq=10 \
     trainer.test_freq=10 \
-    trainer.total_epochs=10
+    trainer.total_epochs=10 2>&1 | tee verl_demo.log
 
+ls
+sleep 10
 
-pkill -P -9 $server_pid
-kill -9 $kill $server_pid
+# pkill -P -9 $server_pid
+# kill -9 $kill $server_pid
