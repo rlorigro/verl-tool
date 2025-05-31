@@ -13,7 +13,7 @@ VerlTool: An unified and easy-to-extend tool-agent training framework based on v
 
 <p align="center">
 | 
-<a href="https://github.com/TIGER-AI-Lab/verl-tool?tab=readme-ov-file#-training"><b>Quick Start</b></a> | 
+<a href="https://github.com/TIGER-AI-Lab/verl-tool?tab=readme-ov-file#training"><b>Quick Start</b></a> | 
 <a href="https://arxiv.org/abs/2505.16175"><b>Paper</b></a> | 
 <a href="https://github.com/TIGER-AI-Lab/QuickCodec"><b>QuickCodec</b></a> |
 <a href="https://github.com/TIGER-AI-Lab/QuickVideo?tab=readme-ov-file#2-run-quickvideo-recommended"><b>QuickPrefill</b></a> 
