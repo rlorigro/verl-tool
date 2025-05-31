@@ -156,9 +156,9 @@ The training step records are automatically saved in [`verl_step_records`](verl_
 **We provide comprehensive benchmarks to evaluate both math and code models in [`benchmarks`](benchmarks).**  We will add more task benchmarks in the future.
 
 ## ToDos  
-- [ ] Async VLLM
-- [ ] Add VLM servers and example training scripts
-- [ ] MCP server tool support
+- [ ] Async rollout and tool interaction for each trajectory using vllm and sglang
+- [ ] integrate MCP server interface as a general tool type
+- [ ] Web-browsing tool
 
 ## Contribute Your Own Tools 
 ### Contribution to Tool Libraries
