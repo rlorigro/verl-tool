@@ -119,7 +119,7 @@ python examples/data_preprocess/deep_math.py --data_source zwhe99/DeepMath-103K 
 We train the **Verl-Tool-1.5B-Math** model using the command below. The training configuration can be found in [verl_tool/trainer/config/ppo_trainer.yaml](verl_tool/trainer/config/ppo_trainer.yaml) and [verl_tool/llm_agent/config.py](verl_tool/llm_agent/config.py). For other model types, examples can be found in [`examples/train`](examples/train).
 
 ```bash
-bash examples/train/torl/torl_1.5b_math_hard.sh # train the model
+bash examples/train/torl/train_qwen_1.5B_math_deep_math.sh # train the model 
 ```
 Training tips:
 
