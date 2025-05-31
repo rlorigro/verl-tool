@@ -112,7 +112,7 @@ We will take verl-tool-math (Tool-Integrated RL for Math) as an example. Check [
 Prepare the data for training. You can use the provided script to preprocess the data. More examples can be found in [examples/data_preprocess](examples/data_preprocess).
 
 ```bash
-python examples/data_preprocess/math_torl.py --data_source DigitalLearningGmbH/MATH-lighteval --local_dir data/math_torl # preprocess the data and save
+python examples/data_preprocess/deep_math.py --data_source zwhe99/DeepMath-103K --local_dir data/deep_math_tool_v9 --sys_prompt_version v9 # preprocess the data and save
 ```
 
 ### Single Node Training
