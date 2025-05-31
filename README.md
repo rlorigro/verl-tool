@@ -122,9 +122,12 @@ We train the **Verl-Tool-1.5B-Math** model using the command below. The training
 bash examples/train/torl/torl_1.5b_math_hard.sh # train the model
 ```
 Training tips:
-1. For low VRAM GPUs, we recommend using set `do_offload=True`, `enforce_eager=True`, `tensor_parallel_size=1`, `use_dynamic_bsz=False`, and low `ppo_micro_batch_size_per_gpu`
-2. If you encounter vllm generation stuck, try lower the `workers_per_tool` in the script, and use lower `gpu_memory_utilization` in the script.
-3. For large VRAM GPUs, we recommend using set `do_offload=False`, `use_dynamic_bsz=True` for faster training.
+
+1. For low VRAM GPUs, we recommend setting `do_offload=True`, `enforce_eager=True`, `tensor_parallel_size=1`, `use_dynamic_bsz=False`, and using a small `ppo_micro_batch_size_per_gpu`. For high VRAM GPUs, set `do_offload=False` and `use_dynamic_bsz=True` to speed up training.
+2. If VLLM generation gets stuck, try lowering `workers_per_tool` and reducing `gpu_memory_utilization` in the script.
+3. If you encounter CPU OOM issues during VLLM rollout generation, try setting `do_offload=False` and lowering `gpu_memory_utilization`.
+4. See [verl performance tuning](https://verl.readthedocs.io/en/latest/perf/perf_tuning.html) for more details. 
+   
 
 ### Multi Node Training
 1. Head Node
