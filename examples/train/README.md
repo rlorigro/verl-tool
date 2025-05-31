@@ -1,6 +1,6 @@
 # Model Training Scripts
 
-This folder contain scripts for calling the `verl-tool` pipeline for training models with tool-calling capability. The training configuration can be found in [verl_tool/trainer/config/ppo_trainer.yaml](verl_tool/trainer/config/ppo_trainer.yaml) and [verl_tool/llm_agent/config.py](verl_tool/llm_agent/config.py)
+This folder contain scripts for calling the `verl-tool` pipeline for training models with tool-calling capability. The training configuration can be found in [../../verl_tool/trainer/config/ppo_trainer.yaml](verl_tool/trainer/config/ppo_trainer.yaml) and [../../verl_tool/llm_agent/config.py](verl_tool/llm_agent/config.py)
 
 Specifically, `acecoder` is used for training tool-calling coding models. `torl` is used to train tool-calling mathematical models. Other folders are currently under development.
 
