@@ -67,7 +67,7 @@ class AgentActorConfig:
     # Directory to save agent records (e.g., logs or results)
     agent_records_dir: str = None
     
-    # Whether to enable rolling generation with prompt
+    # If rolling_with_prompt is True, then we will keep the system prompt when truncation 
     rolling_with_prompt: bool = False
     
     # Whether to call tool before generating the response
