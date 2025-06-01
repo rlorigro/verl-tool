@@ -16,7 +16,9 @@ Specifically, `acecoder` is used for training tool-calling coding models. `torl`
 |[Python Interpreter](https://github.com/TIGER-AI-Lab/verl-tool/blob/main/verl_tool/servers/tools/python_code.py) (recommend)|Code Interpreter|
 |[Firejail](https://github.com/TIGER-AI-Lab/verl-tool/blob/main/verl_tool/servers/tools/firejail_python_code.py) (local sandbox)|Code Interpreter|
 |[Piston](https://github.com/TIGER-AI-Lab/verl-tool/blob/main/verl_tool/servers/tools/piston.py) (sandbox)|Code Interpreter|
-|Text Broswer (Coming Soon)  |Web Broswer     |
+|[Text Broswer](https://github.com/TIGER-AI-Lab/verl-tool/blob/main/verl_tool/servers/tools/text_browser.py)  |Web Broswer     |
+|Base Terminal (Coming soon) | Base Terminal |
+|Image Processing (Coming soon) | Image Processing |
 
 ## Config Explanation
 
