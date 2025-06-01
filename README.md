@@ -170,3 +170,7 @@ Go to the [./verl_tool/servers/tools](./verl_tool/servers/tools) directory. Each
 Go to the [`./verl_tool/agent_workers/reward_manager`](./verl_tool/agent_workers/reward_manager) directory and add your new reward manager.  
 Then, make sure update the `verl_tool/trainer/main_ppo.py` file to include your new reward manager.
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=TIGER-AI-Lab/verl-tool&type=Date)](https://www.star-history.com/#TIGER-AI-Lab/verl-tool&Date)
+
