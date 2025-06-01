@@ -170,6 +170,77 @@ Go to the [./verl_tool/servers/tools](./verl_tool/servers/tools) directory. Each
 Go to the [`./verl_tool/agent_workers/reward_manager`](./verl_tool/agent_workers/reward_manager) directory and add your new reward manager.  
 Then, make sure update the `verl_tool/trainer/main_ppo.py` file to include your new reward manager.
 
+
+## Core Contributors
+
+<table>
+<tr>
+    <td align="center">
+        <a href="https://github.com/jdf-prog">
+            <img src="https://github.com/jdf-prog.png" width="100px;" alt="Dongfu Jiang"/>
+            <br />
+            <sub><b>Dongfu Jiang</b></sub>
+        </a>
+    </td>
+    <td align="center">
+        <a href="https://github.com/Zhuofeng-Li">
+            <img src="https://github.com/Zhuofeng-Li.png" width="100px;" alt="Zhuofeng Li"/>
+            <br />
+            <sub><b>Zhuofeng Li</b></sub>
+        </a>
+    </td>
+    <td align="center">
+        <a href="https://github.com/EigenTom">
+            <img src="https://github.com/EigenTom.png" width="100px;" alt="Yi Lu"/>
+            <br />
+            <sub><b>Yi Lu</b></sub>
+        </a>
+    </td>
+    <td align="center">
+        <a href="https://github.com/cogito233">
+            <img src="https://github.com/cogito233.png" width="100px;" alt="Zhiheng Lvu"/>
+            <br />
+            <sub><b>Zhiheng Lvu</b></sub>
+        </a>
+    </td>
+    <td align="center">
+        <a href="https://github.com/erenup">
+            <img src="https://github.com/erenup.png" width="100px;" alt="Ping Nie"/>
+            <br />
+            <sub><b>Ping Nie</b></sub>
+        </a>
+    </td>
+</tr>
+</table>
+
+## Advisors
+
+<table>
+<tr>
+    <td align="center">
+        <a href="https://github.com/wenhuchen">
+            <img src="https://github.com/wenhuchen.png" width="100px;" alt="Wenhu Chen"/>
+            <br />
+            <sub><b>Wenhu Chen</b></sub>
+        </a>
+    </td>
+    <td align="center">
+        <a href="https://github.com/P2333">
+            <img src="https://github.com/P2333.png" width="100px;" alt="Tianyu Pang"/>
+            <br />
+            <sub><b>Tianyu Pang</b></sub>
+        </a>
+    </td>
+    <td align="center">
+        <a href="https://github.com/duchao0726">
+            <img src="https://github.com/duchao0726.png" width="100px;" alt="Chao Du"/>
+            <br />
+            <sub><b>Chao Du</b></sub>
+        </a>
+    </td>
+</tr>
+</table>
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=TIGER-AI-Lab/verl-tool&type=Date)](https://www.star-history.com/#TIGER-AI-Lab/verl-tool&Date)
