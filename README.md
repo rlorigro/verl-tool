@@ -80,11 +80,10 @@ All these models are also in our [Huggingface Collection](https://huggingface.co
 
 ## Features
 
-- **Native RL Framework for Training Tool-Calling Agents.** `verl-tool` natively supports **multi-turn interactive loops** between agents and their environments.
-- **Developer Friendly.** By integrating `verl` as a submodule, `verl-tool` abstracts away the complexity of RL training. Developers only need focus on building their tools following simple templates.
-- **Fast Tool Server with Multiple Tool Types.** `verl-tool` uses [Ray Serve](https://docs.ray.io/en/latest/serve/index.html) to asynchronously serve tools, ensuring full compatibility with verl agent training. See [./verl_tool/servers/tools](./verl_tool/servers/tools) for all available tools — each Python file represents a supported tool type.
-- **Comprehensive Evaluation Suite.** See [benchmarks](benchmarks). `verl-tool` allows you to instantly evaluate your models’ capabilities. Currently, it supports benchmarks for math and code models, with more domains to be added in the future.
-
+- 🔧 **Complete decoupling of actor rollout and environment interaction** - We use verl as a submodule to benefit from ongoing verl repo updates. All tool calling is integrated via a unified API, allowing you to easily add new tools by simply adding a Python file and testing independently.
+- 🌍 **Tool-as-environment paradigm** - Each tool interaction can modify the environment state. We store and reload environment states for each trajectory.
+- ⚡ **Native RL framework for tool-calling agents** - verl-tool natively supports multi-turn interactive loops between agents and their tool environments.
+- 📊 **User-friendly evaluation suite** - Launch your trained model with OpenAI API alongside the tool server. Simply send questions and get final outputs with all interactions handled internally. See [benchmarks](benchmarks).
 
 ## Installation
 We highly recommend using uv to install verl-tool. 
