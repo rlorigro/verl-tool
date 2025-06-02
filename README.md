@@ -43,7 +43,7 @@ VerlTool: An unified and easy-to-extend tool-agent training framework based on v
 
 
 ## News
-+ [2025/05/31] We release the Verl-tool training/eval code. We are working on the paper and will release it very soon.
++ [2025/05/31] We release the Verl-tool training/eval code (Twitter thread: https://x.com/DongfuJiang/status/1929198238017720379). We are working on the paper and will release it very soon.
 
 
 ## Features
