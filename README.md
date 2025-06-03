@@ -177,35 +177,35 @@ Then, make sure update the `verl_tool/trainer/main_ppo.py` file to include your 
 <tr>
     <td align="center">
         <a href="https://github.com/jdf-prog">
-            <img src="https://github.com/jdf-prog.png" width="100px;" alt="Dongfu Jiang"/>
+            <img src="https://github.com/jdf-prog.png" width="75px;" alt="Dongfu Jiang"/>
             <br />
             <sub><b>Dongfu Jiang</b></sub>
         </a>
     </td>
     <td align="center">
         <a href="https://github.com/Zhuofeng-Li">
-            <img src="https://github.com/Zhuofeng-Li.png" width="100px;" alt="Zhuofeng Li"/>
+            <img src="https://github.com/Zhuofeng-Li.png" width="75px;" alt="Zhuofeng Li"/>
             <br />
             <sub><b>Zhuofeng Li</b></sub>
         </a>
     </td>
     <td align="center">
         <a href="https://github.com/EigenTom">
-            <img src="https://github.com/EigenTom.png" width="100px;" alt="Yi Lu"/>
+            <img src="https://github.com/EigenTom.png" width="75px;" alt="Yi Lu"/>
             <br />
             <sub><b>Yi Lu</b></sub>
         </a>
     </td>
     <td align="center">
         <a href="https://github.com/cogito233">
-            <img src="https://github.com/cogito233.png" width="100px;" alt="Zhiheng Lvu"/>
+            <img src="https://github.com/cogito233.png" width="75px;" alt="Zhiheng Lvu"/>
             <br />
             <sub><b>Zhiheng Lvu</b></sub>
         </a>
     </td>
     <td align="center">
         <a href="https://github.com/erenup">
-            <img src="https://github.com/erenup.png" width="100px;" alt="Ping Nie"/>
+            <img src="https://github.com/erenup.png" width="75px;" alt="Ping Nie"/>
             <br />
             <sub><b>Ping Nie</b></sub>
         </a>
@@ -219,27 +219,35 @@ Then, make sure update the `verl_tool/trainer/main_ppo.py` file to include your 
 <tr>
     <td align="center">
         <a href="https://github.com/wenhuchen">
-            <img src="https://github.com/wenhuchen.png" width="100px;" alt="Wenhu Chen"/>
+            <img src="https://github.com/wenhuchen.png" width="750px;" alt="Wenhu Chen"/>
             <br />
             <sub><b>Wenhu Chen</b></sub>
         </a>
     </td>
     <td align="center">
         <a href="https://github.com/P2333">
-            <img src="https://github.com/P2333.png" width="100px;" alt="Tianyu Pang"/>
+            <img src="https://github.com/P2333.png" width="75px;" alt="Tianyu Pang"/>
             <br />
             <sub><b>Tianyu Pang</b></sub>
         </a>
     </td>
     <td align="center">
         <a href="https://github.com/duchao0726">
-            <img src="https://github.com/duchao0726.png" width="100px;" alt="Chao Du"/>
+            <img src="https://github.com/duchao0726.png" width="75px;" alt="Chao Du"/>
             <br />
             <sub><b>Chao Du</b></sub>
         </a>
     </td>
 </tr>
 </table>
+
+## Acknowledgements
+We thank the following open-source projects to make verl-tool possible:
+- [VLLM](https://github.com/vllm-project/vllm) and [SGLang](https://github.com/sgl-project/sglang) for their fast LLM inference support!
+- [verl](https://github.com/volcengine/verl) for the great RL framework design.
+- [SearchR1](https://github.com/PeterGriffinJin/Search-R1), [RAGEN](https://github.com/RAGEN-AI/RAGEN), and [ToRL](https://github.com/GAIR-NLP/ToRL) for their early-stage exploration of tool-agent RL training.
+
+We thank [Netmind.AI](https://www.netmind.ai/), [SeaAI Lab](https://sail.sea.com/)  and [Map](https://huggingface.co/m-a-p) for the GPU supoprt!
 
 ## Star History
 
