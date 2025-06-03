@@ -24,9 +24,9 @@ VerlTool: An unified and easy-to-extend tool-agent training framework based on v
 
 ## Table of Contents
 - [News](#news)
+- [Features](#features)
 - [Main Results](#main-results)
 - [Model Checkpoints](#model-checkpoints)
-- [Features](#features)
 - [Installation](#installation)
 - [Training](#training)
   - [Single Node Training](#single-node-training)
