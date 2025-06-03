@@ -219,7 +219,7 @@ Then, make sure update the `verl_tool/trainer/main_ppo.py` file to include your 
 <tr>
     <td align="center">
         <a href="https://github.com/wenhuchen">
-            <img src="https://github.com/wenhuchen.png" width="750px;" alt="Wenhu Chen"/>
+            <img src="https://github.com/wenhuchen.png" width="75px;" alt="Wenhu Chen"/>
             <br />
             <sub><b>Wenhu Chen</b></sub>
         </a>
