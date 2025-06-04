@@ -159,6 +159,15 @@ The training step records are automatically saved in [`verl_step_records`](verl_
 ## Evaluation
 **We provide comprehensive benchmarks to evaluate both math and code models in [`benchmarks`](benchmarks).**  We will add more task benchmarks in the future.
 
+### Test Tool Servers
+```bash
+# Start the tool server
+host=localhost
+port=5001
+python -m verl_tool.servers.serve --host $host --port $port --tool_type "firejail_python_code_with_test" --workers_per_tool 4 &
+python -m verl_tool.servers.tests.test_firejail_python_code_with_test_tool firejail --url=http://localhost:5001/get_observation
+```
+
 ## ToDos  
 - [ ] Async rollout and tool interaction for each trajectory using vllm and sglang
 - [ ] integrate MCP server interface as a general tool type
