@@ -45,8 +45,7 @@ VerlTool: An unified and easy-to-extend tool-agent training framework based on v
 
 
 ## News
-+ [2025/05/31] We release the Verl-tool training/eval code (Twitter thread: https://x.com/DongfuJiang/status/1929198238017720379). We are working on the paper and will release it very soon.
-
++ [2025/05/31] We release the Verl-tool training/eval code with ToRL training as an initial example (see [X post]. We are working on the paper and will release it very soon.
 
 ## Features
 
@@ -125,7 +124,7 @@ We will take verl-tool-math (Tool-Integrated RL for Math) as an example. Check [
 Prepare the data for training. You can use the provided script to preprocess the data. More examples can be found in [examples/data_preprocess](examples/data_preprocess).
 
 ```bash
-python examples/data_preprocess/deep_math.py --data_source zwhe99/DeepMath-103K --local_dir data/deep_math_tool_v9 --sys_prompt_version v9 # preprocess the data and save
+python examples/data_preprocess/deepmath.py --data_source zwhe99/DeepMath-103K --local_dir data/deepmath_torl --sys_prompt_style torl
 ```
 
 ### Single Node Training
@@ -157,6 +156,81 @@ ray start --address='head_node_ip:6379' --block # start ray worker node
 The training step records are automatically saved in [`verl_step_records`](verl_step_records).
 
 ## Evaluation
+
+The evaluation of the verl-tool trained models is naturally hard due to the tool calling nature, where we need to maintain not only the model's infernece engine (e.g. VLLM or SGLang), and also the tool server that allow the models to interact with. Therefore, to better facilitate the evaluation service, we wrap the the whole interaction process into a OpenAI-like API service, where you can simply send messages **in the openai chat format** and then the rest multi-turn interaction between the inference engine and the tool server will be handled internally by the service, returning the final result in the OpenAI response format.
+
+### Run the Evaluation Service
+
+1. Start the Python code execution tool server and API Service:
+
+```bash
+bash eval_service/scripts/start_api_service.sh
+```
+
+
+
+## Overview
+This package provides a service that enables LLMs to call tools, temporarily focusing on Python code execution capabilities.
+
+The service can be accessed via OpenAI's `client.chat.completions.create` API. When accessing, please ensure the model name corresponds to the one that is being set in the script.
+
+Server is managed by `app.py`, while the main tool-calling logic is implemented in `model_service.py`. `config.py`'s default parameters are overridden in `scripts/start_api_service.sh`.
+
+## Setup and Installation
+
+### 1. Activate Service
+
+Start the Python code execution tool server and API Service:
+
+```bash
+bash eval_service/scripts/start_api_service.sh
+```
+
+You can set your own params in `start_api_service.sh`. 
+
+Specifically, the parameters are explained as follows:
+
+~~~bash
+# set the default host ip for the tool server
+host=0.0.0.0
+
+# the tool will randomly pick an available port from 30000 to 31000 when start up
+port=$(shuf -i 30000-31000 -n 1)
+
+# set the entry point of the tool server
+tool_server_url=http://$host:$port/get_observation
+
+# this is the model path, when calling the tool server please align the model name with this parameter
+model_path=Qwen/Qwen2.5-Coder-7B-Instruct
+
+# define the maximum turns for model-tool interaction
+max_turns=4
+
+# this is the minimum number of tool-calling activities enforced by the server. When set to a specific number, even if the LLM did not actively asking for tool calling, the tool server will still try to extract Python code from its output.
+min_action_num=4
+
+# this is the action token that your LLM shall produce when it is asking for a tool calling round.
+action_stop_tokens="<python>"
+
+# Note: num_models * tensor_parallel_size should be equal to the number of GPUs.
+# recommend set `num_models` as large as possible to achieve parallel processing.
+# tensor_parallel_size: control the tensor sharding across GPUs.
+tensor_parallel_size=1
+# number of vllm instances.
+num_models=8 
+
+# TBD
+enable_mtrl=True
+~~~
+
+### 2. Test the API Service
+
+**Please Replace with your local server address in the testing `.py` file**
+
+```bash
+python eval_service/test/test_api.py
+```
+
 **We provide comprehensive benchmarks to evaluate both math and code models in [`benchmarks`](benchmarks).**  We will add more task benchmarks in the future.
 
 ### Test Tool Servers

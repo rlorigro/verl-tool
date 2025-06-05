@@ -27,36 +27,33 @@ from verl.utils.reward_score import prime_math
 def extract_solution(solution_str):
     return remove_boxed(last_boxed_only_string(solution_str))
 
-system_prompt1 = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem above, and put your final answer within \\boxed{}.:
+
+simple_rl_system_prompt = '''Please reason step by step, and put your final answer within \\boxed{}.'''
+
+torl_system_prompt = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. Please integrate natural language reasoning with programs to solve the problem above, and put your final answer within \\boxed{}.
 '''
 
-system_prompt2 = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem above. If you want to test any python code, writing it inside <python> and  </python> tags following with <output>. Please put your final answer within \\boxed{}.:
-'''
-
-system_prompt3 = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem above. If you want to run any python code, write code in the python markdown code block and the execution will be appended in an output code block like "```python\nyou code here\n```\n```output\nresult here\n```". Please put your final answer within \\boxed{}.'''
-
-system_prompt4 = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please put your final answer within \\boxed{}.'''
-
-system_prompt5 = """\
-A conversation between user and assistant. The user asks a question, and the assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., <think> reasoning process here </think> <answer> answer here </answer>. Please integrate natural language reasoning with programs to solve the problem. That means during the thinking, the assistant can run any python code by writing in the python markdown code block, then the stdout and stderr result will be appended in an output code block like "```python\nyou code here\n```\n```output\nresult here\n```". Please put your final answer within \\boxed{}."""
-
-system_prompt6 = """A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem above. If you want to run any code, include "<|calling system for feedback|>" at the end of your response for the current turn. Then the system will execute the code in the markdown block and provide the standard output and error. If you think the solution is complete and don't need to test, don't include "<|calling system for feedback|>" in the response and put your final answer within \\boxed{}. 
-"""
-
-system_prompt7 = """A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. User: Please integrate natural language reasoning with programs to solve the problem. That means during the thinking, the assistant can run any python code by writing in the python markdown code block, then the stdout and stderr result will be appended in an output code block like "```python\nyou code here\n```\n```output\nresult here\n```". Please put your final answer within \\boxed{}.
-"""
-
-system_prompt8 = """Please reason step by step, and put your final answer within \\boxed{}.
-"""
-
-system_prompt9 = '''A conversation between User and Assistant. The user asks a question, and the Assistant solves it. Please integrate natural language reasoning with programs to solve the problem above, and put your final answer within \\boxed{}.:
-'''
+def apply_system_prompt(sys_prompt_style:str, question:str):
+    """
+    Apply the system prompt style to the question.
+    Args:
+        sys_prompt_style (str): The system prompt style to apply. Can be 'simple_rl' or 'torl'.
+        question (str): The question to apply the system prompt to.
+    Returns:
+        list: A list of dictionaries representing the conversation with the system prompt applied.
+    """
+    if sys_prompt_style == 'simple_rl':
+        return [{'role': 'user', 'content': question + '\n' + simple_rl_system_prompt}]
+    elif sys_prompt_style == 'torl':
+        return [{'role': 'system', 'content': torl_system_prompt}, {'role': 'user', 'content': question}]
+    else:
+        raise ValueError(f"Unknown system prompt style: {sys_prompt_style}")
 
 def main(
     data_source='zwhe99/DeepMath-103K',
-    local_dir='~/data/deep_math_wo_tool',
+    local_dir='~/data/deepmath_torl',
     hdfs_dir=None,
-    sys_prompt_version: str = 'v1',
+    sys_prompt_style= 'torl',
 ):
     
     print(f"Loading the {data_source} dataset from huggingface...", flush=True)
@@ -64,12 +61,6 @@ def main(
     dataset = dataset.train_test_split(test_size=500, seed=42)
     train_dataset = dataset['train']
     test_dataset = dataset['test']
-    
-    global system_prompt
-    v_idx = sys_prompt_version.split('v')[-1]
-    system_prompt_version = int(v_idx)
-    system_prompt = eval(f'system_prompt{system_prompt_version}')
-    print(f"Using system prompt version {system_prompt_version}...", flush=True)
     
     math500_test_dataset = datasets.load_dataset('HuggingFaceH4/MATH-500', split='test')
     
@@ -83,15 +74,7 @@ def main(
             
             data = {
                 "data_source": data_source,
-                "prompt": [
-                {
-                    "role": "system",
-                    "content": system_prompt
-                },
-                {
-                    "role": "user",
-                    "content": question
-                }],
+                "prompt": apply_system_prompt(sys_prompt_style, question),
                 "ability": "math",
                 "reward_model": {
                     "style": "rule",
@@ -116,15 +99,7 @@ def main(
             
             data = {
                 "data_source": data_source,
-                "prompt": [
-                {
-                    "role": "system",
-                    "content": system_prompt
-                },
-                {
-                    "role": "user",
-                    "content": question
-                }],
+                "prompt": apply_system_prompt(sys_prompt_style, question),
                 "ability": "math",
                 "reward_model": {
                     "style": "rule",
@@ -162,15 +137,7 @@ def main(
             
             data = {
                 "data_source": data_source,
-                "prompt": [
-                {
-                    "role": "system",
-                    "content": system_prompt
-                },
-                {
-                    "role": "user",
-                    "content": question
-                }],
+                "prompt": apply_system_prompt(sys_prompt_style, question),
                 "ability": "math",
                 "reward_model": {
                     "style": "rule",
@@ -205,15 +172,7 @@ def main(
             
             data = {
                 "data_source": data_source,
-                "prompt": [
-                {
-                    "role": "system",
-                    "content": system_prompt
-                },
-                {
-                    "role": "user",
-                    "content": question
-                }],
+                "prompt": apply_system_prompt(sys_prompt_style, question),
                 "ability": "math",
                 "reward_model": {
                     "style": "rule",
@@ -244,10 +203,8 @@ if __name__ == '__main__':
     fire.Fire(main)
     
 """
-# tool 
-python examples/data_preprocess/deep_math.py --data_source zwhe99/DeepMath-103K --local_dir data/deep_math_tool_v9 --sys_prompt_version v9
-# multi-turn tool
-python examples/data_preprocess/deep_math.py --data_source zwhe99/DeepMath-103K --local_dir data/deep_math --sys_prompt_version v6
-# without tool
-python examples/data_preprocess/deep_math.py --data_source zwhe99/DeepMath-103K --local_dir data/deep_math_wo_tool --sys_prompt_version v8
+# simple rl system prompt (no tool)
+python examples/data_preprocess/deepmath.py --data_source zwhe99/DeepMath-103K --local_dir data/deepmath_simple_rl --sys_prompt_style simple_rl
+# torl system prompt (with code interpreter tool)
+python examples/data_preprocess/deepmath.py --data_source zwhe99/DeepMath-103K --local_dir data/deepmath_torl --sys_prompt_style torl
 """

@@ -9,15 +9,15 @@ server_pid=$!
 echo "Server (pid=$server_pid) started at $tool_server_url"
 
 # 2. start api service
-model_path=Qwen/Qwen2.5-Coder-7B-Instruct
+model_path=VerlTool/torl-deep_math-fsdp_agent-qwen2.5-math-1.5b-grpo-n16-b128-t1.0-lr1e-6-320-step
 max_turns=4
 min_action_num=4
 api_host="0.0.0.0"
 api_port=5000
 action_stop_tokens=""
 tensor_parallel_size=1
-num_models=8 # number of vllm instances; num_models * tensor_parallel_size should be equal to the number of GPUs
-enable_mtrl=True
+num_models=1 # number of vllm instances; num_models * tensor_parallel_size should be equal to the number of GPUs
+enable_mtrl=False # whether to evaluatoin in multi-chat-turn setting (taken each observation as a new chat turn)
 # temp file for action tokens as verl cannot pass special strs as params
 action_stop_tokens_file=$(mktemp)
 echo "$action_stop_tokens" > $action_stop_tokens_file
