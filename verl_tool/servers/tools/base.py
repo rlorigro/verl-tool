@@ -91,8 +91,6 @@ class BaseTool:
         """
         # import json
         if trajectory_id in self.env_cache:
-            # with open(f"env_cache/{trajectory_id}.json", "w") as f:
-                # json.dump(self.env_cache[trajectory_id], f)
             del self.env_cache[trajectory_id]
     
     def parse_action(self, action:str):
