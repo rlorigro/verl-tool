@@ -90,7 +90,7 @@ class AgentActorManager:
         if self.config.mtrl_sep is None:
             messages = [{"role": "system", "content": "{obs}"}]
             self.config.mtrl_sep = "\n" + self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-
+            self.config.mtrl_sep = self.config.mtrl_sep.replace("system", self.config.mtrl_role)
     def _batch_tokenize(self, responses: List[str]) -> torch.Tensor:
         """Tokenize a batch of responses."""
         return self.tokenizer(
@@ -127,7 +127,7 @@ class AgentActorManager:
         if self.config.enable_mtrl:
             responses_str = [self.tokenizer.decode(responses[i][:effective_lens[i]], skip_special_tokens=False) for i in range(responses.shape[0])]
             for i in range(len(responses_str)):
-                if action_step >= self.config.min_action_num:
+                if action_step >= self.config.min_turns:
                     if self.action_stop_tokens:
                         if any([action_stop_token in responses_str[i] for action_stop_token in self.action_stop_tokens]):
                             do_action = True
@@ -172,7 +172,7 @@ class AgentActorManager:
                         has_action = True
                         responses_str[i] = resp.split(self.action_stop_tokens[j])[0] + self.action_stop_tokens[j]
                         break
-                if not has_action and action_step < self.config.min_action_num:
+                if not has_action and action_step < self.config.min_turns:
                     has_action = True
                     responses_str[i] = resp + self.action_stop_tokens[0]
                 do_actions.append(has_action)
@@ -200,7 +200,7 @@ class AgentActorManager:
     #     responses = responses[:, :max_len]
     #     responses_str = [self.tokenizer.decode(responses[i][:effective_lens[i]], skip_special_tokens=True) for i in range(responses.shape[0])]
 
-    #     if action_step < self.config.min_action_num:
+    #     if action_step < self.config.min_turns:
     #         # re-encode remove special tokens like eos
     #         responses = self._batch_tokenize(responses_str).to(torch.int64)
     #         # force do action for those effective len not equal to full len
