@@ -226,7 +226,7 @@ def execute_python(code: Union[str, List[str]], timeout: int=TIMEOUT, stdin: Opt
             "--rlimit-fsize=2m",  # Limit file size
             "--rlimit-as=1096m"  # Limit address space
         ]
-        command.extend([python_path, file_name])
+        command.extend([python_path, file_path])
         subprocess_cwd = cwd
     else:
         env = original_env
@@ -241,7 +241,6 @@ def execute_python(code: Union[str, List[str]], timeout: int=TIMEOUT, stdin: Opt
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=env,
-            preexec_fn=set_limits,  # Set resource limits before execution
             text=True,
             timeout=timeout,
             cwd=subprocess_cwd,

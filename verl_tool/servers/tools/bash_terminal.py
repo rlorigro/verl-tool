@@ -18,7 +18,7 @@ class BashTerminalTool(BaseTool):
     tool_type = "bash_terminal"
     timeout = TIMEOUT
     stop_tokens = ["```output", "<o>", "<tool_call>"]
-    use_firejail = False  # Default to False to avoid resource issues
+    use_firejail = True  # Default to False to avoid resource issues
     
     def __init__(self, num_workers=1):
         super().__init__(num_workers)

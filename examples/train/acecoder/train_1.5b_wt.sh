@@ -1,4 +1,4 @@
-# verl_tool: firejail_python_code: force_run_test_cases=True, enable_history_code_execution=True
+# verl_tool: python_code: force_run_test_cases=True, enable_history_code_execution=True
 # acecoder reward manager: add_format_think_penalty = True, add_format_answer_penalty = True, parse_code_mode = "all"
 set -x
 dataset_name1=acecoder_long/CodeDPO-AceCoderV2-150K-processed-Qwen32B-inference-with-execution-prompt-complex
@@ -36,7 +36,7 @@ top_p=1.0
 strategy="fsdp_agent" # remove _agent for normal verl behavior
 action_stop_tokens="\n\`\`\`,\`\`\`output"
 max_turns=2
-min_action_num=1
+min_turns=1
 mask_observations=False # mask observations for kl loss and gradient descent
 kl_loss_coef=0.0
 kl_coef=0
@@ -69,7 +69,7 @@ echo "action_stop_tokens_file=$action_stop_tokens_file"
 host=$(hostname -I | awk '{print $1}')
 port=$(shuf -i 30000-31000 -n 1)
 tool_server_url=http://$host:$port/get_observation
-python -m verl_tool.servers.serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 16 &
+python -m verl_tool.servers.serve --host $host --port $port --tool_type "python_code" --workers_per_tool 16 &
 server_pid=$!
 echo "Server (pid=$server_pid) started at $tool_server_url"
 
@@ -106,7 +106,7 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     +actor_rollout_ref.agent.max_start_length=$max_prompt_length \
     +actor_rollout_ref.agent.max_obs_length=$max_obs_length \
     +actor_rollout_ref.agent.max_turns=$max_turns \
-    +actor_rollout_ref.agent.min_action_num=$min_action_num \
+    +actor_rollout_ref.agent.min_turns=$min_turns \
     +actor_rollout_ref.agent.num_gpus=$n_gpus_per_node \
     +actor_rollout_ref.agent.action_stop_tokens=$action_stop_tokens_file \
     +actor_rollout_ref.agent.additional_eos_token_ids=$additional_eos_token_ids \

@@ -481,5 +481,5 @@ if __name__ == "__main__":
     
     
 """
-python -m verl_tool.servers.ray_serve --tool_type "firejail_python_code" --workers_per_tool 64
+python -m verl_tool.servers.ray_serve --tool_type "python_code" --workers_per_tool 64
 """
