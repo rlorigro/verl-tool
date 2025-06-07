@@ -82,13 +82,14 @@ class SqlTool(BaseTool):
         env = self.load_env(trajectory_id)
         
         
-        if not is_valid:
+        if "```sql" not in parsed_action:
             # observation = "No valid Python code found. Please provide code in either <python>...</python> tags or ```python...``` code blocks."
             observation = "Code Extraction Error: code block not detected."
             execution_result = ""
             done = False
             valid = False
             correctness = 0.0
+            print(f"===> Warining", observation, f"\nCode:", action)
         else:
             # Extract stdin if provided in extra_field
             gold = extra_field.get("gt_sql", None) if extra_field else None
@@ -109,6 +110,7 @@ class SqlTool(BaseTool):
             if error_message:
                 observation = f"```error\n{error_message}\n```\n"
                 has_error = True
+                print(f"===> resulting observation", execution_result)
             else:
                 observation = f""
                 has_error = False
@@ -127,7 +129,7 @@ class SqlTool(BaseTool):
         self.update_env(trajectory_id, env, parsed_action, is_valid, extra_field, execution_result)
         self.save_env(trajectory_id, env)
         # print(f"===> parsed code", parsed_action)
-        print(f"===> resulting observation", execution_result)
+        
         # return observation, done, valid
         return {'extracted':code_to_execute, 'correctness':correctness, 'message':observation}, done, valid
         

@@ -151,7 +151,7 @@ def eval_nested(pred, label):
     if label is not None:
         label_total += 1
     if pred is not None and label is not None:
-        cnt += Excecutor().eval_exact_match(pred, label)
+        cnt += Executor().eval_exact_match(pred, label)
     return label_total, pred_total, cnt
 
 
@@ -563,7 +563,7 @@ def get_all_preds_for_execution(gold: str, pred: str) -> Tuple[int, Iterator[str
     return num_alternatives, plugin_all_permutations(pred_query_value_replaced, gold_values)
 
 
-class Excecutor:
+class Executor:
     """A simple evaluator"""
 
     def __init__(self):
@@ -748,8 +748,8 @@ class Excecutor:
 
 
 
-# excecutor = Excecutor()
-eq_func = Excecutor.result_equal
+excecutor = Executor()
+eq_func = Executor.result_equal
 
 import signal
 

@@ -30,7 +30,7 @@ max_obs_length=512
 temperature=1.0
 top_p=1.0
 strategy="fsdp_agent" # remove _agent for normal verl behavior
-action_stop_tokens='```\n'
+action_stop_tokens='\n```'
 ##########
 max_turns=0
 # min_action_num=1

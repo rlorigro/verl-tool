@@ -748,7 +748,7 @@ class AgentActorManager:
             response: Response from the tool server
         """
         safe_payload = sanitize_request(batch_data)
-        print(f"====> Submit {len(safe_payload['trajectory_ids'])} Requests to SQLTool Server")
+        print(f"====> Submit {len(safe_payload['trajectory_ids'])} Requests to Tool Server")
         # print(f"====>Tool @{self.config.tool_server_url}")
         # json.dump(safe_payload, open("/home/ma-user/work/haozhe/workspace/verl-tool/action_logs2.json","w"))
         response = requests.post(self.config.tool_server_url, json=safe_payload)
