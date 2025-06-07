@@ -175,6 +175,8 @@ class AgentActorManager:
                 if not has_action and action_step < self.config.min_action_num:
                     has_action = True
                     responses_str[i] = resp + self.action_stop_tokens[0]
+                if not has_action and "```sql" in responses_str[i]:
+                    has_action = True 
                 do_actions.append(has_action)
             for i in range(len(responses_str)):
                 if not do_actions[i]:
@@ -518,6 +520,7 @@ class AgentActorManager:
 
         # Main generation loop
         # self.config.max_turns = 0
+        multiturn_obs = dict()
         for step in range(self.config.max_turns+1):
             if not active_mask.sum():
                 print("All trajectories are done.")
@@ -541,7 +544,14 @@ class AgentActorManager:
             with self.actor_rollout_wg.rollout.update_sampling_params(**agent_sampling_params):
                 gen_output = self.actor_rollout_wg.rollout.generate_sequences(rollings_active) # [active_size, response_length]
             print(f"====> iter{step} rollout finished @run_llm_loop")
+            
             responses_ids, responses_str, do_actions = self._postprocess_responses(gen_output.batch['responses'], step) # [active_size, ...]
+            # if step==1:
+            #     aa = self.tokenizer.batch_decode(gen_output.batch['input_ids'], special_tokens=False)
+            #     bb = self.tokenizer.batch_decode(gen_output.batch['responses'], special_tokens=False)
+            #     # rollings_active
+            #     temp = self.tokenizer.batch_decode(rollings_active.batch['input_ids'], special_tokens=False)
+            #     import pdb; pdb.set_trace()
             responses_ids, _ = self.tensor_fn._example_level_pad(responses_ids, responses_str, active_mask) # [bs*n, response_length]
 
             # print(f"Number of active trajectories: {active_mask.sum().item()}")
@@ -563,6 +573,12 @@ class AgentActorManager:
                 extra_fields=rollings_active.non_tensor_batch.get('extra_info', None),
                 is_last_step=(step == self.config.max_turns)
             )
+            cnt = 0
+            for active, uid in zip(active_mask, traj_ids):
+                if active: 
+                    multiturn_obs[uid] = next_obs[cnt]
+                    cnt += 1
+
             has_dict_obs = True # isinstance(next_obs[-1],dict)
             scores = None
             if has_dict_obs:
@@ -579,8 +595,8 @@ class AgentActorManager:
                         message = entry 
                         code = ""
                     new_obs.append(message)
-                    scores.append(correct)
-                    codes.append(code)
+                    # scores.append(correct)
+                    # codes.append(code)
                 next_obs = new_obs
             
 
@@ -641,7 +657,27 @@ class AgentActorManager:
             'action_lengths': turns_stats_extra["action_lengths"],
             'obs_lengths': turns_stats_extra["obs_lengths"],
         }
-        if has_dict_obs and scores:
+        is_sql = self.config.reward_model.reward_manager == 'sqlcoder'
+        print(f"====> is_sql = {is_sql}")
+        if has_dict_obs and is_sql:
+            new_obs = []
+            scores = []
+            codes = []
+            for uid in traj_ids:
+                entry = multiturn_obs[uid]
+                if isinstance(entry, dict):
+                    correct = entry['correctness']
+                    message = entry['message']
+                    code = entry['extracted']
+                else: # when will the observation be empty string?
+                    correct = 0.0 
+                    message = entry 
+                    code = ""
+                new_obs.append(message)
+                scores.append(correct)
+                codes.append(code)
+                
+            # import pdb; pdb.set_trace()
             non_tensors['sql_scores'] = scores
             non_tensors['extracted'] = codes 
             non_tensors['error_message'] = new_obs
