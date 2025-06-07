@@ -579,25 +579,18 @@ class AgentActorManager:
                     multiturn_obs[uid] = next_obs[cnt]
                     cnt += 1
 
-            has_dict_obs = True # isinstance(next_obs[-1],dict)
-            scores = None
-            if has_dict_obs:
-                new_obs = []
-                scores = []
-                codes = []
-                for entry in next_obs:
-                    if isinstance(entry, dict):
-                        correct = entry['correctness']
-                        message = entry['message']
-                        code = entry['extracted']
-                    else: # when will the observation be empty string?
-                        correct = 0.0 
-                        message = entry 
-                        code = ""
-                    new_obs.append(message)
-                    # scores.append(correct)
-                    # codes.append(code)
-                next_obs = new_obs
+            
+            new_obs = []
+            scores = []
+            codes = []
+            for entry in next_obs:
+                if isinstance(entry, dict):
+                    message = entry['message']
+                else: # when will the observation be empty string?
+                    message = entry 
+                new_obs.append(message)
+
+            next_obs = new_obs
             
 
             # # for debug
@@ -657,9 +650,12 @@ class AgentActorManager:
             'action_lengths': turns_stats_extra["action_lengths"],
             'obs_lengths': turns_stats_extra["obs_lengths"],
         }
-        is_sql = self.config.reward_model.reward_manager == 'sqlcoder'
-        print(f"====> is_sql = {is_sql}")
-        if has_dict_obs and is_sql:
+        extra_info = gen_batch.non_tensor_batch.get('extra_info', None)
+        is_sql = False 
+        if extra_info is not None and ("gt_sql" in extra_info[0]):
+            is_sql = True
+        # print(f"====> is_sql = {is_sql}")
+        if is_sql:
             new_obs = []
             scores = []
             codes = []
