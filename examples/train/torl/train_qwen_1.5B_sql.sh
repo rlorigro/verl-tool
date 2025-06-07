@@ -12,7 +12,7 @@ export SWANLAB_API_KEY='iTjHP8OAfepmyjJc0IzcS'
 # cp -r /home/ma-user/work/jiaran/MLM-master/Megatron-LM/cache/* /cache
 train_data=/home/ma-user/work/haozhe/workspace/verl-tool/data/nl2sql/train.parquet
 val_data=/home/ma-user/work/haozhe/workspace/verl-tool/data/nl2sql/dev.parquet
-model_name=/home/ma-user/work/haozhe/workspace/verl-tool/base_models/Qwen2.5-Coder-7B-Instruct
+model_name=/home/ma-user/work/haozhe/workspace/verl-tool/base_models/Qwen2.5-Coder-1.5B-Instruct
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
 n_gpus_per_node=8
 n_nodes=1
@@ -30,7 +30,7 @@ max_obs_length=512
 temperature=1.0
 top_p=1.0
 strategy="fsdp_agent" # remove _agent for normal verl behavior
-action_stop_tokens='\n```'
+action_stop_tokens='```\n'
 ##########
 max_turns=0
 # min_action_num=1

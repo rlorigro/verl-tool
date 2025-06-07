@@ -9,7 +9,8 @@ import uuid
 import hashlib
 from typing import Tuple, Dict, Any, Optional
 from ..utils import kill_python_subprocess_processes
-from .sql_executor import score, Executor
+from .utils.sql_executor import score, Executor
+# from .sql_executor import score
 import random
 
 # Timeout for code execution in seconds
@@ -37,7 +38,7 @@ class SqlTool(BaseTool):
     enable_mannual_reflection = False
     force_run_test_cases = False
     done_without_error = False
-    executor = Executor()
+    # executor = Executor()
     def get_usage_inst(self):
         return "You are able to write and execute Python code."
     
@@ -52,13 +53,13 @@ class SqlTool(BaseTool):
         Returns:
             Tuple containing the extracted code and a validity flag
         """
-        # Try to find Python code in various formats
-        # print('=====> sql ')
         code = re.findall(r"(```sql.*?```)", action, re.DOTALL)
-        
+
         if len(code) == 0:
             # code = [action]
-            return "Error", False
+            # print(action)
+            # print('==== cannot extract')
+            return "Error", True
         
         parsed_code = code[-1].strip()
 
@@ -89,7 +90,8 @@ class SqlTool(BaseTool):
             done = False
             valid = False
             correctness = 0.0
-            print(f"===> Warining", observation, f"\nCode:", action)
+            # print(f"===> Warining", observation)
+            code_to_execute = "None"
         else:
             # Extract stdin if provided in extra_field
             gold = extra_field.get("gt_sql", None) if extra_field else None
@@ -102,15 +104,15 @@ class SqlTool(BaseTool):
             "cmp_method": "bird"}
             try:
                 # correctness, error_message = run_with_timeout(score, args=(code_to_execute, meta), timeout=2)
-                correctness, error_message = score(code_to_execute, meta, self.executor)
+                correctness, error_message = score(code_to_execute, meta)
             except Exception as e:
                 correctness = 0.0
-                error_message = "Execution Timeout."
+                error_message = str(e)
 
             if error_message:
                 observation = f"```error\n{error_message}\n```\n"
                 has_error = True
-                print(f"===> resulting observation", execution_result)
+                # print(f"===> resulting observation", observation)
             else:
                 observation = f""
                 has_error = False

@@ -556,7 +556,7 @@ class AgentActorManager:
                 else:
                     turns_stats_extra["action_lengths"][i].append(0)
 
-            # Execute in environment and process observations
+            # Execute in environment and process observations        
             active_uids = [traj_ids[i] for i in range(len(traj_ids)) if active_mask[i]]
             next_obs, dones, valid_action, finishs = self.interact_with_tool_server(
                 active_uids, responses_str, do_actions, active_mask,
@@ -749,8 +749,6 @@ class AgentActorManager:
         """
         safe_payload = sanitize_request(batch_data)
         print(f"====> Submit {len(safe_payload['trajectory_ids'])} Requests to Tool Server")
-        # print(f"====>Tool @{self.config.tool_server_url}")
-        # json.dump(safe_payload, open("/home/ma-user/work/haozhe/workspace/verl-tool/action_logs2.json","w"))
         response = requests.post(self.config.tool_server_url, json=safe_payload)
         print(f"====> Received {len(safe_payload['trajectory_ids'])} responses")
         
