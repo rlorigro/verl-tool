@@ -546,12 +546,7 @@ class AgentActorManager:
             print(f"====> iter{step} rollout finished @run_llm_loop")
             
             responses_ids, responses_str, do_actions = self._postprocess_responses(gen_output.batch['responses'], step) # [active_size, ...]
-            # if step==1:
-            #     aa = self.tokenizer.batch_decode(gen_output.batch['input_ids'], special_tokens=False)
-            #     bb = self.tokenizer.batch_decode(gen_output.batch['responses'], special_tokens=False)
-            #     # rollings_active
-            #     temp = self.tokenizer.batch_decode(rollings_active.batch['input_ids'], special_tokens=False)
-            #     import pdb; pdb.set_trace()
+            
             responses_ids, _ = self.tensor_fn._example_level_pad(responses_ids, responses_str, active_mask) # [bs*n, response_length]
 
             # print(f"Number of active trajectories: {active_mask.sum().item()}")
@@ -568,17 +563,16 @@ class AgentActorManager:
 
             # Execute in environment and process observations        
             active_uids = [traj_ids[i] for i in range(len(traj_ids)) if active_mask[i]]
+            
             next_obs, dones, valid_action, finishs = self.interact_with_tool_server(
                 active_uids, responses_str, do_actions, active_mask,
                 extra_fields=rollings_active.non_tensor_batch.get('extra_info', None),
                 is_last_step=(step == self.config.max_turns)
             )
-            cnt = 0
-            for active, uid in zip(active_mask, traj_ids):
+            
+            for active, uid, no in zip(active_mask, traj_ids, next_obs):
                 if active: 
-                    multiturn_obs[uid] = next_obs[cnt]
-                    cnt += 1
-
+                    multiturn_obs[uid] = no
             
             new_obs = []
             scores = []
