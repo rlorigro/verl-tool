@@ -54,7 +54,9 @@ VerlTool: A unified and easy-to-extend tool-agent training framework based on ve
 - [Acknowledgements](#acknowledgements)
 - [Star History](#star-history)
 
+
 ## News
++ [2025/06/13] We integrated [DeepWiki](https://deepwiki.com/TIGER-AI-Lab/verl-tool) for Verl-Tool. Feel free to browse the AI-generated docs and chat with Verl-tool codes.
 + [2025/06/06] We have updated a detailed design overview in the README, including how to add new tools, how to use the tool server, and how to train your own models with verl-tool.
 + [2025/05/31] We released the Verl-tool training/evaluation code with ToRL training as an initial example (see [X post](https://x.com/DongfuJiang/status/1929198238017720379)). We are working on the paper and will release it very soon.
 
