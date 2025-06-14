@@ -1,6 +1,6 @@
 set -x
 export VLLM_ATTENTION_BACKEND=XFORMERS
-dataset_name=deep_math_tool_v9 # or math_torl_offical to use torl training data
+dataset_name=deepmath_torl # or math_torl_offical to use torl training data
 train_data=$(pwd)/data/${dataset_name}/train.parquet
 val_data=[$(pwd)/data/${dataset_name}/test.parquet,\
 $(pwd)/data/${dataset_name}/math500_test.parquet,\

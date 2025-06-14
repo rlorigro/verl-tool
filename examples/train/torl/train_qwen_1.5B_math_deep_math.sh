@@ -1,13 +1,13 @@
 set -x
-dataset_name=deep_math_tool_v9 # or math_torl_offical to use torl training data
+dataset_name=deepmath_torl # or math_torl_offical to use torl training data
 train_data=$(pwd)/data/${dataset_name}/train.parquet
 val_data=[$(pwd)/data/${dataset_name}/test.parquet,\
 $(pwd)/data/${dataset_name}/math500_test.parquet,\
 $(pwd)/data/${dataset_name}/aime24_test.parquet,\
 $(pwd)/data/${dataset_name}/aime25_test.parquet]
-model_name=/map-vepfs/models/Qwen2.5-Math-1.5B
+model_name=Qwen/Qwen2.5-Math-1.5B
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
-n_gpus_per_node=8
+n_gpus_per_node=4
 n_nodes=1
 n=16
 batch_size=128
