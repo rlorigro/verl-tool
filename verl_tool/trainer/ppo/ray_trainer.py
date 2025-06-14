@@ -170,7 +170,7 @@ class AgentRayPPOTrainer(RayPPOTrainer):
                     batch_keys=["input_ids", "attention_mask", "position_ids"],
                     non_tensor_batch_keys=["raw_prompt_ids"],
                 )
-            if 'agent' in self.config.actor_rollout_ref.actor.strategy:
+            if self.config.actor_rollout_ref.actor.enable_agent:
                 additional_non_tensor_keys = ['extra_info']
                 additional_non_tensor_keys = [k for k in additional_non_tensor_keys if k in test_batch.non_tensor_batch.keys()]
                 for key in additional_non_tensor_keys:
@@ -296,7 +296,8 @@ class AgentRayPPOTrainer(RayPPOTrainer):
                         batch_keys=['input_ids', 'attention_mask', 'position_ids'],
                         non_tensor_batch_keys=['raw_prompt_ids']
                     )
-                if 'agent' in self.config.actor_rollout_ref.actor.strategy:
+                    
+                if self.config.actor_rollout_ref.actor.enable_agent:
                     additional_non_tensor_keys = ['extra_info']
                     additional_non_tensor_keys = [k for k in additional_non_tensor_keys if k in batch.non_tensor_batch.keys()]
                     for key in additional_non_tensor_keys:

@@ -8,6 +8,7 @@ import random
 import regex as re
 import numpy as np
 import requests
+import omegaconf
 from collections import defaultdict
 from typing import List, Dict, Any, Tuple
 from dataclasses import dataclass
@@ -83,7 +84,7 @@ class AgentActorManager:
         self.additional_eos_token_ids = self.config.additional_eos_token_ids
         if isinstance(self.additional_eos_token_ids, str):
             self.additional_eos_token_ids = [int(x) for x in self.additional_eos_token_ids.split(',')]
-        elif isinstance(self.additional_eos_token_ids, list):
+        elif isinstance(self.additional_eos_token_ids, list) or isinstance(self.additional_eos_token_ids, omegaconf.listconfig.ListConfig):
             self.additional_eos_token_ids = [int(x) for x in self.additional_eos_token_ids]
         elif self.additional_eos_token_ids is None:
             self.additional_eos_token_ids = []

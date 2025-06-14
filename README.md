@@ -79,7 +79,7 @@ git submodule update --init --recursive
 uv sync
 source .venv/bin/activate
 uv pip install -e verl
-uv pip install vllm==0.9.1
+uv pip install "vllm<0.9.0"
 uv pip install flash-attn --no-build-isolation
 uv pip install -e ".[acecoder,torl]"
 # uv pip install dill==0.4.0 fsspec==2025.3.2 protobuf==5.29.4
@@ -92,12 +92,10 @@ conda create --name verl-tool-env python=3.10
 conda activate verl-tool-env
 pip install -e .
 pip install -e verl
-pip install vllm==0.8.4
+pip install install "vllm<0.9.0"
 pip install flash-attn --no-build-isolation
 pip install -e ".[acecoder,torl]"
-pip install dill==0.4.0
-pip install fsspec==2025.3.2
-pip install protobuf==5.29.4
+# pip install dill==0.4.0 fsspec==2025.3.2 protobuf==5.29.4
 ```
 
 ## Design and Architecture
@@ -502,7 +500,7 @@ The polar coordinates for the point $(0,3)$ are $(3.0, \frac{\pi}{2})$. Therefor
 |TORL-7B    |✅        |92.70|82.20   |33.50        |49.90          |43.30           |65.00|61.10|
 |**Qwen-2.5-Math-7B + Verl-Tool**           |✅        |**91.40**|**83.40**|**29.80**    |**50.20**      |**40.00**       |**72.50**|**61.22**|
 
-## Model Checkpoints 
+### Model Checkpoints 
 
 All these models are available in our [Huggingface Collection](https://huggingface.co/VerlTool).
 
@@ -510,6 +508,15 @@ All these models are available in our [Huggingface Collection](https://huggingfa
 |-|-|-|
 |Qwen-2.5-Math-1.5B-Verl-tool|[🤗](https://huggingface.co/VerlTool/torl-deep_math-fsdp_agent-qwen2.5-math-1.5b-grpo-n16-b128-t1.0-lr1e-6-320-step)|[📈](https://wandb.ai/1004271927-SHU/Verl-Tool-Math?nw=nwuser1004271927)|
 |Qwen-2.5-Math-7B-Verl-tool|[🤗](https://huggingface.co/VerlTool/torl-deep_math-fsdp_agent-qwen2.5-math-7b-grpo-n16-b128-t1.0-lr1e-6-310-step)|[📈](https://wandb.ai/1004271927-SHU/Verl-Tool-Math?nw=nwuser1004271927)|
+
+## Updating verl version
+To update the verl submodule to the latest version, run the following commands in the verl-tool root directory:
+```bash
+cd verl && git pull origin main && cd ..
+cp -r verl/verl/trainer/config/* ./verl_tool/trainer/config/
+uv pip install -e verl
+```
+Note there might be some small parameters needed to remove the '+' prefix in the training script because default values may be added to the new config files.
 
 ## Contributing
 
