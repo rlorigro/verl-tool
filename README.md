@@ -19,7 +19,7 @@ VerlTool: A unified and easy-to-extend tool-agent training framework based on ve
   <a href="https://github.com/TIGER-AI-Lab/verl-tool/tree/main/benchmarks"><b>Evaluation</b></a> |
   <a href="https://deepwiki.com/TIGER-AI-Lab/verl-tool"><b>DeepWiki</b></a> |
   <a href="https://github.com/TIGER-AI-Lab/verl-tool/tree/main/assets/imgs/wechat_group.jpg"><b>WeChat Group</b></a> |
-  <a href="https://discord.gg/4PfkadTX"><b>Discord</b></a>
+  <a href="https://discord.gg/CUARJFJ8"><b>Discord</b></a>
 |
 </p>
 
