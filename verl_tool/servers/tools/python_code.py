@@ -145,12 +145,12 @@ def clean_traceback(text, base_path):
 
 # Set resource limits directly
 def set_limits():
-    # Memory limit (512MB)
-    resource.setrlimit(resource.RLIMIT_AS, (2 * 1024**2, resource.RLIM_INFINITY))
-    # Process limit
+    # Memory limit (8GB)
+    resource.setrlimit(resource.RLIMIT_AS, (4 * 1024**3, resource.RLIM_INFINITY))
+    # # Process limit
     resource.setrlimit(resource.RLIMIT_CPU, (TIMEOUT, resource.RLIM_INFINITY))
-    # File size limit
-    resource.setrlimit(resource.RLIMIT_FSIZE, (100*1024*1024, 100*1024*1024))
+    # File size limit (500 MB)
+    resource.setrlimit(resource.RLIMIT_FSIZE, (500*1024*1024, 500*1024*1024))
     
 def execute_python(code: Union[str, List[str]], timeout: int=TIMEOUT, stdin: Optional[str] = None, python_path: str = None, pre_import_lib: bool = False, use_firejail: bool=False) -> Tuple[str, bool]:
     """
