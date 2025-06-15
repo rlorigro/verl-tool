@@ -125,6 +125,7 @@ class AgentRayPPOTrainer(RayPPOTrainer):
             sample_outputs.extend(output_texts)
 
             test_batch = test_batch.union(test_output_gen_batch)
+            test_batch.meta_info['global_step'] = self.global_steps # added by verl_tool
 
             # evaluate using reward_function
             result = self.val_reward_fn(test_batch, return_dict=True)
