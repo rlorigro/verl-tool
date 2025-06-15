@@ -13,8 +13,9 @@ import resource
 from typing import Tuple, Dict, Any, Optional, Union, List
 
 # Timeout for code execution in seconds
-TIMEOUT = 5
+TIMEOUT = 10
 PRE_IMPORT_LIBS = "from string import *\nfrom re import *\nfrom datetime import *\nfrom collections import *\nfrom heapq import *\nfrom bisect import *\nfrom copy import *\nfrom math import *\nfrom random import *\nfrom statistics import *\nfrom itertools import *\nfrom functools import *\nfrom operator import *\nfrom io import *\nfrom sys import *\nfrom json import *\nfrom builtins import *\nfrom typing import *\nimport string\nimport re\nimport datetime\nimport collections\nimport heapq\nimport bisect\nimport copy\nimport math\nimport random\nimport statistics\nimport itertools\nimport functools\nimport operator\nimport io\nimport sys\nimport json\nsys.setrecursionlimit(6*10**5)\n\n"
+filejail_command_exists = shutil.which("firejail") is not None
 
 def check_forbidden_imports(code: str) -> bool:
     """
@@ -145,9 +146,9 @@ def clean_traceback(text, base_path):
 # Set resource limits directly
 def set_limits():
     # Memory limit (512MB)
-    resource.setrlimit(resource.RLIMIT_AS, (512*1024*1024, 512*1024*1024))
+    resource.setrlimit(resource.RLIMIT_AS, (2 * 1024**2, resource.RLIM_INFINITY))
     # Process limit
-    resource.setrlimit(resource.RLIMIT_NPROC, (16, 16))
+    resource.setrlimit(resource.RLIMIT_CPU, (TIMEOUT, resource.RLIM_INFINITY))
     # File size limit
     resource.setrlimit(resource.RLIMIT_FSIZE, (100*1024*1024, 100*1024*1024))
     
@@ -188,7 +189,6 @@ def execute_python(code: Union[str, List[str]], timeout: int=TIMEOUT, stdin: Opt
     else:
         assert os.path.exists(python_path), f"Python path {python_path} does not exist."
     
-    filejail_command_exists = shutil.which("firejail") is not None
     if use_firejail and filejail_command_exists:
         env = {}
         # Core system variables
@@ -238,10 +238,10 @@ def execute_python(code: Union[str, List[str]], timeout: int=TIMEOUT, stdin: Opt
         result = subprocess.run(
             command,
             input=stdin if stdin else None,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
             env=env,
             text=True,
+            capture_output=True,
+            preexec_fn=set_limits,
             timeout=timeout,
             cwd=subprocess_cwd,
         )
@@ -251,10 +251,11 @@ def execute_python(code: Union[str, List[str]], timeout: int=TIMEOUT, stdin: Opt
         
         if stderr:
             has_error = True
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as e:
         has_error = True
-        stdout = ""
-        stderr = f"Execution timed out after {timeout} seconds.\n"
+        stdout = e.stdout if e.stdout else ""
+        stderr = e.stderr if e.stderr else ""
+        stderr += f"Execution timed out after {timeout} seconds.\n"
     # Clean up the temporary file
     try:
         # remove cwd
