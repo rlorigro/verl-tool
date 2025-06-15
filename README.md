@@ -104,7 +104,7 @@ pip install -e ".[acecoder,torl]"
 
 Verl-Tool is designed to decouple the RL training and the tool calling processes. The RL training components (computation of logp, reward, advantages, RL algorithms, etc.) are handled by the verl framework, while the tool calling process is managed by the tool server **through an additional plugin to the verl rollout**.
 
-We achieve this by inheriting from `ActorRolloutRefWorker` → `AgentActorRolloutRefWorker` in [verl_tool/agent_workers/fsdp_workers.py](verl_tool/agent_workers/fsdp_workers.py) and then overriding the original RefWorker in [verl_tool/trainer/main_ppo](verl_tool/trainer/main_ppo.py) by adding this line:
+We achieve this by inheriting from `ActorRolloutRefWorker` → `AgentActorRolloutRefWorker` in [verl_tool/worker/fsdp_workers.py](verl_tool/worker/fsdp_workers.py) and then overriding the original RefWorker in [verl_tool/trainer/main_ppo](verl_tool/trainer/main_ppo.py) by adding this line:
 
 ```python
 from verl_tool.trainer.ppo.ray_trainer import AgentRayPPOTrainer as RayPPOTrainer
@@ -338,7 +338,7 @@ ray start --address='head_node_ip:6379' --block # start ray worker node
 
 ### Training Logs
 
-During training, the generated responses, rewards, etc., of each step are recorded in the `verl_step_records` directory. The corresponding code logic is written in the `verl_tool/agent_workers/reward_manager/{reward_manager_name}.py` file. This helps you debug the training process and understand how the model interacts with the tool server.
+During training, the generated responses, rewards, etc., of each step are recorded in the `verl_step_records` directory. The corresponding code logic is written in the `verl_tool/worker/reward_manager/{reward_manager_name}.py` file. This helps you debug the training process and understand how the model interacts with the tool server.
 
 ## Evaluation
 
@@ -526,7 +526,7 @@ Go to the [./verl_tool/servers/tools](./verl_tool/servers/tools) directory. Each
 
 ### Creating New Reward Managers
 
-Go to the [`./verl_tool/agent_workers/reward_manager`](./verl_tool/agent_workers/reward_manager) directory and add your new reward manager. Then, make sure to update the `verl_tool/trainer/main_ppo.py` file to include your new reward manager.
+Go to the [`./verl_tool/worker/reward_manager`](./verl_tool/worker/reward_manager) directory and add your new reward manager. Then, make sure to update the `verl_tool/trainer/main_ppo.py` file to include your new reward manager.
 
 ## ToDos  
 - [ ] Async rollout and tool interaction for each trajectory using VLLM and SGLang

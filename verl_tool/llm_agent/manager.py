@@ -348,14 +348,14 @@ class AgentActorManager:
 
         return new_rollings, available_context_budget
 
-    def _info_masked_concatenate_with_padding(self,
+    def _loss_masked_concatenate_with_padding(self,
         prompt: torch.Tensor,
         prompt_with_mask: torch.Tensor,
         response: torch.Tensor,
         info: torch.Tensor = None,
         pad_to_left: bool = True
     ) -> torch.Tensor:
-        """Concatenate tensors and handle padding. Additionally, create a mask (info_mask) to cover the information block if it exists."""
+        """Concatenate tensors and handle padding. Additionally, create a mask (loss_mask) to cover the information block if it exists."""
         # move `response` and `info` tensor to the same device as `prompt`
         response = response.to(prompt.device)
         if info is not None:
@@ -372,9 +372,9 @@ class AgentActorManager:
             tensors.append(info)
 
             # assemble the mask for the observation part
-            info_mask = torch.full(info.size(), pad_id, dtype=info.dtype, device=info.device)  # information mask
+            loss_mask = torch.full(info.size(), pad_id, dtype=info.dtype, device=info.device)  # information mask
             # extend the mask for the observation part, to update masked tensors
-            tensors_with_mask.append(info_mask)
+            tensors_with_mask.append(loss_mask)
 
         concatenated = torch.cat(tensors, dim=1)
         concatenated_with_info = torch.cat(tensors_with_mask, dim=1)
@@ -396,18 +396,18 @@ class AgentActorManager:
 
         # observation exists, perform concatenation and masked concatenation
         if next_obs_ids != None:
-            responses, responses_with_info_mask = self._info_masked_concatenate_with_padding(
+            responses, responses_with_loss_mask = self._loss_masked_concatenate_with_padding(
                 right_side['responses'],
-                right_side['responses_with_info_mask'],
+                right_side['responses_with_loss_mask'],
                 cur_responses,
                 next_obs_ids,
                 pad_to_left=False
             )
         else:
             # no observation, only concatenate the response with generated response
-            responses, responses_with_info_mask = self._info_masked_concatenate_with_padding(
+            responses, responses_with_loss_mask = self._loss_masked_concatenate_with_padding(
                     right_side['responses'],
-                    right_side['responses_with_info_mask'],
+                    right_side['responses_with_loss_mask'],
                     cur_responses,
                     pad_to_left=False
                 )
@@ -423,10 +423,10 @@ class AgentActorManager:
         if self.config.truncate_response_side == 'left':
             # it should be left most of the time.
             return {'responses': responses[:, :max_len],
-                    'responses_with_info_mask': responses_with_info_mask[:, :max_len]}, overlong_dones
+                    'responses_with_loss_mask': responses_with_loss_mask[:, :max_len]}, overlong_dones
         elif self.config.truncate_response_side == 'right':
             return {'responses': responses[:, -max_len:],
-                    'responses_with_info_mask': responses_with_info_mask[:, -max_len:]}, overlong_dones
+                    'responses_with_loss_mask': responses_with_loss_mask[:, -max_len:]}, overlong_dones
         else:
             raise ValueError(
                 f"Invalid truncate_response_side: {self.config.truncate_response_side}. Allowed options are 'left' or 'right'.")
@@ -445,7 +445,7 @@ class AgentActorManager:
 
         original_left_side = {'input_ids': initial_input_ids[:, -self.config.max_start_length:]}
         original_right_side = {'responses': initial_input_ids[:, []],
-                               'responses_with_info_mask': initial_input_ids[:, []]}
+                               'responses_with_loss_mask': initial_input_ids[:, []]}
 
         turns_stats = torch.zeros(gen_batch.batch['input_ids'].shape[0], dtype=torch.int)
         valid_action_stats = torch.zeros(gen_batch.batch['input_ids'].shape[0], dtype=torch.int)
@@ -672,10 +672,10 @@ class AgentActorManager:
                 padding_side='right'
             ) # [bs*n, max_response_length]
 
-        # padding response_with_info_mask length to max_response_length
-        if final_output['responses_with_info_mask'].shape[1] < self.config.max_response_length:
-            final_output['responses_with_info_mask'] = self.tensor_fn.pad_tensor(
-                final_output['responses_with_info_mask'],
+        # padding response_with_loss_mask length to max_response_length
+        if final_output['responses_with_loss_mask'].shape[1] < self.config.max_response_length:
+            final_output['responses_with_loss_mask'] = self.tensor_fn.pad_tensor(
+                final_output['responses_with_loss_mask'],
                 max_length=self.config.max_response_length,
                 padding_side='right'
             ) # [bs*n, max_response_length]
@@ -694,12 +694,12 @@ class AgentActorManager:
 
         # Create observation mask
         if self.config.mask_observations:
-            final_output['info_mask'] = torch.cat([
+            final_output['loss_mask'] = torch.cat([
                 self.tensor_fn.create_attention_mask(left_side['input_ids']),
-                self.tensor_fn.create_attention_mask(final_output['responses_with_info_mask'])
+                self.tensor_fn.create_attention_mask(final_output['responses_with_loss_mask'])
             ], dim=1) # [bs*n, prompt_length + max_response_length]
         else:
-            final_output['info_mask'] = final_output['attention_mask']
+            final_output['loss_mask'] = final_output['attention_mask']
 
         # Create position ids
         final_output['position_ids'] = self.tensor_fn.create_position_ids(
