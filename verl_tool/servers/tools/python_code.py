@@ -248,13 +248,15 @@ def execute_python(code: Union[str, List[str]], timeout: int=TIMEOUT, stdin: Opt
         # Clean both stdout and stderr
         stdout = clean_traceback(result.stdout, cwd)
         stderr = clean_traceback(result.stderr, cwd)
-        
+        stderr = stderr if stderr else ""
         if stderr:
             has_error = True
     except subprocess.TimeoutExpired as e:
         has_error = True
         stdout = e.stdout if e.stdout else ""
         stderr = e.stderr if e.stderr else ""
+        stdout = stdout.decode('utf-8') if isinstance(stdout, bytes) else stdout
+        stderr = stderr.decode('utf-8') if isinstance(stderr, bytes) else stderr
         stderr += f"Execution timed out after {timeout} seconds.\n"
     # Clean up the temporary file
     try:
@@ -263,7 +265,9 @@ def execute_python(code: Union[str, List[str]], timeout: int=TIMEOUT, stdin: Opt
             shutil.rmtree(cwd)
     except Exception as e:
         pass
-    return stdout, (stderr if stderr else ""), has_error
+    assert isinstance(stdout, str), f"Expected stdout to be a string, got {type(stdout)}"
+    assert isinstance(stderr, str), f"Expected stderr to be a string, got {type(stderr)}"
+    return stdout, stderr, has_error
 
 @register_tool
 class PythonCodeTool(BaseTool):
