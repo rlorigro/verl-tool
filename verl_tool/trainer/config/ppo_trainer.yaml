@@ -478,6 +478,8 @@ actor_rollout_ref:
       # Qwen/QwQ-32B, Qwen/Qwen3-xxB
       enable_tokenization_sanity_check: True
 
+      format: llama3_json
+
 # configs for the critic
 critic:
 

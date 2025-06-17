@@ -89,10 +89,9 @@ class TaskRunner:
         if config.actor_rollout_ref.actor.strategy in ["fsdp", "fsdp2"]:
             assert config.critic.strategy in ["fsdp", "fsdp2"]
             from verl.single_controller.ray import RayWorkerGroup
-            from verl.workers.fsdp_workers import CriticWorker
+            from verl.workers.fsdp_workers import CriticWorker, AsyncActorRolloutRefWorker
             from verl_tool.workers.fsdp_workers import (
                 AgentActorRolloutRefWorker as ActorRolloutRefWorker,
-                AgentAsyncActorRolloutRefWorker as AsyncActorRolloutRefWorker
             )
 
             actor_rollout_cls = AsyncActorRolloutRefWorker if config.actor_rollout_ref.rollout.mode == "async" else ActorRolloutRefWorker
@@ -101,10 +100,9 @@ class TaskRunner:
         elif config.actor_rollout_ref.actor.strategy == "megatron":
             assert config.actor_rollout_ref.actor.strategy == config.critic.strategy
             from verl.single_controller.ray.megatron import NVMegatronRayWorkerGroup
-            from verl.workers.megatron_workers import CriticWorker
+            from verl.workers.megatron_workers import CriticWorker, AsyncActorRolloutRefWorker
             from verl_tool.workers.megatron_workers import (
                 AgentActorRolloutRefWorker as ActorRolloutRefWorker,
-                AgentAsyncActorRolloutRefWorker as AsyncActorRolloutRefWorker
             )
 
             actor_rollout_cls = AsyncActorRolloutRefWorker if config.actor_rollout_ref.rollout.mode == "async" else ActorRolloutRefWorker
@@ -157,10 +155,6 @@ class TaskRunner:
         reward_fn = load_reward_manager(config, tokenizer, num_examine=0, **config.reward_model.get("reward_kwargs", {}))
         val_reward_fn = load_reward_manager(config, tokenizer, num_examine=1, **config.reward_model.get("reward_kwargs", {}))
         resource_pool_manager = ResourcePoolManager(resource_pool_spec=resource_pool_spec, mapping=mapping)
-
-        # added by verl-tool
-        reward_fn.run_id = config.trainer.experiment_name
-        val_reward_fn.run_id = config.trainer.experiment_name
 
         from verl.utils.dataset.rl_dataset import collate_fn
 

@@ -20,7 +20,7 @@ import ray
 
 from verl import DataProto
 from verl.utils.reward_score import default_compute_score
-from verl_tool.workers.reward_manager import get_reward_manager_cls
+from verl_tool.workers.reward_manager import get_reward_manager_cls # added by verl-tool
 
 
 def get_custom_reward_fn(config):
@@ -99,13 +99,16 @@ def load_reward_manager(config, tokenizer, num_examine, **reward_kwargs):
             final_compute_score = default_compute_score
 
     # Instantiate and return the reward manager with the specified parameters
-    return reward_manager_cls(
+    reward_manager = reward_manager_cls(
         tokenizer=tokenizer,
         num_examine=num_examine,
         compute_score=final_compute_score,
         reward_fn_key=config.data.reward_fn_key,
         **reward_kwargs,
     )
+    # added by verl-tool
+    reward_manager.run_id = config.trainer.experiment_name
+    return reward_manager
 
 
 def compute_reward(data: DataProto, reward_fn):

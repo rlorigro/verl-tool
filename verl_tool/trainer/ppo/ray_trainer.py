@@ -1,57 +1,123 @@
-from verl.trainer.ppo.ray_trainer import RayPPOTrainer, _timer
-from verl.trainer.ppo.ray_trainer import *
+import ray
+import uuid
+import torch
+import numpy as np
+from copy import deepcopy
+from pprint import pprint
+from collections import defaultdict
+from verl.trainer.ppo.ray_trainer import (
+    RayPPOTrainer,
+    _timer,
+    compute_advantage,
+    compute_response_mask,
+    apply_kl_penalty,
+    reduce_metrics,
+    agg_loss,
+    pad_dataproto_to_divisor,
+    unpad_dataproto,
+    compute_throughout_metrics,
+    process_validation_metrics,
+    DataProto,
+    AdvantageEstimator,
+    RayClassWithInitArgs,
+    create_colocated_worker_cls,
+    Role,
+)
+from omegaconf import OmegaConf
+from .reward import compute_reward, compute_reward_async
 from .metric_utils import (
     agent_compute_data_metrics as compute_data_metrics,
     compute_timing_metrics,
 )
 from tqdm import tqdm
 
-
-def apply_kl_penalty(data: DataProto, kl_ctrl: core_algos.AdaptiveKLController, kl_penalty='kl'):
-    responses = data.batch['responses']
-    response_length = responses.size(1)
-    token_level_scores = data.batch['token_level_scores']
-    batch_size = data.batch.batch_size[0]
-    if 'loss_mask' in data.batch.keys():
-        # masking observations, instead of directly using original `attention_mask`
-        attention_mask = data.batch['loss_mask']
-    else:
-        attention_mask = data.batch['attention_mask']
-    response_mask = attention_mask[:, -response_length:]
-
-    # compute kl between ref_policy and current policy
-    # When apply_kl_penalty, algorithm.use_kl_in_reward=True, so the reference model has been enabled.
-    kld = core_algos.kl_penalty(data.batch['old_log_probs'], data.batch['ref_log_prob'],
-                                kl_penalty=kl_penalty)  # (batch_size, response_length)
-    kld = kld * response_mask
-    beta = kl_ctrl.value
-
-    token_level_rewards = token_level_scores - beta * kld
-
-    current_kl = masked_mean(kld, mask=response_mask, axis=-1)  # average over sequence
-    current_kl = torch.mean(current_kl, dim=0).item()
-
-    # according to https://github.com/huggingface/trl/blob/951ca1841f29114b969b57b26c7d3e80a39f75a0/trl/trainer/ppo_trainer.py#L837
-    kl_ctrl.update(current_kl=current_kl, n_steps=batch_size)
-    data.batch['token_level_rewards'] = token_level_rewards
-
-    metrics = {'actor/reward_kl_penalty': current_kl, 'actor/reward_kl_penalty_coeff': beta}
-
-    return data, metrics
-
-
-def compute_response_mask(data: DataProto):
-    responses = data.batch['responses']
-    response_length = responses.size(1)
-    if 'loss_mask' in data.batch.keys():
-        # masking observations, instead of directly using original `attention_mask`
-        attention_mask = data.batch['loss_mask']
-    else:
-        attention_mask = data.batch['attention_mask']
-    return attention_mask[:, -response_length:]
-
-
 class AgentRayPPOTrainer(RayPPOTrainer):
+
+    def init_workers(self):
+        """Initialize distributed training workers using Ray backend.
+
+        Creates:
+        1. Ray resource pools from configuration
+        2. Worker groups for each role (actor, critic, etc.)
+        """
+        self.resource_pool_manager.create_resource_pool()
+
+        self.resource_pool_to_cls = {pool: {} for pool in self.resource_pool_manager.resource_pool_dict.values()}
+
+        # create actor and rollout
+        if self.hybrid_engine:
+            resource_pool = self.resource_pool_manager.get_resource_pool(Role.ActorRollout)
+            actor_rollout_cls = RayClassWithInitArgs(
+                cls=self.role_worker_mapping[Role.ActorRollout],
+                config=self.config.actor_rollout_ref,
+                role="actor_rollout",
+            )
+            self.resource_pool_to_cls[resource_pool]["actor_rollout"] = actor_rollout_cls
+        else:
+            raise NotImplementedError
+
+        # create critic
+        if self.use_critic:
+            resource_pool = self.resource_pool_manager.get_resource_pool(Role.Critic)
+            critic_cls = RayClassWithInitArgs(cls=self.role_worker_mapping[Role.Critic], config=self.config.critic)
+            self.resource_pool_to_cls[resource_pool]["critic"] = critic_cls
+
+        # create reference policy if needed
+        if self.use_reference_policy:
+            resource_pool = self.resource_pool_manager.get_resource_pool(Role.RefPolicy)
+            ref_policy_cls = RayClassWithInitArgs(self.role_worker_mapping[Role.RefPolicy], config=self.config.actor_rollout_ref, role="ref")
+            self.resource_pool_to_cls[resource_pool]["ref"] = ref_policy_cls
+
+        # create a reward model if reward_fn is None
+        if self.use_rm:
+            # we create a RM here
+            resource_pool = self.resource_pool_manager.get_resource_pool(Role.RewardModel)
+            rm_cls = RayClassWithInitArgs(self.role_worker_mapping[Role.RewardModel], config=self.config.reward_model)
+            self.resource_pool_to_cls[resource_pool]["rm"] = rm_cls
+
+        # initialize WorkerGroup
+        # NOTE: if you want to use a different resource pool for each role, which can support different parallel size,
+        # you should not use `create_colocated_worker_cls`.
+        # Instead, directly pass different resource pool to different worker groups.
+        # See https://github.com/volcengine/verl/blob/master/examples/ray/tutorial.ipynb for more information.
+        all_wg = {}
+        wg_kwargs = {}  # Setting up kwargs for RayWorkerGroup
+        if OmegaConf.select(self.config.trainer, "ray_wait_register_center_timeout") is not None:
+            wg_kwargs["ray_wait_register_center_timeout"] = self.config.trainer.ray_wait_register_center_timeout
+
+        for resource_pool, class_dict in self.resource_pool_to_cls.items():
+            worker_dict_cls = create_colocated_worker_cls(class_dict=class_dict)
+            wg_dict = self.ray_worker_group_cls(resource_pool=resource_pool, ray_cls_with_init=worker_dict_cls, device_name=self.device_name, **wg_kwargs)
+            spawn_wg = wg_dict.spawn(prefix_set=class_dict.keys())
+            all_wg.update(spawn_wg)
+
+        if self.use_critic:
+            self.critic_wg = all_wg["critic"]
+            self.critic_wg.init_model()
+
+        if self.use_reference_policy and not self.ref_in_actor:
+            self.ref_policy_wg = all_wg["ref"]
+            self.ref_policy_wg.init_model()
+
+        if self.use_rm:
+            self.rm_wg = all_wg["rm"]
+            self.rm_wg.init_model()
+
+        # we should create rollout at the end so that vllm can have a better estimation of kv cache memory
+        self.actor_rollout_wg = all_wg["actor_rollout"]
+        self.actor_rollout_wg.init_model()
+
+        # create async rollout manager and request scheduler
+        self.async_rollout_mode = False
+        if self.config.actor_rollout_ref.rollout.mode == "async":
+            # from verl.workers.rollout.async_server import AsyncLLMServerManager
+            from verl_tool.workers.rollout.async_server import VerlToolAsyncLLMServerManager as AsyncLLMServerManager # added by verl-tool
+
+            self.async_rollout_mode = True
+            self.async_rollout_manager = AsyncLLMServerManager(
+                config=self.config,
+                worker_group=self.actor_rollout_wg,
+            )
 
     def _validate(self):
         data_source_lst = []
@@ -90,6 +156,7 @@ class AgentRayPPOTrainer(RayPPOTrainer):
                 batch_keys=batch_keys_to_pop,
                 non_tensor_batch_keys=non_tensor_batch_keys_to_pop,
             )
+            # added by verl-tool
             if self.config.actor_rollout_ref.actor.enable_agent:
                 additional_non_tensor_keys = ['extra_info']
                 additional_non_tensor_keys = [k for k in additional_non_tensor_keys if k in test_batch.non_tensor_batch.keys()]
@@ -233,6 +300,7 @@ class AgentRayPPOTrainer(RayPPOTrainer):
                     batch_keys=batch_keys_to_pop,
                     non_tensor_batch_keys=non_tensor_batch_keys_to_pop,
                 )
+                # added by verl-tool
                 if self.config.actor_rollout_ref.actor.enable_agent:
                     additional_non_tensor_keys = ['extra_info']
                     additional_non_tensor_keys = [k for k in additional_non_tensor_keys if k in batch.non_tensor_batch.keys()]
@@ -248,6 +316,7 @@ class AgentRayPPOTrainer(RayPPOTrainer):
                         if not self.async_rollout_mode:
                             gen_batch_output = self.actor_rollout_wg.generate_sequences(gen_batch)
                         else:
+                            print(gen_batch.meta_info)
                             self.async_rollout_manager.wake_up()
                             gen_batch_output = self.async_rollout_manager.generate_sequences(gen_batch)
                             self.async_rollout_manager.sleep()

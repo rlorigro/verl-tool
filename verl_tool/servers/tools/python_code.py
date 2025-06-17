@@ -3,6 +3,7 @@ add-apt-repository ppa:deki/firejail
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get -y install firejail firejail-profiles
 """
+import ray
 from .base import BaseTool, register_tool
 import regex as re
 import subprocess
@@ -151,7 +152,7 @@ def set_limits():
     resource.setrlimit(resource.RLIMIT_CPU, (TIMEOUT, resource.RLIM_INFINITY))
     # File size limit (500 MB)
     resource.setrlimit(resource.RLIMIT_FSIZE, (500*1024*1024, 500*1024*1024))
-    
+
 def execute_python(code: Union[str, List[str]], timeout: int=TIMEOUT, stdin: Optional[str] = None, python_path: str = None, pre_import_lib: bool = False, use_firejail: bool=False) -> Tuple[str, bool]:
     """
     Execute Python code in a Firejail sandbox with a timeout.
