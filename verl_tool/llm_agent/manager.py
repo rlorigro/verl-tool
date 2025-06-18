@@ -593,7 +593,7 @@ class AgentActorManager:
 
             perf_timer.start(f'step_{step}_state_updates')
             curr_active_mask = torch.tensor([not done for done in dones], dtype=torch.bool)
-            self._update_active_mask_inplace(turns_stats, curr_active_mask)
+            self._update_active_mask_inplace(active_mask, curr_active_mask)
             turns_stats[curr_active_mask] += 1
             valid_action_stats += torch.tensor(valid_action, dtype=torch.int)
 
@@ -845,8 +845,8 @@ class AgentActorManager:
         active_valid_actions = [int(x) for x in response['valids']]
 
         logger.debug(f"Received observations from tool server. Samples: {len(active_observations)}")
-        logger.debug(f" - Number of valid actions (exclusing finish action): {len([x for x in active_valid_actions if x])} / {len(active_valid_actions)}")
-        logger.debug(f" - Number of dones: {len([x for x in active_dones if x])} / {len(active_dones)}")
+        logger.info(f" - Number of valid actions (exclusing finish action): {len([x for x in active_valid_actions if x])} / {len(active_valid_actions)}")
+        logger.info(f" - Number of dones: {len([x for x in active_dones if x])} / {len(active_dones)}")
         logger.debug("Example observations:")
         non_empty_observations = [obs for obs in active_observations if obs]
         if len(non_empty_observations) > 0:

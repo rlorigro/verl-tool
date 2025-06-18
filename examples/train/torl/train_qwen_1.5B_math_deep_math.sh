@@ -20,7 +20,7 @@ top_p=1.0
 enable_agent=True # enable agent for tool use
 strategy="fsdp" # remove _agent for normal verl behavior
 action_stop_tokens='```output'
-max_turns=3
+max_turns=1
 kl_loss_coef=0.0
 kl_coef=0
 entropy_coeff=0
@@ -40,7 +40,7 @@ mask_observations=True # mask observations for kl loss and gradient descent
 enable_mtrl=False # enable multi-turn training
 max_action_length=2048
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
-run_name_postfix=""
+run_name_postfix="debug"
 if [ "$enable_agent" = "True" ]; then
     run_name="${reward_manager}-${strategy}-agent-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 else
