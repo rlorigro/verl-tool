@@ -6,6 +6,7 @@ import asyncio
 import logging
 from typing import Dict, List, Optional, Tuple, Any, Set, Union
 from tqdm import tqdm
+import regex as re
 
 import fire
 import uvicorn
@@ -103,14 +104,21 @@ class AsyncToolManager:
         Returns:
             The identified tool type or None if no tool matches
         """
-        # Check for finish condition
-        if extra_field.get("finish", False):
+        # Check for finish condition (explicit finish flag or <answer> tag)
+        if extra_field.get("finish", False) or "</answer>" in action:
             return "finish"
+        
+        # Search-R1 style: prioritize search tool for <search> tags
+        if "</search>" in action and "search_retrieval" in self.tools:
+            _, valid = self.tools["search_retrieval"].parse_action(action)
+            if valid:
+                return "search_retrieval"
             
         # If only one tool available, use it
         if len(self.tools) == 1:
             return list(self.tools.keys())[0]
-        # # Try to find matching tool
+            
+        # Try to find matching tool (excluding finish tool)
         for tool_type, tool in self.tools.items():
             if tool_type == "finish":
                 continue
