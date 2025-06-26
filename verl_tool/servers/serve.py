@@ -104,15 +104,8 @@ class AsyncToolManager:
         Returns:
             The identified tool type or None if no tool matches
         """
-        # Check for finish condition (explicit finish flag or <answer> tag)
-        if extra_field.get("finish", False) or "</answer>" in action:
+        if extra_field.get("finish", False):
             return "finish"
-        
-        # Search-R1 style: prioritize search tool for <search> tags
-        if "</search>" in action and "search_retrieval" in self.tools:
-            _, valid = self.tools["search_retrieval"].parse_action(action)
-            if valid:
-                return "search_retrieval"
             
         # If only one tool available, use it
         if len(self.tools) == 1:

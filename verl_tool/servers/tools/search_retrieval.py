@@ -27,6 +27,7 @@ class SearchRetrievalTool(BaseTool):
     def parse_action(self, action: str) -> Tuple[str, bool]:
         """
         Parse the raw action string to extract search queries.
+        Implements the prioritization logic that was originally in serve.py lines 112-115.
         
         Args:
             action: Raw action string containing search query
@@ -34,15 +35,39 @@ class SearchRetrievalTool(BaseTool):
         Returns:
             Tuple containing the extracted query and a validity flag
         """
-        # Extract search query from <search>query</search> tags
-        search_matches = re.findall(r"<search>(.*?)</search>", action, re.DOTALL)
+        # Priority logic moved from serve.py: prioritize search tool for <search> tags
+        # This implements the original logic: if "</search>" in action and "search_retrieval" in self.tools
+        if "</search>" in action:
+            # Extract search query from <search>query</search> tags
+            search_matches = re.findall(r"<search>(.*?)</search>", action, re.DOTALL)
+            
+            if len(search_matches) > 0:
+                # Use the last search query if multiple are found
+                query = search_matches[-1].strip()
+                return query, True
         
-        if len(search_matches) == 0:
-            return "", False
+        return "", False
+    
+    def get_action_priority(self, action: str, extra_field: dict) -> int:
+        """
+        Get priority for handling this action. SearchRetrieval has high priority for <search> tags.
+        This moves the tool identification logic from serve.py to the tool itself.
         
-        # Use the last search query if multiple are found
-        query = search_matches[-1].strip()
-        return query, True
+        Args:
+            action: The raw action string
+            extra_field: Extra fields associated with the action
+        Returns:
+            priority: Integer priority (-1 means cannot handle, higher numbers = higher priority)
+        """
+        # High priority for actions with </search> tags (original logic from serve.py line 112-115)
+        if "</search>" in action:
+            _, valid = self.parse_action(action)
+            if valid:
+                return 100  # High priority for search actions
+        
+        # Standard priority check
+        _, valid = self.parse_action(action)
+        return 0 if valid else -1
     
     def conduct_action(self, trajectory_id, action, extra_field):
         """
