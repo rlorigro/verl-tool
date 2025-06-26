@@ -10,7 +10,6 @@ import hashlib
 from typing import Tuple, Dict, Any, Optional
 from ..utils import kill_python_subprocess_processes
 from .utils.sql_executor import score
-# from .sql_executor import score
 import random
 
 # Timeout for code execution in seconds
