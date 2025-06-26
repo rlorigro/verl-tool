@@ -465,10 +465,12 @@ class AgentActorManager:
         rollings = gen_batch
         traj_ids = gen_batch.non_tensor_batch['traj_ids']
 
-        turns_stats_extra = {
-            "action_lengths": [[] for _ in range(gen_batch.batch['input_ids'].shape[0])],
-            "obs_lengths": [[] for _ in range(gen_batch.batch['input_ids'].shape[0])]
-        }
+        turns_stats_extra_keys = ['action_lengths', 'obs_lengths', 'rewards']
+        turns_stats_extra = {}
+        for key in turns_stats_extra_keys:
+            turns_stats_extra[key] = np.empty((gen_batch.batch['input_ids'].shape[0],), dtype=object)  # rewards can be None, so we use object type
+            for i in range(gen_batch.batch['input_ids'].shape[0]):
+                turns_stats_extra[key][i] = []
         agent_sampling_params = sampling_params.copy()
         agent_sampling_params.update({
             "n": 1,  # already repeated by n times in repeat_inputs_by_n
@@ -492,10 +494,13 @@ class AgentActorManager:
             responses_str = [''] * len(traj_ids)
             responses_ids = torch.zeros((len(traj_ids), 1), dtype=torch.int64)
             active_uids = [traj_ids[i] for i in range(len(traj_ids)) if active_mask[i]]
-            next_obs, dones, valid_action, finishs = await self.interact_with_tool_server(
+            next_obs, dones, valid_action, finishs, rewards = await self.interact_with_tool_server(
                 active_uids, responses_str, do_actions, active_mask,
                 extra_fields=rollings.non_tensor_batch.get('extra_info', None)
             )
+            for i, reward in enumerate(rewards):
+                if rewards[i] is not None and active_mask[i]:
+                    turns_stats_extra["rewards"][i].append(reward)
             curr_active_mask = torch.tensor([not done for done in dones], dtype=torch.bool)
             active_num_list.append(self._update_active_mask_inplace(active_mask, curr_active_mask))
             # turns_stats[curr_active_mask] += 1
@@ -584,11 +589,14 @@ class AgentActorManager:
             # Execute in environment and process observations
             perf_timer.start(f'step_{step}_tool_interaction')
             active_uids = [traj_ids[i] for i in range(len(traj_ids)) if active_mask[i]]
-            next_obs, dones, valid_action, finishs = await self.interact_with_tool_server(
+            next_obs, dones, valid_action, finishs, rewards = await self.interact_with_tool_server(
                 active_uids, responses_str, do_actions, active_mask,
                 extra_fields=rollings_active.non_tensor_batch.get('extra_info', None),
                 is_last_step=(step == self.config.max_turns)
             )
+            for i, reward in enumerate(rewards):
+                if rewards[i] is not None and active_mask[i]:
+                    turns_stats_extra["rewards"][i].append(reward)
             perf_timer.end(f'step_{step}_tool_interaction')
 
             perf_timer.start(f'step_{step}_state_updates')
@@ -606,7 +614,7 @@ class AgentActorManager:
                 if active:
                     obs_length = next_obs_ids[obs_idx].shape[0]
                     turns_stats_extra["obs_lengths"][i].append(int(obs_length))
-                    obs_idx += 1
+                    obs_idx += 1 
                 else:
                     turns_stats_extra["obs_lengths"][i].append(0)
 
@@ -640,6 +648,7 @@ class AgentActorManager:
             'active_mask': active_mask.tolist(),
             'action_lengths': turns_stats_extra["action_lengths"],
             'obs_lengths': turns_stats_extra["obs_lengths"],
+            'turn_rewards': turns_stats_extra["rewards"],
         }
 
         logger.info(f"ACTIVE_TRAJ_NUM: {active_num_list}")
@@ -824,10 +833,12 @@ class AgentActorManager:
             resposnes: responses from the model
             pad_token: pad token
             active_mask: active mask
-        Returns:
-            observations: observations from the tool server. None if the the query do not need to do any action.
-            dones: dones
-            valid_actions: valid actions
+        Returns: (All of length of active_mask, which is the original batch size)
+            observations (List[str]): observations from the tool server. None if the the query do not need to do any action.
+            dones (List[bool]): dones
+            valid_actions (List[bool]): valid actions
+            _finishs (List[bool]): whether the trajectory is finished for eos for all trajectories (including those that are not active)
+            rewards (List[float]): rewards for the trajectories, None if not applicable
         """
         finishs = [not do_action for do_action in do_actions]
         batch_data = {
@@ -868,7 +879,32 @@ class AgentActorManager:
                 _finishs.append(1)
 
         assert len(active_observations) == 0
-        return next_obs, dones, valid_action, _finishs
+        
+        # postprocess next_obs. For now we support two types of observations:
+        # 1. string observations, which will be the most common case
+        # 2. dict observations, e.g. {"obs": "some observation", "reward": 1.0}
+        #     for now we only support "obs" and "reward" keys, but can be extended later
+        processed_next_obs = []
+        rewards = []
+        allowed_keys = ['obs', 'reward']
+        for i, obs in enumerate(next_obs):
+            if isinstance(obs, str):
+                processed_next_obs.append(obs)
+                rewards.append(None)
+            elif isinstance(obs, dict):
+                # Check if all keys are allowed
+                if not all(key in allowed_keys for key in obs.keys()):
+                    raise ValueError(f"Invalid observation keys: {obs.keys()}. Allowed keys are {allowed_keys}")
+                _obs = obs.get('obs', '')
+                _reward = obs.get('reward', None)
+                assert isinstance(_obs, str), f"Expected 'obs' to be a string, but got {type(_obs)}"
+                assert _reward is None or isinstance(_reward, (int, float)), f"Expected 'reward' to be None, int, or float, but got {type(_reward)}"
+                processed_next_obs.append(_obs)
+                rewards.append(_reward)
+            else:
+                raise ValueError(f"Invalid observation type: {type(obs)}. Expected str or dict.")
+        next_obs = processed_next_obs
+        return next_obs, dones, valid_action, _finishs, rewards
 
      # Step 4: Add cleanup method (optional but recommended)
     async def cleanup(self):
