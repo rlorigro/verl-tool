@@ -7,8 +7,8 @@ dataset_name=deep_math_tool_v9 # or math_torl_offical to use torl training data
 # $(pwd)/data/${dataset_name}/aime25_test.parquet]
 # source /home/ma-user/anaconda3/bin/activate
 # conda activate logic
-export WANDB_API_KEY="d326842cab9a5829acb3a8ac4dd27df9ce54aed4"
-export SWANLAB_API_KEY='iTjHP8OAfepmyjJc0IzcS'
+export WANDB_API_KEY="..."
+export SWANLAB_API_KEY='...'
 # cp -r /home/ma-user/work/jiaran/MLM-master/Megatron-LM/cache/* /cache
 train_data=/home/ma-user/work/haozhe/workspace/verl-tool/data/nl2sql/train.parquet
 val_data=/home/ma-user/work/haozhe/workspace/verl-tool/data/nl2sql/dev.parquet
