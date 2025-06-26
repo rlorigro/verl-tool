@@ -56,6 +56,7 @@ VerlTool: A unified and easy-to-extend tool-agent training framework based on ve
 
 
 ## News
++ [2025/06/26] We support DAPO recipe training. See [DAPO.md](./assets/docs/DAPO.md) for more details.
 + [2025/06/18] VerlTool now officially supports Trajectory-Level asynchronous, speeding up the rollout generation with tool calling by at least 2x! see [asyncRL.md](./assets/docs/asyncRL.md) for more details.
 + [2024/06/16] We have updated the verl submodule to the latest version (06/16) and modified some code to adapt to the new version.
 + [2025/06/13] We integrated [DeepWiki](https://deepwiki.com/TIGER-AI-Lab/verl-tool) for Verl-Tool. Feel free to browse the AI-generated docs and chat with Verl-tool codes.

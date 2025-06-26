@@ -164,6 +164,8 @@ class AgentActorManager:
                             else:
                                 do_action = False
                         else:
+                            if not responses_str[i].endswith(self.config.turn_end_token):
+                                responses_str[i] += self.config.turn_end_token
                             do_action = True
                     else:
                         # always do action, decided by the server about whether an action stops
@@ -212,6 +214,12 @@ class AgentActorManager:
             #         "do_action": do_actions[i],
             #     } for i in range(len(responses_str))], f, indent=4)
             responses = self._batch_tokenize(responses_str).to(torch.int64)
+        # overlong dones
+        effective_lens = self.tensor_fn.create_attention_mask(responses).sum(dim=1)
+        for i in range(len(responses_str)):
+            if effective_lens[i] >= self.config.max_response_length:
+                logger.warning(f"[WARNING] Response too long, consider changing your config, {effective_lens[i]} & {self.config.max_response_length}")
+                do_actions[i] = False
         return responses, responses_str, do_actions
 
     async def _process_next_obs(self, next_obs: List[str], dones: List[bool], valid_action: List[bool], finishs: List[bool]) -> torch.Tensor:
@@ -407,16 +415,14 @@ class AgentActorManager:
 
         max_len = min(self.config.max_response_length, effective_len)
 
-        overlong_dones = effective_lens >= self.config.max_response_length
-
         # return the updated responses along with its masked version
         if self.config.truncate_response_side == 'left':
             # it should be left most of the time.
             return {'responses': responses[:, :max_len],
-                    'responses_with_loss_mask': responses_with_loss_mask[:, :max_len]}, overlong_dones
+                    'responses_with_loss_mask': responses_with_loss_mask[:, :max_len]}
         elif self.config.truncate_response_side == 'right':
             return {'responses': responses[:, -max_len:],
-                    'responses_with_loss_mask': responses_with_loss_mask[:, -max_len:]}, overlong_dones
+                    'responses_with_loss_mask': responses_with_loss_mask[:, -max_len:]}
         else:
             raise ValueError(
                 f"Invalid truncate_response_side: {self.config.truncate_response_side}. Allowed options are 'left' or 'right'.")
@@ -465,7 +471,7 @@ class AgentActorManager:
         rollings = gen_batch
         traj_ids = gen_batch.non_tensor_batch['traj_ids']
 
-        turns_stats_extra_keys = ['action_lengths', 'obs_lengths', 'rewards']
+        turns_stats_extra_keys = ['action_lengths', 'obs_lengths', 'rewards', 'tool_interact_info']
         turns_stats_extra = {}
         for key in turns_stats_extra_keys:
             turns_stats_extra[key] = np.empty((gen_batch.batch['input_ids'].shape[0],), dtype=object)  # rewards can be None, so we use object type
@@ -494,13 +500,14 @@ class AgentActorManager:
             responses_str = [''] * len(traj_ids)
             responses_ids = torch.zeros((len(traj_ids), 1), dtype=torch.int64)
             active_uids = [traj_ids[i] for i in range(len(traj_ids)) if active_mask[i]]
-            next_obs, dones, valid_action, finishs, rewards = await self.interact_with_tool_server(
+            next_obs, dones, valid_action, finishs, rewards, tool_interact_info = await self.interact_with_tool_server(
                 active_uids, responses_str, do_actions, active_mask,
                 extra_fields=rollings.non_tensor_batch.get('extra_info', None)
             )
             for i, reward in enumerate(rewards):
                 if rewards[i] is not None and active_mask[i]:
                     turns_stats_extra["rewards"][i].append(reward)
+                turns_stats_extra["tool_interact_info"][i].append(tool_interact_info[i])
             curr_active_mask = torch.tensor([not done for done in dones], dtype=torch.bool)
             active_num_list.append(self._update_active_mask_inplace(active_mask, curr_active_mask))
             # turns_stats[curr_active_mask] += 1
@@ -524,13 +531,12 @@ class AgentActorManager:
                 responses_ids,
                 next_obs_ids
             )
-            original_right_side, overlong_dones = self._update_right_side(
+            original_right_side = self._update_right_side(
                 original_right_side,
                 responses_ids,
                 next_obs_ids
             )
             agent_sampling_params['max_tokens'] = available_context_budget
-            active_mask = active_mask * (~overlong_dones.to(active_mask.dtype).to(active_mask.device))
             active_num_list.append(active_mask.sum().item())
             perf_timer.end('initial_tool_call')
 
@@ -589,7 +595,7 @@ class AgentActorManager:
             # Execute in environment and process observations
             perf_timer.start(f'step_{step}_tool_interaction')
             active_uids = [traj_ids[i] for i in range(len(traj_ids)) if active_mask[i]]
-            next_obs, dones, valid_action, finishs, rewards = await self.interact_with_tool_server(
+            next_obs, dones, valid_action, finishs, rewards, tool_interact_info = await self.interact_with_tool_server(
                 active_uids, responses_str, do_actions, active_mask,
                 extra_fields=rollings_active.non_tensor_batch.get('extra_info', None),
                 is_last_step=(step == self.config.max_turns)
@@ -597,6 +603,7 @@ class AgentActorManager:
             for i, reward in enumerate(rewards):
                 if rewards[i] is not None and active_mask[i]:
                     turns_stats_extra["rewards"][i].append(reward)
+                turns_stats_extra["tool_interact_info"][i].append(tool_interact_info[i])
             perf_timer.end(f'step_{step}_tool_interaction')
 
             perf_timer.start(f'step_{step}_state_updates')
@@ -625,7 +632,7 @@ class AgentActorManager:
                 responses_ids,
                 next_obs_ids
             )
-            original_right_side, overlong_dones = self._update_right_side(
+            original_right_side = self._update_right_side(
                 original_right_side,
                 responses_ids,
                 next_obs_ids
@@ -633,7 +640,6 @@ class AgentActorManager:
             available_context_budget = min(available_context_budget, self.config.max_action_length)
             agent_sampling_params['max_tokens'] = available_context_budget # for vllm
             agent_sampling_params['max_new_tokens'] = available_context_budget # for sglang
-            active_num_list.append(self._update_active_mask_inplace(active_mask, (~overlong_dones).to(active_mask.dtype).to(active_mask.device)))
             perf_timer.end(f'step_{step}_state_updates')
             
             perf_timer.end(step_timer_key)
@@ -649,6 +655,7 @@ class AgentActorManager:
             'action_lengths': turns_stats_extra["action_lengths"],
             'obs_lengths': turns_stats_extra["obs_lengths"],
             'turn_rewards': turns_stats_extra["rewards"],
+            'tool_interact_info': turns_stats_extra["tool_interact_info"],
         }
 
         logger.info(f"ACTIVE_TRAJ_NUM: {active_num_list}")
@@ -736,11 +743,19 @@ class AgentActorManager:
         # Create observation mask
         if self.config.mask_observations:
             final_output['loss_mask'] = torch.cat([
-                self.tensor_fn.create_attention_mask(left_side['input_ids']),
+                torch.zeros_like(left_side['input_ids']), # do not train on prompt
                 self.tensor_fn.create_attention_mask(final_output['responses_with_loss_mask'])
             ], dim=1) # [bs*n, prompt_length + max_response_length]
         else:
             final_output['loss_mask'] = final_output['attention_mask']
+        
+        # if mask overlong trajectory is enabled, we need to mask the overlong trajectory
+        if self.config.mask_overlong_loss:
+            # set loss_mask to 0 for those overlong trajectories
+            effective_lens = self.tensor_fn.create_attention_mask(final_output['responses']).sum(dim=1)
+            overlong_mask = effective_lens >= self.config.max_response_length
+            final_output['loss_mask'][overlong_mask] = 0
+            logger.debug(f"Masked {overlong_mask.sum().item()}/{final_output['loss_mask'].shape[0]} overlong trajectories.")
 
         # Create position ids
         final_output['position_ids'] = self.tensor_fn.create_position_ids(
@@ -839,6 +854,7 @@ class AgentActorManager:
             valid_actions (List[bool]): valid actions
             _finishs (List[bool]): whether the trajectory is finished for eos for all trajectories (including those that are not active)
             rewards (List[float]): rewards for the trajectories, None if not applicable
+            tool_interact_info (List[Dict]): tool interaction info for each trajectory, None if not applicable
         """
         finishs = [not do_action for do_action in do_actions]
         batch_data = {
@@ -886,25 +902,27 @@ class AgentActorManager:
         #     for now we only support "obs" and "reward" keys, but can be extended later
         processed_next_obs = []
         rewards = []
+        tool_interact_info = []
         allowed_keys = ['obs', 'reward']
         for i, obs in enumerate(next_obs):
             if isinstance(obs, str):
                 processed_next_obs.append(obs)
                 rewards.append(None)
+                tool_interact_info.append({})
             elif isinstance(obs, dict):
-                # Check if all keys are allowed
-                if not all(key in allowed_keys for key in obs.keys()):
-                    raise ValueError(f"Invalid observation keys: {obs.keys()}. Allowed keys are {allowed_keys}")
+                assert "obs" in obs, f"Observation dict must contain 'obs' key, but got {obs.keys()}"
                 _obs = obs.get('obs', '')
                 _reward = obs.get('reward', None)
                 assert isinstance(_obs, str), f"Expected 'obs' to be a string, but got {type(_obs)}"
                 assert _reward is None or isinstance(_reward, (int, float)), f"Expected 'reward' to be None, int, or float, but got {type(_reward)}"
                 processed_next_obs.append(_obs)
                 rewards.append(_reward)
+                # store tool interaction info if exists
+                tool_interact_info.append({k: v for k, v in obs.items() if k not in allowed_keys})
             else:
                 raise ValueError(f"Invalid observation type: {type(obs)}. Expected str or dict.")
         next_obs = processed_next_obs
-        return next_obs, dones, valid_action, _finishs, rewards
+        return next_obs, dones, valid_action, _finishs, rewards, tool_interact_info
 
      # Step 4: Add cleanup method (optional but recommended)
     async def cleanup(self):
