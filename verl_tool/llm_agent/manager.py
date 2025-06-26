@@ -755,7 +755,7 @@ class AgentActorManager:
             effective_lens = self.tensor_fn.create_attention_mask(final_output['responses']).sum(dim=1)
             overlong_mask = effective_lens >= self.config.max_response_length
             final_output['loss_mask'][overlong_mask] = 0
-            logger.warning(f"[WARNING] Masked {overlong_mask.sum().item()}/{final_output['loss_mask'].shape[0]} overlong trajectories.")
+            logger.debug(f"Masked {overlong_mask.sum().item()}/{final_output['loss_mask'].shape[0]} overlong trajectories.")
 
         # Create position ids
         final_output['position_ids'] = self.tensor_fn.create_position_ids(
@@ -908,6 +908,7 @@ class AgentActorManager:
             if isinstance(obs, str):
                 processed_next_obs.append(obs)
                 rewards.append(None)
+                tool_interact_info.append({})
             elif isinstance(obs, dict):
                 assert "obs" in obs, f"Observation dict must contain 'obs' key, but got {obs.keys()}"
                 _obs = obs.get('obs', '')

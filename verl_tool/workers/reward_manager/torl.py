@@ -148,7 +148,9 @@ class ToRLRewardManager:
             response_ids = data_item.batch['responses']
             valid_response_length = data_item.batch['attention_mask'][prompt_length:].sum()
             valid_response_ids = response_ids[:valid_response_length]
-            valid_response_ids_with_loss_mask = data_item.batch['responses_with_loss_mask'][:valid_response_length]
+            # valid_response_ids_with_loss_mask = data_item.batch['responses_with_loss_mask'][:valid_response_length]
+            loss_mask = data_item.batch['loss_mask']
+            valid_response_ids_with_loss_mask = torch.where(loss_mask[prompt_length:prompt_length + valid_response_length] == 1, valid_response_ids, self.tokenizer.pad_token_id)
 
             # decode
             prompt_str = self.tokenizer.decode(valid_prompt_ids, skip_special_tokens=True)
