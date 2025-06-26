@@ -280,11 +280,13 @@ class AgentRayPPOTrainer(RayPPOTrainer):
         # we start from step 1
         self.global_steps += 1
         last_val_metrics = None
-
+        timing_raw = {}
+        dapo_batch = None # for dapo
+        num_prompt_in_batch = 0 # for dapo
+        num_gen_batches = 0 # for dapo
         for epoch in range(self.config.trainer.total_epochs):
             for batch_dict in self.train_dataloader:
                 metrics = {}
-                timing_raw = {}
                 batch: DataProto = DataProto.from_single_dict(batch_dict)
 
                 # pop those keys for generation
@@ -366,6 +368,55 @@ class AgentRayPPOTrainer(RayPPOTrainer):
                             future_reward = compute_reward_async.remote(batch, self.config, self.tokenizer)
                         else:
                             reward_tensor, reward_extra_infos_dict = compute_reward(batch, self.reward_fn)
+
+                    # added by verl-tool for dapo
+                    if not hasattr(self.config.algorithm, "filter_groups") or not self.config.algorithm.filter_groups.enable:
+                        pass
+                    else:  # NOTE: When prompts after filtering is less than train batch size,
+                        # we skip to the next generation batch
+                        new_batch = batch
+                        metric_name = self.config.algorithm.filter_groups.metric
+                        if metric_name == "seq_final_reward":
+                            # Turn to numpy for easier filtering
+                            new_batch.non_tensor_batch["seq_final_reward"] = new_batch.batch["token_level_rewards"].sum(dim=-1).numpy()
+                        elif metric_name == "seq_reward":
+                            new_batch.non_tensor_batch["seq_reward"] = new_batch.batch["token_level_scores"].sum(dim=-1).numpy()
+
+                        # Collect the sequence reward for each trajectory
+                        prompt_uid2metric_vals = defaultdict(list)
+                        for uid, metric_val in zip(new_batch.non_tensor_batch["uid"], new_batch.non_tensor_batch[metric_name]):
+                            prompt_uid2metric_vals[uid].append(metric_val)
+
+                        prompt_uid2metric_std = {}
+                        for prompt_uid, metric_vals in prompt_uid2metric_vals.items():
+                            prompt_uid2metric_std[prompt_uid] = np.std(metric_vals)
+
+                        kept_prompt_uids = [uid for uid, std in prompt_uid2metric_std.items() if std > 0 or len(prompt_uid2metric_vals[uid]) == 1]
+                        num_prompt_in_batch += len(kept_prompt_uids)
+
+                        kept_traj_idxs = []
+                        for idx, traj_from_prompt_uid in enumerate(new_batch.non_tensor_batch["uid"]):
+                            if traj_from_prompt_uid in kept_prompt_uids:
+                                kept_traj_idxs.append(idx)
+
+                        new_batch = new_batch[kept_traj_idxs]
+                        dapo_batch = new_batch if dapo_batch is None else DataProto.concat([dapo_batch, new_batch])
+                        batch = dapo_batch
+
+                        prompt_bsz = self.config.data.train_batch_size
+                        if num_prompt_in_batch < prompt_bsz:
+                            print(f"{num_prompt_in_batch=} < {prompt_bsz=}")
+                            max_num_gen_batches = self.config.algorithm.filter_groups.max_num_gen_batches
+                            if max_num_gen_batches <= 0 or num_gen_batches < max_num_gen_batches:
+                                print(f"{num_gen_batches=}. Keep generating...")
+                                progress_bar.update(1)
+                                continue
+                            else:
+                                raise ValueError(f"{num_gen_batches=} >= {max_num_gen_batches=}." + " Generated too many. Please check if your data are too difficult." + " You could also try set max_num_gen_batches=0 to enable endless trials.")
+                        else:
+                            # Align the batch
+                            traj_bsz = self.config.data.train_batch_size * self.config.actor_rollout_ref.rollout.n
+                            batch = batch[:traj_bsz]
 
                     # recompute old_log_probs
                     with _timer("old_log_prob", timing_raw):
@@ -522,6 +573,13 @@ class AgentRayPPOTrainer(RayPPOTrainer):
                 # TODO: implement actual tflpo and theoretical tflpo
                 n_gpus = self.resource_pool_manager.get_n_gpus()
                 metrics.update(compute_throughout_metrics(batch=batch, timing_raw=timing_raw, n_gpus=n_gpus))
+                # added by verl_tool for dapo
+                timing_raw = defaultdict(float)  # clear timing
+
+                metrics["train/num_gen_batches"] = num_gen_batches
+                dapo_batch = None
+                num_prompt_in_batch = 0
+                num_gen_batches = 0
 
                 # TODO: make a canonical logger that supports various backend
                 logger.log(data=metrics, step=self.global_steps)
