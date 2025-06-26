@@ -12,23 +12,36 @@ model_name="/map-vepfs/yi/model_weights/Qwen2.5-Coder-1.5B-Instruct"
 train_data="/map-vepfs/yi/Search-R1/data/nq_search/train.parquet"
 val_data="/map-vepfs/yi/Search-R1/data/nq_search/test.parquet"
 
+
+# Search-R1 specific action tokens
+
+action_stop_tokens="</search>,</answer>"
+retriever_url="http://127.0.0.1:8001/retrieve"
+retriever_topk=3
+# total_epochs=15
+# total_training_steps=1005
+
 # Training hyperparameters
 rl_alg=grpo # gae(ppo) or grpo
-n_gpus_per_node=2
+n_gpus_per_node=8
 n_nodes=1
-n=1
-batch_size=512
+n=16
+batch_size=128
 ppo_mini_batch_size=$batch_size
 max_prompt_length=4096
-max_response_length=500
-max_start_length=2048
-max_obs_length=500
+max_response_length=2048
+max_obs_length=512
 temperature=1.0
 top_p=1.0
 enable_agent=True # enable agent for tool use
 strategy="fsdp" # fsdp2
-lr=1e-6
 max_turns=2
+kl_loss_coef=0.0
+kl_coef=0
+entropy_coeff=0
+kl_loss_type=low_var_kl
+lr=1e-6
+reward_manager=search_r1_qa_em
 ppo_micro_batch_size_per_gpu=1
 log_prob_micro_batch_size_per_gpu=8
 tensor_model_parallel_size=1
@@ -37,25 +50,24 @@ do_offload=True # control actor's fsdp.[param|optimizer]_offload and actor_rollo
 use_dynamic_bsz=True # faster
 ulysses_sequence_parallel_size=1 # set to 1 for normal verl behavior, otherwise it will cause OOM
 fsdp_size=-1
-total_epochs=15
-total_training_steps=1005
-enable_mtrl=False
+additional_eos_token_ids=[151645] # <|im_end|> token id
+mask_observations=True # mask observations for kl loss and gradient descent
+enable_mtrl=False # enable multi-turn training
 max_action_length=2048
-
-# Search-R1 specific action tokens
-action_stop_tokens="</search>,</answer>"
-retriever_url="http://127.0.0.1:8000/retrieve"
-retriever_topk=3
-
 # Generate run name
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
 run_name_postfix="search_r1"
 run_name="search_r1_qa_em-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}-${run_name_postfix}"
 export VERL_RUN_ID=$run_name
+export NCCL_DEBUG=INFO
+export VLLM_USE_V1=1
+rollout_mode='async'
 
 # # Launch retrieval server (same as Search-R1)
 # echo "Starting retrieval server..."
 # cd /map-vepfs/yi/Search-R1
+# export HF_ENDPOINT=https://hf-mirror.com
+# 
 # conda activate retriever
 # bash /map-vepfs/yi/Search-R1/retrieval_launch.sh &
 # retriever_pid=$!
@@ -63,17 +75,22 @@ export VERL_RUN_ID=$run_name
 # conda activate verl-tool-env-yi # activate verl-tool environment
 # sleep 10  # Wait for retrieval server to start
 
+# Set environment variables for search tool configuration
+export RETRIEVER_URL=$retriever_url
+export RETRIEVER_TOPK=$retriever_topk
+
+# Create action stop tokens file
+mkdir -p $(pwd)/tmp
+action_stop_tokens_file="$(pwd)/tmp/search_r1_action_tokens.txt"
+echo -n "$action_stop_tokens" > $action_stop_tokens_file
+echo "Action stop tokens file: $action_stop_tokens_file"
+
 echo "Retrieval server started with PID: $retriever_pid"
 
 # Launch tool server with search capabilities
 host=$(hostname -I | awk '{print $1}')
 port=$(shuf -i 30000-31000 -n 1)
 tool_server_url=http://$host:$port/get_observation
-
-# Set environment variables for search tool configuration
-export RETRIEVER_URL=$retriever_url
-export RETRIEVER_TOPK=$retriever_topk
-
 # Start tool server with both search_retrieval and finish tools
 python -m verl_tool.servers.serve \
     --host $host \
@@ -84,15 +101,6 @@ tool_server_pid=$!
 
 echo "Tool server (pid=$tool_server_pid) started at $tool_server_url"
 
-# Wait for tool server to be ready
-sleep 5
-
-# Create action stop tokens file
-mkdir -p $(pwd)/tmp
-action_stop_tokens_file="$(pwd)/tmp/search_r1_action_tokens.txt"
-echo -n "$action_stop_tokens" > $action_stop_tokens_file
-echo "Action stop tokens file: $action_stop_tokens_file"
-
 # TODO: fix the error of cannot invoke:
 # actor_rollout_ref.actor.checkpoint.contents=['model','optimizer','extra','hf_model'] \
 
@@ -102,44 +110,48 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     data.train_files=$train_data \
     data.val_files=$val_data \
     data.train_batch_size=$batch_size \
-    data.val_batch_size=$batch_size \
+    data.val_batch_size=1024 \
     data.max_prompt_length=$max_prompt_length \
     data.max_response_length=$max_response_length \
     data.truncation='right' \
-    reward_model.reward_manager="search_r1_qa_em" \
+    reward_model.reward_manager=$reward_manager \
+    reward_model.launch_reward_fn_async=True \
     actor_rollout_ref.model.path=$model_name \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
-    actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.actor.optim.lr=$lr \
+    actor_rollout_ref.actor.optim.lr_warmup_steps=10 \
+    actor_rollout_ref.model.use_remove_padding=True \
+    actor_rollout_ref.model.trust_remote_code=True \
+    actor_rollout_ref.actor.checkpoint.save_contents=['model','optimizer','extra','hf_model'] \
     actor_rollout_ref.actor.ppo_mini_batch_size=$ppo_mini_batch_size \
     actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=$ppo_micro_batch_size_per_gpu \
     actor_rollout_ref.actor.use_dynamic_bsz=$use_dynamic_bsz \
     actor_rollout_ref.actor.use_kl_loss=True \
     actor_rollout_ref.actor.strategy=$strategy \
-    actor_rollout_ref.actor.kl_loss_coef=0.0 \
-    actor_rollout_ref.actor.kl_loss_type=low_var_kl \
-    actor_rollout_ref.actor.entropy_coeff=0 \
+    actor_rollout_ref.actor.kl_loss_coef=$kl_loss_coef \
+    actor_rollout_ref.actor.kl_loss_type=$kl_loss_type \
+    actor_rollout_ref.actor.entropy_coeff=$entropy_coeff \
     actor_rollout_ref.actor.fsdp_config.param_offload=$do_offload \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=$do_offload \
     actor_rollout_ref.actor.fsdp_config.fsdp_size=$fsdp_size \
     actor_rollout_ref.actor.ulysses_sequence_parallel_size=$ulysses_sequence_parallel_size \
-    +actor_rollout_ref.actor.checkpoint.contents=['model','optimizer','extra','hf_model'] \
     +actor_rollout_ref.actor.enable_agent=$enable_agent \
     +actor_rollout_ref.agent.tool_server_url=$tool_server_url \
     +actor_rollout_ref.agent.max_prompt_length=$max_prompt_length \
     +actor_rollout_ref.agent.max_response_length=$max_response_length \
-    +actor_rollout_ref.agent.max_start_length=$max_start_length \
+    +actor_rollout_ref.agent.max_start_length=$max_prompt_length \
     +actor_rollout_ref.agent.max_obs_length=$max_obs_length \
     +actor_rollout_ref.agent.max_turns=$max_turns \
     +actor_rollout_ref.agent.num_gpus=$n_gpus_per_node \
+    +actor_rollout_ref.agent.additional_eos_token_ids=$additional_eos_token_ids \
+    +actor_rollout_ref.agent.mask_observations=$mask_observations \
     +actor_rollout_ref.agent.action_stop_tokens=$action_stop_tokens_file \
     +actor_rollout_ref.agent.enable_mtrl=$enable_mtrl \
     +actor_rollout_ref.agent.max_action_length=$max_action_length \
-    +actor_rollout_ref.agent.mask_observations=true \
-    +actor_rollout_ref.agent.truncate_obs_side="left" \
-    +actor_rollout_ref.agent.rollout_mode="async" \
     actor_rollout_ref.rollout.tensor_model_parallel_size=$tensor_model_parallel_size \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=$log_prob_micro_batch_size_per_gpu \
+    actor_rollout_ref.rollout.enforce_eager=False \
+    actor_rollout_ref.rollout.free_cache_engine=False \
     actor_rollout_ref.rollout.name=vllm \
     actor_rollout_ref.rollout.gpu_memory_utilization=$gpu_memory_utilization \
     actor_rollout_ref.rollout.temperature=$temperature \
@@ -147,19 +159,20 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     actor_rollout_ref.rollout.top_k=-1 \
     actor_rollout_ref.rollout.n=$n \
     actor_rollout_ref.rollout.log_prob_use_dynamic_bsz=$use_dynamic_bsz \
-    actor_rollout_ref.rollout.max_num_seqs=1024 \
+    actor_rollout_ref.rollout.max_num_seqs=512 \
     actor_rollout_ref.ref.log_prob_use_dynamic_bsz=$use_dynamic_bsz \
     actor_rollout_ref.ref.fsdp_config.param_offload=$do_offload \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=$log_prob_micro_batch_size_per_gpu \
+    actor_rollout_ref.ref.ulysses_sequence_parallel_size=$ulysses_sequence_parallel_size \
     critic.optim.lr=1e-5 \
     critic.strategy=$strategy \
     critic.model.path=$model_name \
     critic.model.fsdp_config.fsdp_size=$fsdp_size \
     critic.ppo_micro_batch_size_per_gpu=$ppo_micro_batch_size_per_gpu \
     critic.ulysses_sequence_parallel_size=$ulysses_sequence_parallel_size \
-    algorithm.kl_ctrl.kl_coef=0 \
-    trainer.logger=['console'] \
-    trainer.project_name="Search-R1-verl-tool" \
+    algorithm.kl_ctrl.kl_coef=$kl_coef \
+    trainer.logger=['console','tensorboard'] \
+    trainer.project_name=$reward_manager \
     trainer.experiment_name=$run_name \
     trainer.val_before_train=True \
     trainer.default_hdfs_dir=null \
@@ -168,8 +181,6 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     +trainer.remove_previous_ckpt_in_save=True \
     trainer.save_freq=10 \
     trainer.test_freq=50 \
-    trainer.total_epochs=$total_epochs \
-    2>&1 | tee search_r1_training.log
 
 # Cleanup
 echo "Training completed. Cleaning up..."
