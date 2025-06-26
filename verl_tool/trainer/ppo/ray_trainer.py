@@ -319,7 +319,6 @@ class AgentRayPPOTrainer(RayPPOTrainer):
                         if not self.async_rollout_mode:
                             gen_batch_output = self.actor_rollout_wg.generate_sequences(gen_batch)
                         else:
-                            print(gen_batch.meta_info)
                             self.async_rollout_manager.wake_up()
                             gen_batch_output = self.async_rollout_manager.generate_sequences(gen_batch)
                             self.async_rollout_manager.sleep()
@@ -378,13 +377,27 @@ class AgentRayPPOTrainer(RayPPOTrainer):
                     else:  # NOTE: When prompts after filtering is less than train batch size,
                         # we skip to the next generation batch
                         dapo_substep += 1
+                        # rewards assignment
+                        batch.batch["token_level_scores"] = reward_tensor 
+                        if reward_extra_infos_dict:
+                            print(f'{list(reward_extra_infos_dict.keys())=}')
+                            to_remove_keys = []
+                            for k, v in reward_extra_infos_dict.items():
+                                mean_v = np.mean([x for x in v if x is not None])
+                                metrics[f'reward_extra_info/{k}'] = mean_v
+                                if None in v:
+                                    to_remove_keys.append(k)
+                            for k in to_remove_keys:
+                                reward_extra_infos_dict.pop(k)
+                            batch.non_tensor_batch.update({k: np.array(v) for k, v in reward_extra_infos_dict.items()})
+                            
                         new_batch = batch
                         metric_name = self.config.algorithm.filter_groups.metric
                         if metric_name == "seq_final_reward":
                             # Turn to numpy for easier filtering
-                            new_batch.non_tensor_batch["seq_final_reward"] = reward_tensor.sum(dim=-1).numpy()
+                            new_batch.non_tensor_batch["seq_final_reward"] = batch.batch["token_level_scores"].sum(dim=-1).numpy()
                         elif metric_name == "seq_reward":
-                            new_batch.non_tensor_batch["seq_reward"] = reward_tensor.sum(dim=-1).numpy()
+                            new_batch.non_tensor_batch["seq_reward"] = batch.batch["token_level_scores"].sum(dim=-1).numpy()
 
                         # Collect the sequence reward for each trajectory
                         prompt_uid2metric_vals = defaultdict(list)
@@ -412,22 +425,31 @@ class AgentRayPPOTrainer(RayPPOTrainer):
 
                         prompt_bsz = self.config.data.train_batch_size
                         if num_prompt_in_batch < prompt_bsz:
-                            print(f"{num_prompt_in_batch=} < {prompt_bsz=}")
+                            print(f"cur_num_traj={num_prompt_in_batch*self.config.actor_rollout_ref.rollout.n} < expected_num_traj={prompt_bsz*self.config.actor_rollout_ref.rollout.n}.")
                             max_num_gen_batches = self.config.algorithm.filter_groups.max_num_gen_batches
                             if max_num_gen_batches <= 0 or num_gen_batches < max_num_gen_batches:
-                                print(f"{num_gen_batches=}. Keep generating...")
+                                print(f"DAPO sub sample step {num_gen_batches}. Keep generating...")
+                                num_gen_batches += 1
                                 progress_bar.update(1)
                                 continue
                             else:
-                                raise ValueError(f"{num_gen_batches=} >= {max_num_gen_batches=}." + " Generated too many. Please check if your data are too difficult." + " You could also try set max_num_gen_batches=0 to enable endless trials.")
+                                raise ValueError(f"cur_num_traj={num_prompt_in_batch*self.config.actor_rollout_ref.rollout.n} < expected_num_traj={prompt_bsz*self.config.actor_rollout_ref.rollout.n}." + \
+                                    " Generated too many. Please check if your data are too difficult." + " You could also try set max_num_gen_batches=0 to enable endless trials.")
                         else:
                             # Align the batch
                             traj_bsz = self.config.data.train_batch_size * self.config.actor_rollout_ref.rollout.n
-                            dapo_batch = batch[traj_bsz:] if len(batch) > traj_bsz else None # keep
-                            batch = batch[:traj_bsz]
-                            num_prompt_in_batch = len(dapo_batch) if dapo_batch is not None else 0
+                            cur_batch = batch[:traj_bsz]
+                            
+                            # dapo_batch = batch[traj_bsz:] if len(batch) > traj_bsz else None
+                            # print(f"cur_num_traj={len(batch)} >= expected_num_traj={len(cur_batch)}. Keep {len(cur_batch)} trajectories for this step and {len(dapo_batch)} trajectories for the next step.")
+                            # num_prompt_in_batch = len(dapo_batch) if dapo_batch is not None else 0
+                            
+                            dapo_batch = None
+                            print(f"cur_num_traj={len(batch)} >= expected_num_traj={len(cur_batch)}. Keep {len(cur_batch)} trajectories for this step")
+                            num_gen_batches = 0
                             dapo_substep = 0
-                            print(f"{num_prompt_in_batch=} >= {prompt_bsz=}. Keep {len(batch)} trajectories for this step and {len(dapo_batch)} trajectories for the next step.")
+                            batch = cur_batch
+                            metrics["train/num_gen_batches"] = num_gen_batches
 
                     # recompute old_log_probs
                     with _timer("old_log_prob", timing_raw):
@@ -483,27 +505,24 @@ class AgentRayPPOTrainer(RayPPOTrainer):
                     with _timer("adv", timing_raw):
                         # we combine with rule-based rm
                         reward_extra_infos_dict: dict[str, list]
-                        if self.config.reward_model.launch_reward_fn_async and not do_filter_groups:
-                            reward_tensor, reward_extra_infos_dict = ray.get(future_reward)
-                        batch.batch["token_level_scores"] = reward_tensor
+                        if not do_filter_groups:
+                            if self.config.reward_model.launch_reward_fn_async:
+                                reward_tensor, reward_extra_infos_dict = ray.get(future_reward)
+                            batch.batch["token_level_scores"] = reward_tensor
 
-                        if reward_extra_infos_dict:
-                            
+                            if reward_extra_infos_dict:
+                                print(f'{list(reward_extra_infos_dict.keys())=}')
 
-                            batch.batch['token_level_scores'] = reward_tensor
-
-                            print(f'{list(reward_extra_infos_dict.keys())=}')
-
-                            # added by verl_tool
-                            to_remove_keys = []
-                            for k, v in reward_extra_infos_dict.items():
-                                mean_v = np.mean([x for x in v if x is not None])
-                                metrics[f'reward_extra_info/{k}'] = mean_v
-                                if None in v:
-                                    to_remove_keys.append(k)
-                            for k in to_remove_keys:
-                                reward_extra_infos_dict.pop(k)
-                            batch.non_tensor_batch.update({k: np.array(v) for k, v in reward_extra_infos_dict.items()})
+                                # added by verl_tool
+                                to_remove_keys = []
+                                for k, v in reward_extra_infos_dict.items():
+                                    mean_v = np.mean([x for x in v if x is not None])
+                                    metrics[f'reward_extra_info/{k}'] = mean_v
+                                    if None in v:
+                                        to_remove_keys.append(k)
+                                for k in to_remove_keys:
+                                    reward_extra_infos_dict.pop(k)
+                                batch.non_tensor_batch.update({k: np.array(v) for k, v in reward_extra_infos_dict.items()})
 
                         # compute rewards. apply_kl_penalty if available
                         if self.config.algorithm.use_kl_in_reward:
@@ -590,7 +609,6 @@ class AgentRayPPOTrainer(RayPPOTrainer):
                 # added by verl_tool for dapo
                 timing_raw = defaultdict(float)  # clear timing
                 metrics = {}
-                metrics["train/num_gen_batches"] = num_gen_batches
                 num_gen_batches = 0
 
                 progress_bar.update(1)
