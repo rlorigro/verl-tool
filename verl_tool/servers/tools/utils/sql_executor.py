@@ -395,8 +395,9 @@ def score(
         ground_truth_info: A dictionary containing the gold SQL, db_id, etc.
 
     Returns:
-        A tuple containing the score (1.0 for a match, 0.0 otherwise)
-        and a message (e.g., error details).
+        score: float, (1.0 for a match, 0.0 otherwise)
+        pred_results: str, the results of the predicted query execution
+        message: str, a message detailing the outcome (e.g., error details).
     """
     db_manager = DatabaseManager()
     evaluator = ExecutionEvaluator()
@@ -405,26 +406,32 @@ def score(
     gold_sql = ground_truth_info['gold_sql']
     # NOTE: Assuming a directory structure where db files are in '/cache/'.
     # This might need to be adjusted based on the actual environment.
-    db_path = os.path.join('/cache/', ground_truth_info['db_id'])
+    cache_dir = os.getenv('SQL_CACHE_DIR', 'data/nl2sql/cache')
+    db_path = os.path.join(cache_dir, ground_truth_info['db_id'])
     comparison_method = ground_truth_info.get('cmp_method', 'bird')
+
+    score = 0.0
+    pred_results = ""
+    message = ""
 
     # 1. Execute the ground truth query
     gold_error, gold_results = db_manager.execute_query(db_path, gold_sql)
     if gold_error:
-        message = f"Ground truth query failed to execute: {gold_error}"
+        message = f"Ground truth query failed to execute: {db_path}\n{gold_error}"
         db_manager.close_all_connections()
-        return 0.0, message
+        return score, pred_results, message
 
     # 2. Extract and execute the predicted query
     predicted_sql = extract_sql_from_markdown(predicted_query_str)
     if not predicted_sql:
-        return 0.0, "Prediction is not a valid SQL code block."
+        message = "Prediction is not a valid SQL code block."
+        return score, pred_results, message
 
     pred_error, pred_results = db_manager.execute_query(db_path, predicted_sql)
     if pred_error:
         message = f"Execution Error: {pred_error}"
         db_manager.close_all_connections()
-        return 0.0, message
+        return score, pred_results, message
 
     # 3. Compare the results
     try:
@@ -438,7 +445,7 @@ def score(
         
         score = 1.0 if is_match else 0.0
         message = "Success: Results match." if is_match else "Mismatch: Results are not equivalent."
-        return score, ""
+        return score, pred_results, message
 
     finally:
         # Ensure all database connections are closed

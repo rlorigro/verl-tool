@@ -8,9 +8,7 @@ import json
 import uuid
 import hashlib
 from typing import Tuple, Dict, Any, Optional
-from ..utils import kill_python_subprocess_processes
 from .utils.sql_executor import score
-import random
 
 # Timeout for code execution in seconds
 TIMEOUT = 5
@@ -102,26 +100,26 @@ class SqlTool(BaseTool):
             "gold_sql": gold, # "SELECT T2.`T-BIL`, T1.ID, T1.SEX, T1.Birthday FROM Patient AS T1 INNER JOIN Laboratory AS T2 ON T1.ID = T2.ID ORDER BY T2.`T-IL` DESC LIMIT 1", 
             "cmp_method": "bird"}
             try:
-                # correctness, error_message = run_with_timeout(score, args=(code_to_execute, meta), timeout=2)
-                correctness, error_message = score(code_to_execute, meta)
+                correctness, execution_result, error_message = score(code_to_execute, meta)
             except Exception as e:
                 correctness = 0.0
                 error_message = str(e)
+                execution_result = ""
 
-            if error_message:
+            if not correctness:
                 observation = f"```output\n{error_message}\n```\n"
                 done = False
-                print(f"===> error", observation, "\n", code_to_execute)
+                # print(f"===> error", observation, "\n", code_to_execute)
             else:
-                observation = f""
+                observation = f"```output\n{execution_result}\n```\n"
                 done = True
             
             valid = True
-        execution_result = observation # json.dumps({'correctness':correctness, 'message':observation})
-        self.update_env(trajectory_id, env, parsed_action, is_valid, extra_field, execution_result)
+        self.update_env(trajectory_id, env, parsed_action, is_valid, extra_field, observation)
         self.save_env(trajectory_id, env)
         # print(f"===> parsed code", parsed_action)
         
         # return observation, done, valid
-        return {'extracted':code_to_execute, 'correctness':correctness, 'message':observation}, done, valid
+        return_obs = {"obs": observation, "reward": correctness, "code": code_to_execute, "correctness": correctness, "error_message": error_message}
+        return return_obs, done, valid
         

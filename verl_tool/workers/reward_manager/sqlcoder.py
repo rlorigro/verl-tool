@@ -28,15 +28,13 @@ import torch
 from collections import defaultdict
 from verl import DataProto
 from verl.protocol import collate_fn
-from verl_tool.agent_workers.reward_manager.reward_score import _default_compute_score
-# from verl_tool.agent_workers.reward_manager.reward_score.torl_math import (
-#     compute_score as torl_compute_score,
-# )
+from .reward_score import _default_compute_score
+from verl.workers.reward_manager import register
 
 def hash_string(s):
     return hashlib.sha256(s.encode()).hexdigest()
 
-
+@register("sqlcoder")
 class SQLCoderRewardManager:
     def __init__(
         self, tokenizer, num_examine, compute_score=None, reward_fn_key="data_source") -> None:
@@ -81,45 +79,21 @@ class SQLCoderRewardManager:
         reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32)
         
         # reward extra info every key of it is a default len(data) list filled with None
-        
         prompt_ids = data.batch['prompts']
         prompt_length = prompt_ids.shape[-1]
         response_ids = data.batch['responses']
         valid_prompt_length = data.batch['attention_mask'][:, :prompt_length].sum(dim=-1)
         valid_response_length = data.batch['attention_mask'][:, prompt_length:].sum(dim=-1)
         non_tensor_batch = data.non_tensor_batch # dict
-        list_rewards = non_tensor_batch['sql_scores']
+        turn_rewards = non_tensor_batch['turn_rewards']
         
-        for i,rew in enumerate(list_rewards):
-            reward_tensor[i,:] = rew
-        # ground_truths = [entry['gt_sql'] for entry in non_tensor_batch['extra_info']]
-        # reward_tensor[:] = list_rewards
-        # code_data.meta_info['save_record'] = False
-        # math_data.meta_info['save_record'] = False
-        # code_reward = self.AceCoderRewardManager(code_data, return_dict=True)
-        # math_reward = self.ToRLRewardManager(math_data, return_dict=True)
-        # print("len code_reward", len(code_reward['reward_tensor']))
-        # print("len math_reward", len(math_reward['reward_tensor']))
-        # put the code and math reward together in the original order
-        # reward_tensor[code_data_idxs] = code_reward['reward_tensor']
-        # reward_tensor[math_data_idxs] = math_reward['reward_tensor']
-        
-        # for k, v in code_reward['reward_extra_info'].items():
-        #     if k not in reward_extra_info:
-        #         for i in range(len(v)):
-        #             reward_extra_info[f"code_{k}"][code_data_idxs[i]] = v[i]
-        # for k, v in math_reward['reward_extra_info'].items():
-        #     if k not in reward_extra_info:
-        #         for i in range(len(v)):
-        #             reward_extra_info[f"math_{k}"][math_data_idxs[i]] = v[i]
-        # reward_extra_keys = list(reward_extra_info.keys())
-        # scores = [{key: reward_extra_info[key][i] for key in reward_extra_keys} for i in range(len(data))]
-        
-        # Save the records
-        # ground_truths = [
-        #     data_item.non_tensor_batch["reward_model"]["ground_truth"]
-        #     for data_item in data
-        # ]
+        for i, turn_rewards_i in enumerate(turn_rewards):
+            if len(turn_rewards_i) == 0:
+                # if there is no turn rewards, set the last turn reward to 0. Also means that the response may not match any tool cause the tool is invalid
+                turn_rewards_i = [0.0]
+            assert turn_rewards_i[-1] is not None, f"Last turn reward is None for index {i}, turn rewards: {turn_rewards_i}"
+            reward_tensor[i, valid_response_length[i].item() - 1] = turn_rewards_i[-1]
+
         if "turns_stats" in data.non_tensor_batch:
             num_turn = data.non_tensor_batch["turns_stats"]
             num_valid_action = data.non_tensor_batch["valid_action_stats"]
@@ -137,10 +111,8 @@ class SQLCoderRewardManager:
                     "prompt_ntokens": valid_prompt_length[i].item(),
                     "response": self.tokenizer.decode(response_ids[i][:valid_response_length[i].item()], skip_special_tokens=False),
                     "response_ntokens": valid_response_length[i].item(),
-                    # "ground_truth": ground_truths[i],
-                    "score": list_rewards[i],
-                    "extracted": non_tensor_batch['extracted'][i],
-                    "error_message": non_tensor_batch['error_message'][i],
+                    "score": turn_rewards[i],
+                    "tool_interact_info": data[i].non_tensor_batch.get('tool_interact_info', None),
                     'extra_info': data[i].non_tensor_batch.get('extra_info', None),
                 }
                 for i in range(len(data))

@@ -1,43 +1,24 @@
 set -x
-dataset_name=deep_math_tool_v9 # or math_torl_offical to use torl training data
-# train_data=$(pwd)/data/${dataset_name}/train.parquet
-# val_data=[$(pwd)/data/${dataset_name}/test.parquet,\
-# $(pwd)/data/${dataset_name}/math500_test.parquet,\
-# $(pwd)/data/${dataset_name}/aime24_test.parquet,\
-# $(pwd)/data/${dataset_name}/aime25_test.parquet]
-# source /home/ma-user/anaconda3/bin/activate
-# conda activate logic
-export WANDB_API_KEY="..."
-export SWANLAB_API_KEY='...'
-# cp -r /home/ma-user/work/jiaran/MLM-master/Megatron-LM/cache/* /cache
-train_data=/home/ma-user/work/haozhe/workspace/verl-tool/data/nl2sql/train.parquet
-val_data=/home/ma-user/work/haozhe/workspace/verl-tool/data/nl2sql/dev.parquet
-# model_name=/home/ma-user/work/haozhe/workspace/verl-tool/base_models/Qwen2.5-Coder-1.5B-Instruct
-model_name=/home/ma-user/work/haozhe/workspace/verl-tool/base_models/Qwen2.5-Coder-7B-Instruct
+dataset_name=nl2sql/NL2SQL-Queries
+train_data=$(pwd)/data/${dataset_name}/train.parquet
+val_data=$(pwd)/data/${dataset_name}/dev.parquet
+model_name=Qwen/Qwen2.5-Coder-7B-Instruct
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
-n_gpus_per_node=8
+n_gpus_per_node=4
 n_nodes=1
 n=8
-# batch_size=32
-# ppo_mini_batch_size=32 # $batch_size
-# max_prompt_length=2500
-# max_response_length=1596
-# max_obs_length=1024
 batch_size=128
 ppo_mini_batch_size=$batch_size
 max_prompt_length=1500
 max_response_length=2596
 max_obs_length=512
+max_action_length=2048
 temperature=1.0
 top_p=1.0
-strategy="fsdp_agent" # remove _agent for normal verl behavior
-action_stop_tokens='<|im_end|>'
-##########
+strategy="fsdp"
+action_stop_tokens=''
 max_turns=1
-# min_action_num=1
-# enable_mtrl=True 
-
-###########
+min_turns=0
 kl_loss_coef=0.0
 kl_coef=0
 entropy_coeff=0
@@ -54,16 +35,16 @@ ulysses_sequence_parallel_size=1 # set to 1 for normal verl behavior, otherwise 
 fsdp_size=-1
 additional_eos_token_ids=[151645] # <|im_end|> token id
 mask_observations=True # mask observations for kl loss and gradient descent
-enable_mtrl=False # enable multi-turn training
-max_action_length=2048
-min_action_num=0 # always call sql interpreter
+enable_mtrl=True # enable multi-turn training
+rollout_mode='async'
 
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
-# run_name="try4-${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
+run_name_postfix="debug-sqlcoder"
+run_name="${reward_manager}-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 port=$(shuf -i 30000-31000 -n 1)
-run_name="debug-sqlcoder-$port"
 export VERL_RUN_ID=$run_name
 export NCCL_DEBUG=INFO
+export VLLM_USE_V1=1
 
 # temp file for action tokens as verl cannot pass special strs as params
 mkdir -p $(pwd)/tmp
@@ -74,7 +55,7 @@ echo "action_stop_tokens_file=$action_stop_tokens_file"
 host=127.0.0.1 # $(hostname -I | awk '{print $1}')
 
 tool_server_url=http://$host:$port/get_observation
-python -m verl_tool.servers.serve --host $host --port $port --tool_type "sql" --workers_per_tool 1 &
+python -m verl_tool.servers.serve --host $host --port $port --tool_type "sql" --workers_per_tool 4 &
 # --done-if-invalid True
 server_pid=$!
 
@@ -90,13 +71,14 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     data.max_response_length=$max_response_length \
     data.truncation='right' \
     reward_model.reward_manager=$reward_manager \
+    reward_model.launch_reward_fn_async=True \
     actor_rollout_ref.model.path=$model_name \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.actor.optim.lr=$lr \
     actor_rollout_ref.actor.optim.lr_warmup_steps=10 \
     actor_rollout_ref.model.use_remove_padding=True \
-    +actor_rollout_ref.model.trust_remote_code=True \
-    actor_rollout_ref.actor.checkpoint.contents=['model','optimizer','extra','hf_model'] \
+    actor_rollout_ref.model.trust_remote_code=True \
+    actor_rollout_ref.actor.checkpoint.save_contents=['model','optimizer','extra','hf_model'] \
     actor_rollout_ref.actor.ppo_mini_batch_size=$ppo_mini_batch_size \
     actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=$ppo_micro_batch_size_per_gpu \
     actor_rollout_ref.actor.use_dynamic_bsz=$use_dynamic_bsz \
@@ -109,19 +91,18 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=$do_offload \
     actor_rollout_ref.actor.fsdp_config.fsdp_size=$fsdp_size \
     actor_rollout_ref.actor.ulysses_sequence_parallel_size=$ulysses_sequence_parallel_size \
-    +actor_rollout_ref.agent.tool_server_url=$tool_server_url \
-    +actor_rollout_ref.agent.max_prompt_length=$max_prompt_length \
-    +actor_rollout_ref.agent.max_response_length=$max_response_length \
-    +actor_rollout_ref.agent.max_start_length=$max_prompt_length \
-    +actor_rollout_ref.agent.max_obs_length=$max_obs_length \
-    +actor_rollout_ref.agent.max_turns=$max_turns \
-    +actor_rollout_ref.agent.num_gpus=$n_gpus_per_node \
-    +actor_rollout_ref.agent.additional_eos_token_ids=$additional_eos_token_ids \
-    +actor_rollout_ref.agent.mask_observations=$mask_observations \
-    +actor_rollout_ref.agent.action_stop_tokens=$action_stop_tokens_file \
-    +actor_rollout_ref.agent.enable_mtrl=$enable_mtrl \
-    +actor_rollout_ref.agent.min_action_num=$min_action_num \
-    +actor_rollout_ref.agent.max_action_length=$max_action_length \
+    actor_rollout_ref.agent.tool_server_url=$tool_server_url \
+    actor_rollout_ref.agent.max_prompt_length=$max_prompt_length \
+    actor_rollout_ref.agent.max_response_length=$max_response_length \
+    actor_rollout_ref.agent.max_start_length=$max_prompt_length \
+    actor_rollout_ref.agent.max_obs_length=$max_obs_length \
+    actor_rollout_ref.agent.max_turns=$max_turns \
+    actor_rollout_ref.agent.additional_eos_token_ids=$additional_eos_token_ids \
+    actor_rollout_ref.agent.mask_observations=$mask_observations \
+    actor_rollout_ref.agent.action_stop_tokens=$action_stop_tokens_file \
+    actor_rollout_ref.agent.enable_mtrl=$enable_mtrl \
+    actor_rollout_ref.agent.min_turns=$min_turns \
+    actor_rollout_ref.agent.max_action_length=$max_action_length \
     actor_rollout_ref.rollout.tensor_model_parallel_size=$tensor_model_parallel_size \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=$log_prob_micro_batch_size_per_gpu \
     actor_rollout_ref.rollout.enforce_eager=False \
@@ -134,6 +115,7 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     actor_rollout_ref.rollout.n=$n \
     actor_rollout_ref.rollout.log_prob_use_dynamic_bsz=$use_dynamic_bsz \
     actor_rollout_ref.rollout.max_num_seqs=512 \
+    actor_rollout_ref.rollout.mode=$rollout_mode \
     actor_rollout_ref.ref.log_prob_use_dynamic_bsz=$use_dynamic_bsz \
     actor_rollout_ref.ref.fsdp_config.param_offload=$do_offload \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=$log_prob_micro_batch_size_per_gpu \
@@ -145,7 +127,7 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     critic.ppo_micro_batch_size_per_gpu=$ppo_micro_batch_size_per_gpu \
     critic.ulysses_sequence_parallel_size=$ulysses_sequence_parallel_size \
     algorithm.kl_ctrl.kl_coef=$kl_coef \
-    trainer.logger=['console','swanlab'] \
+    trainer.logger=['console','wandb'] \
     trainer.project_name=$reward_manager \
     trainer.experiment_name=$run_name \
     trainer.val_before_train=False \
