@@ -42,18 +42,20 @@ def em_check(prediction, golden_answers):
             score = 1
             break
     return score
-
+    
 
 def extract_solution(solution_str: str) -> str:
     """Extract the final answer from <answer> tags in the solution string."""
-    answer_pattern = r'<answer>(.*?)</answer>'
-    matches = re.findall(answer_pattern, solution_str, re.DOTALL)
-    
-    if len(matches) == 0:
+    answer_pattern = r"<answer>(.*?)</answer>"
+    match = re.finditer(answer_pattern, solution_str, re.DOTALL)
+    matches = list(match)
+
+    # If there are 0  matches, return None
+    if len(matches) < 1:
         return None
-    
-    # Return the last answer if multiple exist
-    return matches[-1].strip()
+
+    # If there are 2 or more matches, return the last one
+    return matches[-1].group(1).strip()
 
 
 def count_answer_tags(text):
@@ -104,6 +106,8 @@ def compute_score(solution_str, ground_truth, method="strict", format_score=0.0,
             return score
         else:
             return format_score
+
+
 
 
 @register("search_r1_qa_em")

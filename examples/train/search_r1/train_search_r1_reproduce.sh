@@ -6,7 +6,6 @@
 set -x
 
 # Model and data configuration
-# model_name="meta-llama/Llama-3.2-3B"
 # model_name="/map-vepfs/yi/model_weights/Llama-3.2-3B"
 model_name="/map-vepfs/yi/model_weights/Qwen2.5-3B"
 train_data="/map-vepfs/yi/Search-R1/data/nq_search/train.parquet"
@@ -16,10 +15,10 @@ val_data="/map-vepfs/yi/Search-R1/data/nq_search/test.parquet"
 # Search-R1 specific action tokens
 
 action_stop_tokens="</search>,</answer>"
-retriever_url="http://127.0.0.1:8001/retrieve"
+retriever_url="http://127.0.0.1:8000/retrieve"
 retriever_topk=3
-# total_epochs=15
-# total_training_steps=1005
+total_epochs=15
+total_training_steps=1005
 
 # Training hyperparameters
 rl_alg=grpo # gae(ppo) or grpo
@@ -29,8 +28,9 @@ n=16
 batch_size=512
 ppo_mini_batch_size=256
 max_prompt_length=4096
-max_response_length=500
-max_obs_length=512
+max_response_length=2560    # 500
+data_max_response_length=3000
+max_obs_length=1024 # 512
 temperature=1.0
 top_p=1.0
 enable_agent=True # enable agent for tool use
@@ -57,7 +57,7 @@ max_action_length=2048
 # Generate run name
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
 run_name_postfix="search_r1"
-run_name="search_r1_qa_em-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}-${run_name_postfix}"
+run_name="sglang_retriever_search_r1_qa_em-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}-${run_name_postfix}"
 export VERL_RUN_ID=$run_name
 export NCCL_DEBUG=INFO
 export VLLM_USE_V1=1
@@ -112,7 +112,7 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     data.train_batch_size=$batch_size \
     data.val_batch_size=256 \
     data.max_prompt_length=$max_prompt_length \
-    data.max_response_length=$max_response_length \
+    data.max_response_length=$data_max_response_length \
     +data.max_start_length=2048 \
     +data.max_obs_length=500 \
     +data.shuffle_train_dataloader=True \
@@ -183,10 +183,10 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     trainer.n_gpus_per_node=$n_gpus_per_node \
     trainer.nnodes=$n_nodes \
     +trainer.remove_previous_ckpt_in_save=True \
-    trainer.save_freq=10 \
+    trainer.save_freq=20 \
     trainer.test_freq=50 \
-    trainer.total_epochs=15 \
-    trainer.total_training_steps=1005 \
+    trainer.total_epochs=$total_epochs \
+    trainer.total_training_steps=$total_training_steps \
 
 # Cleanup
 echo "Training completed. Cleaning up..."
