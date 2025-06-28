@@ -1,13 +1,18 @@
 import torch
 import os
 import re
+import time
 import ray
 import uuid
 import json
 import random
+import logging
+import asyncio
+import aiohttp
 import regex as re
 import numpy as np
 import requests
+import omegaconf
 from collections import defaultdict
 from typing import List, Dict, Any, Tuple
 from dataclasses import dataclass
@@ -19,6 +24,8 @@ from tqdm import tqdm
 from typing import List, Union
 from .config import AgentActorConfig
 from .tensor_helper import TensorHelper, TensorConfig
+from .utils import PerformanceTimer
+logger = logging.getLogger(__file__)
 
 # 1) A sanitizer that strips all embedded NULs (and, optionally, any
 #    other C0 control characters except common whitespace).
@@ -75,7 +82,7 @@ class AgentActorManager:
             if os.path.exists(self.config.action_stop_tokens):
                 with open(self.config.action_stop_tokens, 'r') as f:
                     self.action_stop_tokens = [x for x in f.read().split(',') if x]
-                print(f"Using action stop tokens: {self.action_stop_tokens}")
+                logger.info(f"Using action stop tokens: {self.action_stop_tokens}")
             else:
                 raise ValueError(f"action_stop_tokens file not found: {self.config.action_stop_tokens}")
         else:
@@ -83,14 +90,23 @@ class AgentActorManager:
         self.additional_eos_token_ids = self.config.additional_eos_token_ids
         if isinstance(self.additional_eos_token_ids, str):
             self.additional_eos_token_ids = [int(x) for x in self.additional_eos_token_ids.split(',')]
-        elif isinstance(self.additional_eos_token_ids, list):
+        elif isinstance(self.additional_eos_token_ids, list) or isinstance(self.additional_eos_token_ids, omegaconf.listconfig.ListConfig):
             self.additional_eos_token_ids = [int(x) for x in self.additional_eos_token_ids]
         elif self.additional_eos_token_ids is None:
             self.additional_eos_token_ids = []
         if self.config.mtrl_sep is None:
             messages = [{"role": "system", "content": "{obs}"}]
             self.config.mtrl_sep = "\n" + self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            self.config.mtrl_sep = self.config.mtrl_sep.replace("system", self.config.mtrl_role)
+        self.max_action_length = self.config.max_action_length if self.config.max_action_length is not None else 0
+        self.max_model_len = int(config.max_model_len or config.max_prompt_length + config.max_response_length)
+        self.tokenizer_lock = asyncio.Lock()
 
+        if self.config.rollout_mode == "sync":
+            logger.setLevel(logging.INFO)
+        else:
+            logger.setLevel(logging.WARNING)
+        
     def _batch_tokenize(self, responses: List[str]) -> torch.Tensor:
         """Tokenize a batch of responses."""
         return self.tokenizer(
@@ -100,10 +116,14 @@ class AgentActorManager:
             padding="longest"
         )['input_ids']
 
-    def _preprocess_inputs(self, inputs: DataProto):
+    def repeat_inputs_by_n(self, inputs: DataProto):
         """
         this version verl do not repeat the input by n times, so we manually repeat the input by n times
         """
+        if inputs.meta_info.get("is_repeated_by_n", False):
+            # if the inputs are already repeated by n times, we do not need to repeat again
+            return inputs
+
         # we manually repeat the input by n times if needed since every trajectory is independent
         do_sample = inputs.meta_info.get("do_sample", True)
         assert 'traj_ids' in inputs.non_tensor_batch, "traj_ids should be claimed univerally in the ray trainer"
@@ -117,165 +137,142 @@ class AgentActorManager:
         for i in range(ori_len):
             for j in range(n):
                 inputs.non_tensor_batch['traj_ids'][i*n+j] += f"_{j}"
+        inputs.meta_info['is_repeated_by_n'] = True
         return inputs
 
-    def _postprocess_responses(self, responses: torch.Tensor, action_step: int) -> torch.Tensor:
+    async def _postprocess_responses(self, responses: Union[torch.Tensor, List[str]], action_step: int) -> torch.Tensor:
         """Process responses to stop at python operation or answer operation."""
-        
         effective_lens = self.tensor_fn.create_attention_mask(responses).sum(dim=1)
         do_actions = []
-        if self.config.enable_mtrl:
-            responses_str = [self.tokenizer.decode(responses[i][:effective_lens[i]], skip_special_tokens=False) for i in range(responses.shape[0])]
-            for i in range(len(responses_str)):
-                if action_step >= self.config.min_action_num:
-                    if self.action_stop_tokens:
-                        if any([action_stop_token in responses_str[i] for action_stop_token in self.action_stop_tokens]):
-                            do_action = True
-                            # replace other action stop tokens with the first one
-                            for j in range(1, len(self.action_stop_tokens)):
-                                if self.action_stop_tokens[j] in responses_str[i]:
-                                    responses_str[i] = responses_str[i].replace(self.action_stop_tokens[j], self.action_stop_tokens[0])
+        async with self.tokenizer_lock:
+            if self.config.enable_mtrl:
+                if isinstance(responses, torch.Tensor):
+                    responses_str = [self.tokenizer.decode(responses[i][:effective_lens[i]], skip_special_tokens=False) for i in range(responses.shape[0])]
+                else:
+                    responses_str = responses
+                for i in range(len(responses_str)):
+                    if action_step >= self.config.min_turns:
+                        if self.action_stop_tokens:
+                            if any([action_stop_token in responses_str[i] for action_stop_token in self.action_stop_tokens]):
+                                do_action = True
+                                # replace other action stop tokens with the first one
+                                for j in range(1, len(self.action_stop_tokens)):
+                                    if self.action_stop_tokens[j] in responses_str[i]:
+                                        responses_str[i] = responses_str[i].replace(self.action_stop_tokens[j], self.action_stop_tokens[0])
+                                if not responses_str[i].endswith(self.config.turn_end_token):
+                                    responses_str[i] += self.config.turn_end_token
+                            else:
+                                do_action = False
+                        else:
                             if not responses_str[i].endswith(self.config.turn_end_token):
                                 responses_str[i] += self.config.turn_end_token
-                        else:
-                            do_action = False
+                            do_action = True
                     else:
+                        # always do action, decided by the server about whether an action stops
+                        for j in range(1, len(self.action_stop_tokens)):
+                            if self.action_stop_tokens[j] in responses_str[i]:
+                                responses_str[i] = responses_str[i].replace(self.action_stop_tokens[j], self.action_stop_tokens[0])
+                        turn_end_token_idx = responses_str[i].rfind(self.config.turn_end_token)
+                        if self.action_stop_tokens and not self.action_stop_tokens[0] in responses_str[i]:
+                            if turn_end_token_idx != -1:
+                                responses_str[i] = responses_str[i][:turn_end_token_idx] + self.action_stop_tokens[0] + self.config.turn_end_token
+                            else:
+                                responses_str[i] = responses_str[i] + self.action_stop_tokens[0] + self.config.turn_end_token
+                        else:
+                            if turn_end_token_idx == -1:
+                                responses_str[i] += self.config.turn_end_token
                         do_action = True
+                    do_actions.append(do_action)
+            else:
+                if isinstance(responses, torch.Tensor):
+                    responses_str = self.tokenizer.batch_decode(
+                        responses,
+                        skip_special_tokens=True
+                    )
                 else:
-                    # always do action, decided by the server about whether an action stops
-                    for j in range(1, len(self.action_stop_tokens)):
-                        if self.action_stop_tokens[j] in responses_str[i]:
-                            responses_str[i] = responses_str[i].replace(self.action_stop_tokens[j], self.action_stop_tokens[0])
-                    turn_end_token_idx = responses_str[i].rfind(self.config.turn_end_token)
-                    if self.action_stop_tokens and not self.action_stop_tokens[0] in responses_str[i]:
-                        if turn_end_token_idx != -1:
-                            responses_str[i] = responses_str[i][:turn_end_token_idx] + self.action_stop_tokens[0] + self.config.turn_end_token
-                        else:
-                            responses_str[i] = responses_str[i] + self.action_stop_tokens[0] + self.config.turn_end_token
-                    else:
-                        if turn_end_token_idx == -1:
-                            responses_str[i] += self.config.turn_end_token
-                    do_action = True
-                do_actions.append(do_action)
-        else:
-            responses_str = self.tokenizer.batch_decode(
-                responses,
-                skip_special_tokens=True
-            )          
-            for i, resp in enumerate(responses_str):
-                # resp = resp.strip(' \n')
-                has_action = False
-                for j in range(len(self.action_stop_tokens)):
-                    if self.action_stop_tokens[j] in resp:
-                    # if resp.endswith(self.action_stop_tokens[j]):
-                    # if self.action_stop_tokens[j] in resp[-(len(self.action_stop_tokens[j]) + 3):]: # 5 for some action token tokens not indepdently decoded
+                    responses_str = responses
+                for i, resp in enumerate(responses_str):
+                    # resp = resp.strip(' \n')
+                    has_action = False
+                    for j in range(len(self.action_stop_tokens)):
+                        if self.action_stop_tokens[j] in resp:
+                        # if resp.endswith(self.action_stop_tokens[j]):
+                        # if self.action_stop_tokens[j] in resp[-(len(self.action_stop_tokens[j]) + 3):]: # 5 for some action token tokens not indepdently decoded
+                            has_action = True
+                            responses_str[i] = resp.split(self.action_stop_tokens[j])[0] + self.action_stop_tokens[j]
+                            break
+                    if not has_action and action_step < self.config.min_turns:
                         has_action = True
-                        responses_str[i] = resp.split(self.action_stop_tokens[j])[0] + self.action_stop_tokens[j]
-                        break
-                if not has_action and action_step < self.config.min_action_num:
-                    has_action = True
-                    responses_str[i] = resp + self.action_stop_tokens[0]
-                if not has_action and "```sql" in responses_str[i]:
-                    has_action = True 
-                do_actions.append(has_action)
-            for i in range(len(responses_str)):
-                if not do_actions[i]:
-                    responses_str[i] = self.tokenizer.decode(responses[i][:effective_lens[i]], skip_special_tokens=False) # preserve eos token
-        # with open(f"temp-{action_step}.json", 'w') as f:
-        #     json.dump([{
-        #         "responses_str": responses_str[i],
-        #         "do_action": do_actions[i],
-        #     } for i in range(len(responses_str))], f, indent=4)
-        responses = self._batch_tokenize(responses_str).to(torch.int64)
+                        responses_str[i] = resp + self.action_stop_tokens[0]
+                    do_actions.append(has_action)
+                for i in range(len(responses_str)):
+                    if not do_actions[i]:
+                        responses_str[i] = self.tokenizer.decode(responses[i][:effective_lens[i]], skip_special_tokens=False) # preserve eos token
+            # with open(f"temp-{action_step}.json", 'w') as f:
+            #     json.dump([{
+            #         "responses_str": responses_str[i],
+            #         "do_action": do_actions[i],
+            #     } for i in range(len(responses_str))], f, indent=4)
+            responses = self._batch_tokenize(responses_str).to(torch.int64)
+        # overlong dones
+        effective_lens = self.tensor_fn.create_attention_mask(responses).sum(dim=1)
+        for i in range(len(responses_str)):
+            if effective_lens[i] >= self.config.max_response_length:
+                logger.warning(f"[WARNING] Response too long, consider changing your config, {effective_lens[i]} & {self.config.max_response_length}")
+                do_actions[i] = False
         return responses, responses_str, do_actions
-    
-    # def _postprocess_responses(self, responses: torch.Tensor, action_step: int, eos_token_id: Union[list, List[int]]=None) -> torch.Tensor:
-    #     """Process responses to stop at python operation or answer operation."""
-    #     if not eos_token_id:
-    #         eos_token_id = self.eos_token_id
-    #     if isinstance(eos_token_id, int):
-    #         eos_token_id = [eos_token_id]
-    #     eos_token_id += self.additional_eos_token_ids
-    #     full_len = responses.shape[1]
-    #     effective_lens = self.tensor_fn.create_attention_mask(responses).sum(dim=1)
-    #     max_len = effective_lens.max()
-    #     responses = responses[:, :max_len]
-    #     responses_str = [self.tokenizer.decode(responses[i][:effective_lens[i]], skip_special_tokens=True) for i in range(responses.shape[0])]
 
-    #     if action_step < self.config.min_action_num:
-    #         # re-encode remove special tokens like eos
-    #         responses = self._batch_tokenize(responses_str).to(torch.int64)
-    #         # force do action for those effective len not equal to full len
-    #         do_actions = [effective_lens[i] != full_len for i in range(len(responses_str))]
-    #     else:
-    #         do_actions = [
-    #             not (responses[i, effective_lens[i]-1] in eos_token_id or effective_lens[i] == full_len) for i in range(responses.shape[0])
-    #         ] # consider stop (not do action) when meeting any eos token or the response meet the longest response length. 
-
-    #         for i in range(responses.shape[0]):
-    #             if do_actions[i]:
-    #                 resp = responses_str[i]
-    #                 # sometimes the model can generate pad_token as one of the eos token, then we check if it did not stop with any action stop tokens above, 
-    #                 # this is also a finished sequence
-    #                 if not any([action_stop_token in resp[-(len(action_stop_token)+3):] for action_stop_token in self.action_stop_tokens]):
-    #                     do_actions[i] = False
-        
-    #     # apply self.config.max_action_length
-    #     if self.config.max_action_length is not None and self.config.max_action_length > 0:
-    #         responses = responses[:, :self.config.max_action_length]
-    #     return responses, responses_str, do_actions
-
-    def _process_next_obs(self, next_obs, dones: List[bool], valid_action: List[bool], finishs: List[bool]) -> torch.Tensor:
+    async def _process_next_obs(self, next_obs: List[str], dones: List[bool], valid_action: List[bool], finishs: List[bool]) -> torch.Tensor:
         """Process next observations from environment."""
-        mtrl_sep = self.config.mtrl_sep
-        next_obs = [obs if not done else "" for obs, done in zip(next_obs, dones)]
-
-        if self.config.truncate_obs_side == 'left':
-            next_obs_ids = self.tokenizer(
-                next_obs,
-                padding='longest',
-                return_tensors='pt',
-                add_special_tokens=False,  # Prevents adding special tokens
-                padding_side='left',
-            )['input_ids'].to(torch.int64)
-            if next_obs_ids.shape[1] > self.config.max_obs_length:
-                print(f"[WARNING] OBSERVATION TOO LONG, CONSIDER CHANGING YOUR CONFIG, {next_obs_ids.shape[1]} & {self.config.max_obs_length}")
-                next_obs_ids = next_obs_ids[:, -self.config.max_obs_length:]
-        elif self.config.truncate_obs_side == 'right':
-            next_obs_ids = self.tokenizer(
-                next_obs,
-                padding='longest',
-                return_tensors='pt',
-                add_special_tokens=False,  # Prevents adding special tokens
-                padding_side='right',
-            )['input_ids'].to(torch.int64)
-            if next_obs_ids.shape[1] > self.config.max_obs_length:
-                print(f"[WARNING] OBSERVATION TOO LONG, CONSIDER CHANGING YOUR CONFIG, {next_obs_ids.shape[1]} & {self.config.max_obs_length}")
-                next_obs_ids = next_obs_ids[:, :self.config.max_obs_length]
-        else:
-            raise ValueError(f"Invalid truncate_obs_side: {self.config.truncate_obs_side}")
-        if self.config.enable_mtrl:
-            next_obs = self.tokenizer.batch_decode(
-                next_obs_ids,
-                skip_special_tokens=True
-            )
-            processed_next_obs = []
-            for i in range(len(next_obs)):
-                if finishs[i] or dones[i]:
-                    # do action is false
-                    assert next_obs[i] == "", f"next_obs should be empty when finishs is True, but got {next_obs[i]}"
-                    processed_next_obs.append("")
-                elif valid_action[i]:
-                    processed_next_obs.append(mtrl_sep.format(obs=next_obs[i]))
-                else:
-                    processed_next_obs.append(mtrl_sep.format(obs="Your action is not valid, please check the format and try again." + next_obs[i]))
-            next_obs = processed_next_obs
-            next_obs_ids = self.tokenizer(
-                next_obs,
-                padding='longest',
-                return_tensors='pt',
-                add_special_tokens=False,  # Prevents adding special tokens
-            )['input_ids'].to(torch.int64)
+        async with self.tokenizer_lock:
+            mtrl_sep = self.config.mtrl_sep
+            next_obs = [obs if not done else "" for obs, done in zip(next_obs, dones)]
+            if self.config.truncate_obs_side == 'left':
+                next_obs_ids = self.tokenizer(
+                    next_obs,
+                    padding='longest',
+                    return_tensors='pt',
+                    add_special_tokens=False,  # Prevents adding special tokens
+                    padding_side='left',
+                )['input_ids'].to(torch.int64)
+                if next_obs_ids.shape[1] > self.config.max_obs_length:
+                    logger.warning(f"[WARNING] OBSERVATION TOO LONG, CONSIDER CHANGING YOUR CONFIG, {next_obs_ids.shape[1]} & {self.config.max_obs_length}")
+                    next_obs_ids = next_obs_ids[:, -self.config.max_obs_length:]
+            elif self.config.truncate_obs_side == 'right':
+                next_obs_ids = self.tokenizer(
+                    next_obs,
+                    padding='longest',
+                    return_tensors='pt',
+                    add_special_tokens=False,  # Prevents adding special tokens
+                    padding_side='right',
+                )['input_ids'].to(torch.int64)
+                if next_obs_ids.shape[1] > self.config.max_obs_length:
+                    logger.warning(f"[WARNING] OBSERVATION TOO LONG, CONSIDER CHANGING YOUR CONFIG, {next_obs_ids.shape[1]} & {self.config.max_obs_length}")
+                    next_obs_ids = next_obs_ids[:, :self.config.max_obs_length]
+            else:
+                raise ValueError(f"Invalid truncate_obs_side: {self.config.truncate_obs_side}")
+            if self.config.enable_mtrl:
+                next_obs = self.tokenizer.batch_decode(
+                    next_obs_ids,
+                    skip_special_tokens=True
+                )
+                processed_next_obs = []
+                for i in range(len(next_obs)):
+                    if finishs[i] or dones[i]:
+                        # do action is false
+                        assert next_obs[i] == "", f"next_obs should be empty when finishs is True, but got {next_obs[i]}"
+                        processed_next_obs.append("")
+                    elif valid_action[i]:
+                        processed_next_obs.append(mtrl_sep.format(obs=next_obs[i]))
+                    else:
+                        processed_next_obs.append(mtrl_sep.format(obs="Your action is not valid, please check the format and try again." + next_obs[i]))
+                next_obs = processed_next_obs
+                next_obs_ids = self.tokenizer(
+                    next_obs,
+                    padding='longest',
+                    return_tensors='pt',
+                    add_special_tokens=False,  # Prevents adding special tokens
+                )['input_ids'].to(torch.int64)
 
         return next_obs_ids
 
@@ -297,14 +294,13 @@ class AgentActorManager:
         # Cut to appropriate length
         effective_lens = new_attention_mask.sum(dim=1)
         effective_len = effective_lens.max()
-        min_effective_len = effective_lens.min()
+        min_effective_len = effective_lens.min().item()
         # max_len = min(self.config.max_prompt_length, effective_len)
         max_len = min(self.config.max_prompt_length+self.config.max_response_length, effective_len)
         available_context_budget = max(0, self.config.max_prompt_length+self.config.max_response_length - min_effective_len)
-        if self.config.max_action_length is not None and self.config.max_action_length > 0:
-            available_context_budget = min(available_context_budget, self.config.max_action_length)
+        assert isinstance(available_context_budget, int), f"available_context_budget should be int, but got {type(available_context_budget)}"
         if getattr(self.config, "rolling_with_prompt", False):
-            # Added Zhiheng, if rolling_with_prompt is True, then we need to keep the system prompt
+            # if rolling_with_prompt is True, then we need to keep the system prompt
             if isinstance(left_side, dict):
                 left_ids = left_side["input_ids"]
             else:
@@ -350,14 +346,14 @@ class AgentActorManager:
 
         return new_rollings, available_context_budget
 
-    def _info_masked_concatenate_with_padding(self,
+    def _loss_masked_concatenate_with_padding(self,
         prompt: torch.Tensor,
         prompt_with_mask: torch.Tensor,
         response: torch.Tensor,
         info: torch.Tensor = None,
         pad_to_left: bool = True
     ) -> torch.Tensor:
-        """Concatenate tensors and handle padding. Additionally, create a mask (info_mask) to cover the information block if it exists."""
+        """Concatenate tensors and handle padding. Additionally, create a mask (loss_mask) to cover the information block if it exists."""
         # move `response` and `info` tensor to the same device as `prompt`
         response = response.to(prompt.device)
         if info is not None:
@@ -374,9 +370,9 @@ class AgentActorManager:
             tensors.append(info)
 
             # assemble the mask for the observation part
-            info_mask = torch.full(info.size(), pad_id, dtype=info.dtype, device=info.device)  # information mask
+            loss_mask = torch.full(info.size(), pad_id, dtype=info.dtype, device=info.device)  # information mask
             # extend the mask for the observation part, to update masked tensors
-            tensors_with_mask.append(info_mask)
+            tensors_with_mask.append(loss_mask)
 
         concatenated = torch.cat(tensors, dim=1)
         concatenated_with_info = torch.cat(tensors_with_mask, dim=1)
@@ -398,18 +394,18 @@ class AgentActorManager:
 
         # observation exists, perform concatenation and masked concatenation
         if next_obs_ids != None:
-            responses, responses_with_info_mask = self._info_masked_concatenate_with_padding(
+            responses, responses_with_loss_mask = self._loss_masked_concatenate_with_padding(
                 right_side['responses'],
-                right_side['responses_with_info_mask'],
+                right_side['responses_with_loss_mask'],
                 cur_responses,
                 next_obs_ids,
                 pad_to_left=False
             )
         else:
             # no observation, only concatenate the response with generated response
-            responses, responses_with_info_mask = self._info_masked_concatenate_with_padding(
+            responses, responses_with_loss_mask = self._loss_masked_concatenate_with_padding(
                     right_side['responses'],
-                    right_side['responses_with_info_mask'],
+                    right_side['responses_with_loss_mask'],
                     cur_responses,
                     pad_to_left=False
                 )
@@ -419,35 +415,54 @@ class AgentActorManager:
 
         max_len = min(self.config.max_response_length, effective_len)
 
-        overlong_dones = effective_lens >= self.config.max_response_length
-
         # return the updated responses along with its masked version
         if self.config.truncate_response_side == 'left':
             # it should be left most of the time.
             return {'responses': responses[:, :max_len],
-                    'responses_with_info_mask': responses_with_info_mask[:, :max_len]}, overlong_dones
+                    'responses_with_loss_mask': responses_with_loss_mask[:, :max_len]}
         elif self.config.truncate_response_side == 'right':
             return {'responses': responses[:, -max_len:],
-                    'responses_with_info_mask': responses_with_info_mask[:, -max_len:]}, overlong_dones
+                    'responses_with_loss_mask': responses_with_loss_mask[:, -max_len:]}
         else:
             raise ValueError(
                 f"Invalid truncate_response_side: {self.config.truncate_response_side}. Allowed options are 'left' or 'right'.")
 
+    async def generate_sequences(self, prompts: DataProto, **sampling_params: Dict[str, Any]) -> DataProto:
+        if self.config.rollout_mode == "async":
+            return await self.actor_rollout_wg.simple_generate_sequences(prompts, **sampling_params)
+        elif self.config.rollout_mode == "sync":
+            with self.actor_rollout_wg.rollout.update_sampling_params(**sampling_params):
+                gen_output = self.actor_rollout_wg.rollout.generate_sequences(prompts, **sampling_params) # [active_size, response_length]
+            return gen_output
+        else:
+            raise ValueError(f"Invalid rollout_mode: {self.config.rollout_mode}. Allowed options are 'async' or 'sync'.")
 
-    def run_llm_loop(self, gen_batch: DataProto) -> Tuple[Dict, Dict]:
+    # Instead of creating new masks repeatedly
+    def _update_active_mask_inplace(self, active_mask: torch.Tensor, new_conditions: torch.Tensor):
+        """Update active mask in-place to avoid memory allocation"""
+        active_mask &= new_conditions
+        return active_mask.sum().item()  # Return count for logging
+
+    async def run_llm_loop_async(self, gen_batch: DataProto, **sampling_params: Dict[str, Any]) -> Tuple[Dict, Dict]:
         """Run main LLM generation loop."""
+        perf_timer = PerformanceTimer(do_timer=False)
+        perf_timer.start('run_llm_loop_total')
+        perf_timer.start('initialization')
+        
         ori_meta_info = gen_batch.meta_info
-        if isinstance(ori_meta_info['eos_token_id'], list):
+        if 'eos_token_id' not in ori_meta_info:
+            stop_token_ids = self.tokenizer.eos_token_id + self.additional_eos_token_ids if isinstance(self.tokenizer.eos_token_id, list) else [self.tokenizer.eos_token_id] + self.additional_eos_token_ids
+        elif isinstance(ori_meta_info['eos_token_id'], list):
             stop_token_ids = ori_meta_info['eos_token_id'] + self.additional_eos_token_ids
         else:
             stop_token_ids = [ori_meta_info['eos_token_id']] + self.additional_eos_token_ids
-        gen_batch = self._preprocess_inputs(gen_batch)
-        print(f"====> agent loop with batch saize {gen_batch.batch['input_ids'].shape} at rank{torch.distributed.get_rank()}")
+        gen_batch = self.repeat_inputs_by_n(gen_batch)
+
         initial_input_ids = gen_batch.batch['input_ids'][:, -self.config.max_start_length:].clone()
 
         original_left_side = {'input_ids': initial_input_ids[:, -self.config.max_start_length:]}
         original_right_side = {'responses': initial_input_ids[:, []],
-                               'responses_with_info_mask': initial_input_ids[:, []]}
+                               'responses_with_loss_mask': initial_input_ids[:, []]}
 
         turns_stats = torch.zeros(gen_batch.batch['input_ids'].shape[0], dtype=torch.int)
         valid_action_stats = torch.zeros(gen_batch.batch['input_ids'].shape[0], dtype=torch.int)
@@ -456,38 +471,48 @@ class AgentActorManager:
         rollings = gen_batch
         traj_ids = gen_batch.non_tensor_batch['traj_ids']
 
-        turns_stats_extra = {
-            "action_lengths": [[] for _ in range(gen_batch.batch['input_ids'].shape[0])],
-            "obs_lengths": [[] for _ in range(gen_batch.batch['input_ids'].shape[0])]
-        }
-
-        agent_sampling_params = {
-            "n": 1,  # already repeated by n times in _preprocess_inputs
+        turns_stats_extra_keys = ['action_lengths', 'obs_lengths', 'rewards', 'tool_interact_info']
+        turns_stats_extra = {}
+        for key in turns_stats_extra_keys:
+            turns_stats_extra[key] = np.empty((gen_batch.batch['input_ids'].shape[0],), dtype=object)  # rewards can be None, so we use object type
+            for i in range(gen_batch.batch['input_ids'].shape[0]):
+                turns_stats_extra[key][i] = []
+        agent_sampling_params = sampling_params.copy()
+        agent_sampling_params.update({
+            "n": 1,  # already repeated by n times in repeat_inputs_by_n
             "stop": self.action_stop_tokens,  # stop when generated an end of action
             "include_stop_str_in_output": True,
             "detokenize": True,
             "stop_token_ids": stop_token_ids,
             # "allowed_token_ids": list(range(self.tokenizer.vocab_size)) # see vllm issue: # 1398
-        }
-        if self.config.max_action_length is not None and self.config.max_action_length > 0:
-            agent_sampling_params['max_tokens'] = self.config.max_action_length
+        })
+        available_context_budget = self.config.max_response_length
+        available_context_budget = min(available_context_budget, self.config.max_action_length)
+        agent_sampling_params['max_tokens'] = available_context_budget # for vllm
+        agent_sampling_params['max_new_tokens'] = available_context_budget # for sglang
+
+        perf_timer.end('initialization')
 
         if self.config.call_tool_first:
+            perf_timer.start('initial_tool_call')
             # Added Zhiheng: Add initial observation to the prompt from server, use response=""
             do_actions = [True] * len(traj_ids)
             responses_str = [''] * len(traj_ids)
             responses_ids = torch.zeros((len(traj_ids), 1), dtype=torch.int64)
             active_uids = [traj_ids[i] for i in range(len(traj_ids)) if active_mask[i]]
-            next_obs, dones, valid_action, finishs = self.interact_with_tool_server(
+            next_obs, dones, valid_action, finishs, rewards, tool_interact_info = await self.interact_with_tool_server(
                 active_uids, responses_str, do_actions, active_mask,
                 extra_fields=rollings.non_tensor_batch.get('extra_info', None)
             )
+            for i, reward in enumerate(rewards):
+                if rewards[i] is not None and active_mask[i]:
+                    turns_stats_extra["rewards"][i].append(reward)
+                turns_stats_extra["tool_interact_info"][i].append(tool_interact_info[i])
             curr_active_mask = torch.tensor([not done for done in dones], dtype=torch.bool)
-            active_mask = active_mask * curr_active_mask
-            active_num_list.append(active_mask.sum().item())
+            active_num_list.append(self._update_active_mask_inplace(active_mask, curr_active_mask))
             # turns_stats[curr_active_mask] += 1
             valid_action_stats += torch.tensor(valid_action, dtype=torch.int)
-            next_obs_ids = self._process_next_obs(next_obs, dones, valid_action, finishs) # [active_size, obs_length]
+            next_obs_ids = await self._process_next_obs(next_obs, dones, valid_action, finishs) # [active_size, obs_length]
 
             obs_idx = 0
             for i, active in enumerate(active_mask):
@@ -506,106 +531,88 @@ class AgentActorManager:
                 responses_ids,
                 next_obs_ids
             )
-            original_right_side, overlong_dones = self._update_right_side(
+            original_right_side = self._update_right_side(
                 original_right_side,
                 responses_ids,
                 next_obs_ids
             )
             agent_sampling_params['max_tokens'] = available_context_budget
-            # print("Before overlong dones:", active_mask.sum().item())
-            active_mask = active_mask * (~overlong_dones.to(active_mask.dtype).to(active_mask.device))
-            # print("After overlong dones:", active_mask.sum().item())
             active_num_list.append(active_mask.sum().item())
-            # End of Added Zhiheng
+            perf_timer.end('initial_tool_call')
 
         # Main generation loop
-        # self.config.max_turns = 0
-        multiturn_obs = dict()
+        perf_timer.start('main_generation_loop')
         for step in range(self.config.max_turns+1):
-            if not active_mask.sum():
-                print("All trajectories are done.")
+            if not active_mask.any():
                 break
 
-            # print(f"Action step {step}/{self.config.max_turns}")
-            print(f"====> starting iter{step} rollout @run_llm_loop")
+            step_timer_key = f'step_{step}'
+            perf_timer.start(step_timer_key)
+            perf_timer.start(f'step_{step}_preparation')
+
+            logger.info(f"Action step {step}/{self.config.max_turns}")
             rollings.batch = self.tensor_fn.cut_to_effective_len(
                 rollings.batch,
                 keys=['input_ids', 'attention_mask', 'position_ids']
             ) # TODO: delete
-
             rollings_active = DataProto.from_dict(
                 {k: v[active_mask] for k, v in rollings.batch.items()},
-                {k: v[active_mask] for k, v in rollings.non_tensor_batch.items()},
+                {k: v[active_mask.numpy()] for k, v in rollings.non_tensor_batch.items()},
                 meta_info=ori_meta_info
             )
             if step == self.config.max_turns and self.config.force_finish_for_last_turn:
                 # remove the action stop tokens in the last turn to force a finish
                 agent_sampling_params.pop('stop')
-            with self.actor_rollout_wg.rollout.update_sampling_params(**agent_sampling_params):
-                gen_output = self.actor_rollout_wg.rollout.generate_sequences(rollings_active) # [active_size, response_length]
-            print(f"====> iter{step} rollout finished @run_llm_loop")
             
-            responses_ids, responses_str, do_actions = self._postprocess_responses(gen_output.batch['responses'], step) # [active_size, ...]
+            perf_timer.end(f'step_{step}_preparation')
             
+            # Time the generation
+            perf_timer.start(f'step_{step}_generation')
+            gen_output = await self.generate_sequences(rollings_active, **agent_sampling_params) # [active_size, response_length]
+            perf_timer.end(f'step_{step}_generation')
+
+            # Time the postprocessing
+            perf_timer.start(f'step_{step}_postprocess')
+            responses_ids, responses_str, do_actions = await self._postprocess_responses(gen_output.batch['responses'], step) # [active_size, ...]
             responses_ids, _ = self.tensor_fn._example_level_pad(responses_ids, responses_str, active_mask) # [bs*n, response_length]
+            perf_timer.end(f'step_{step}_postprocess')
 
-            # print(f"Number of active trajectories: {active_mask.sum().item()}")
-            # print(f"Length of responses: {responses_ids.shape[1]}")
+            logger.info(f"Number of active trajectories: {active_mask.sum().item()}")
+            logger.info(f"Length of responses: {responses_ids.shape[1]}")
 
-            idx = 0
-            for i, active in enumerate(active_mask):
-                if active:
-                    action_length = len(self.tokenizer.encode(responses_str[idx], add_special_tokens=False))
-                    turns_stats_extra["action_lengths"][i].append(action_length)
-                    idx += 1
-                else:
-                    turns_stats_extra["action_lengths"][i].append(0)
+            perf_timer.start(f'step_{step}_action_length_tracking')
+            async with self.tokenizer_lock:
+                idx = 0
+                for i, active in enumerate(active_mask):
+                    if active:
+                        action_length = len(self.tokenizer.encode(responses_str[idx], add_special_tokens=False))
+                        turns_stats_extra["action_lengths"][i].append(action_length)
+                        idx += 1
+                    else:
+                        turns_stats_extra["action_lengths"][i].append(0)
+            perf_timer.end(f'step_{step}_action_length_tracking')
 
-            # Execute in environment and process observations        
+            # Execute in environment and process observations
+            perf_timer.start(f'step_{step}_tool_interaction')
             active_uids = [traj_ids[i] for i in range(len(traj_ids)) if active_mask[i]]
-            
-            next_obs, dones, valid_action, finishs = self.interact_with_tool_server(
+            next_obs, dones, valid_action, finishs, rewards, tool_interact_info = await self.interact_with_tool_server(
                 active_uids, responses_str, do_actions, active_mask,
                 extra_fields=rollings_active.non_tensor_batch.get('extra_info', None),
                 is_last_step=(step == self.config.max_turns)
             )
-            
-            for active, uid, no in zip(active_mask, traj_ids, next_obs):
-                if active: 
-                    multiturn_obs[uid] = no
-            
-            new_obs = []
-            scores = []
-            codes = []
-            for entry in next_obs:
-                if isinstance(entry, dict):
-                    message = entry['message']
-                else: # when will the observation be empty string?
-                    message = entry 
-                new_obs.append(message)
+            for i, reward in enumerate(rewards):
+                if rewards[i] is not None and active_mask[i]:
+                    turns_stats_extra["rewards"][i].append(reward)
+                turns_stats_extra["tool_interact_info"][i].append(tool_interact_info[i])
+            perf_timer.end(f'step_{step}_tool_interaction')
 
-            next_obs = new_obs
-            
-
-            # # for debug
-            # with open(f"temp-{step}.json", 'w') as f:
-            #     json.dump([{
-            #         'prompt': self.tokenizer.decode(rollings_active.batch['input_ids'][i], skip_special_tokens=False),
-            #         'response': resp,
-            #         'do_action': do_action,
-            #         'traj_id': traj_id,
-            #         'next_obs': next_obs[i],
-            #         'done': done,
-            #         'valid_action': valid_action[i],
-            #     } for i, (resp, do_action, traj_id, done) in enumerate(zip(responses_str, do_actions, active_uids, dones))], f, indent=4)
-            #     print(f"saved responses to temp-{step}.json")
-
+            perf_timer.start(f'step_{step}_state_updates')
             curr_active_mask = torch.tensor([not done for done in dones], dtype=torch.bool)
-            active_mask = active_mask * curr_active_mask
+            self._update_active_mask_inplace(active_mask, curr_active_mask)
             turns_stats[curr_active_mask] += 1
             valid_action_stats += torch.tensor(valid_action, dtype=torch.int)
 
-            next_obs_ids = self._process_next_obs(next_obs, dones, valid_action, finishs) # [active_size, obs_length]
+            next_obs_ids = await self._process_next_obs(next_obs, dones, valid_action, finishs) # [active_size, obs_length]
 
             obs_idx = 0
             for i, active in enumerate(active_mask):
@@ -614,7 +621,7 @@ class AgentActorManager:
                 if active:
                     obs_length = next_obs_ids[obs_idx].shape[0]
                     turns_stats_extra["obs_lengths"][i].append(int(obs_length))
-                    obs_idx += 1
+                    obs_idx += 1 
                 else:
                     turns_stats_extra["obs_lengths"][i].append(0)
 
@@ -625,17 +632,21 @@ class AgentActorManager:
                 responses_ids,
                 next_obs_ids
             )
-            original_right_side, overlong_dones = self._update_right_side(
+            original_right_side = self._update_right_side(
                 original_right_side,
                 responses_ids,
                 next_obs_ids
             )
-            agent_sampling_params['max_tokens'] = available_context_budget
-            # print("Before overlong dones:", active_mask.sum().item())
-            active_mask = active_mask * (~overlong_dones.to(active_mask.dtype).to(active_mask.device))
-            # print("After overlong dones:", active_mask.sum().item())
-            active_num_list.append(active_mask.sum().item())
-        print(f"====> multiturn completed @run_llm_loop")
+            available_context_budget = min(available_context_budget, self.config.max_action_length)
+            agent_sampling_params['max_tokens'] = available_context_budget # for vllm
+            agent_sampling_params['max_new_tokens'] = available_context_budget # for sglang
+            perf_timer.end(f'step_{step}_state_updates')
+            
+            perf_timer.end(step_timer_key)
+
+        perf_timer.end('main_generation_loop')
+
+        perf_timer.start('final_composition')
         non_tensors = {
             'traj_ids': traj_ids.tolist(),
             'turns_stats': turns_stats.tolist(),
@@ -643,40 +654,24 @@ class AgentActorManager:
             'active_mask': active_mask.tolist(),
             'action_lengths': turns_stats_extra["action_lengths"],
             'obs_lengths': turns_stats_extra["obs_lengths"],
+            'turn_rewards': turns_stats_extra["rewards"],
+            'tool_interact_info': turns_stats_extra["tool_interact_info"],
         }
-        extra_info = gen_batch.non_tensor_batch.get('extra_info', None)
-        is_sql = False 
-        if extra_info is not None and ("gt_sql" in extra_info[0]):
-            is_sql = True
-        # print(f"====> is_sql = {is_sql}")
-        if is_sql:
-            new_obs = []
-            scores = []
-            codes = []
-            for uid in traj_ids:
-                entry = multiturn_obs[uid]
-                if isinstance(entry, dict):
-                    correct = entry['correctness']
-                    message = entry['message']
-                    code = entry['extracted']
-                else: # when will the observation be empty string?
-                    correct = 0.0 
-                    message = entry 
-                    code = ""
-                new_obs.append(message)
-                scores.append(correct)
-                codes.append(code)
-                
-            # import pdb; pdb.set_trace()
-            non_tensors['sql_scores'] = scores
-            non_tensors['extracted'] = codes 
-            non_tensors['error_message'] = new_obs
-            print(f"====> acc = {np.mean(scores)} = {sum(scores)}/{len(scores)}")
 
-        print("ACTIVE_TRAJ_NUM:", active_num_list)
+        logger.info(f"ACTIVE_TRAJ_NUM: {active_num_list}")
 
         results = self._compose_final_output(original_left_side, original_right_side, non_tensors, ori_meta_info)
+        perf_timer.end('final_composition')
+        
+        perf_timer.end('run_llm_loop_total')
+        
+        # Log performance statistics
+        perf_timer.log_stats(logger, f"[PERF] Batch size: {gen_batch.batch['input_ids'].shape[0]} - ")
+        
         return results
+    
+    def run_llm_loop(self, gen_batch: DataProto, **sampling_params: Dict[str, Any]) -> Tuple[Dict, Dict]:
+        return asyncio.run(self.run_llm_loop_async(gen_batch, **sampling_params))
 
     def _compose_final_output(
         self,
@@ -725,10 +720,10 @@ class AgentActorManager:
                 padding_side='right'
             ) # [bs*n, max_response_length]
 
-        # padding response_with_info_mask length to max_response_length
-        if final_output['responses_with_info_mask'].shape[1] < self.config.max_response_length:
-            final_output['responses_with_info_mask'] = self.tensor_fn.pad_tensor(
-                final_output['responses_with_info_mask'],
+        # padding response_with_loss_mask length to max_response_length
+        if final_output['responses_with_loss_mask'].shape[1] < self.config.max_response_length:
+            final_output['responses_with_loss_mask'] = self.tensor_fn.pad_tensor(
+                final_output['responses_with_loss_mask'],
                 max_length=self.config.max_response_length,
                 padding_side='right'
             ) # [bs*n, max_response_length]
@@ -747,12 +742,20 @@ class AgentActorManager:
 
         # Create observation mask
         if self.config.mask_observations:
-            final_output['info_mask'] = torch.cat([
-                self.tensor_fn.create_attention_mask(left_side['input_ids']),
-                self.tensor_fn.create_attention_mask(final_output['responses_with_info_mask'])
+            final_output['loss_mask'] = torch.cat([
+                torch.zeros_like(left_side['input_ids']), # do not train on prompt
+                self.tensor_fn.create_attention_mask(final_output['responses_with_loss_mask'])
             ], dim=1) # [bs*n, prompt_length + max_response_length]
         else:
-            final_output['info_mask'] = final_output['attention_mask']
+            final_output['loss_mask'] = final_output['attention_mask']
+        
+        # if mask overlong trajectory is enabled, we need to mask the overlong trajectory
+        if self.config.mask_overlong_loss:
+            # set loss_mask to 0 for those overlong trajectories
+            effective_lens = self.tensor_fn.create_attention_mask(final_output['responses']).sum(dim=1)
+            overlong_mask = effective_lens >= self.config.max_response_length
+            final_output['loss_mask'][overlong_mask] = 0
+            logger.debug(f"Masked {overlong_mask.sum().item()}/{final_output['loss_mask'].shape[0]} overlong trajectories.")
 
         # Create position ids
         final_output['position_ids'] = self.tensor_fn.create_position_ids(
@@ -774,39 +777,62 @@ class AgentActorManager:
             response: Response from the tool server
         """
         safe_payload = sanitize_request(batch_data)
-        print(f"====> Submit {len(safe_payload['trajectory_ids'])} Requests to Tool Server")
         response = requests.post(self.config.tool_server_url, json=safe_payload)
-        print(f"====> Received {len(safe_payload['trajectory_ids'])} responses")
-        
         if response.status_code != 200:
-            with open("error_data.json", 'w') as f:
+            os.mkdir('tmp', exist_ok=True)  # Ensure tmp directory exists
+            with open("tmp/error_data.json", 'w') as f:
                 json.dump(batch_data, f, indent=4)
             try:
                 # Try to decode as utf-8 for error message
                 error_text = response.text
-                print(f"Error: {response.status_code}, {error_text}")
+                logger.error(f"Error: {response.status_code}, {error_text}")
             except UnicodeDecodeError:
                 # If decoding fails, show raw content and encoding
-                print(f"Error: {response.status_code}, Binary response, encoding: {response.encoding}")
-                print(f"Raw content (first 100 bytes): {response.content[:100]}")
+                logger.error(f"Error: {response.status_code}, Binary response, encoding: {response.encoding}")
+                logger.error(f"Raw content (first 100 bytes): {response.content[:100]}")
             raise ValueError(f"Error: {response.status_code}, Response could not be decoded as UTF-8")
         
         try:
             return response.json()
         except ValueError as e:
-            print(f"Failed to parse JSON: {e}")
-            print(f"Response content type: {response.headers.get('Content-Type')}")
-            print(f"First 100 chars of response: {response.text[:100]}")
-            raise
-        
-        # if response.status_code != 200:
-        #     print(f"Error: {response.status_code}, {response.text}")
-        #     with open("error_data.json", 'w') as f:
-        #         json.dump(batch_data, f, indent=4)
-        #     raise ValueError(f"Error: {response.status_code}, {response.text}")
-        # return response.json()
 
-    def interact_with_tool_server(
+            logger.error(f"Failed to parse JSON: {e}")
+            logger.error(f"Response content type: {response.headers.get('Content-Type')}")
+            logger.error(f"First 100 chars of response: {response.text[:100]}")
+            raise
+    
+    async def _aiohttp_request(self, data):
+        try:
+            timeout = aiohttp.ClientTimeout(total=None)
+            session = aiohttp.ClientSession(timeout=timeout)
+            async with session.post(
+                url=self.config.tool_server_url,
+                json=data,
+            ) as resp:
+                data = await resp.json()
+                return data
+        finally:
+            await session.close()
+        
+    async def send_batch_requests_async(self, batch_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Robust version with retry logic"""
+        safe_payload = sanitize_request(batch_data)
+        
+        try:
+            return await self._aiohttp_request(safe_payload)
+        except Exception as e:
+            # Log error with context
+            logging.error(f"Failed to send batch request after all retries: {e}")
+            logging.error(f"Payload size: {len(str(safe_payload))} chars")
+            
+            # Save error data for debugging
+            os.mkdir('tmp', exist_ok=True)  # Ensure tmp directory exists
+            with open(f"tmp/error_data_{uuid.uuid4().hex[:8]}.json", 'w') as f:
+                json.dump(safe_payload, f, indent=2)
+            
+            raise ValueError(f"Tool server communication failed: {e}")
+        
+    async def interact_with_tool_server(
         self,
         active_uids:List[str],
         responses: List[str],
@@ -814,7 +840,7 @@ class AgentActorManager:
         active_mask=None,
         extra_fields=None,
         is_last_step=False,
-    ):
+    ) -> List[str]:
         """
         Call tool server for queries.
         Args:
@@ -822,10 +848,13 @@ class AgentActorManager:
             resposnes: responses from the model
             pad_token: pad token
             active_mask: active mask
-        Returns:
-            observations: observations from the tool server. None if the the query do not need to do any action.
-            dones: dones
-            valid_actions: valid actions
+        Returns: (All of length of active_mask, which is the original batch size)
+            observations (List[str]): observations from the tool server. None if the the query do not need to do any action.
+            dones (List[bool]): dones
+            valid_actions (List[bool]): valid actions
+            _finishs (List[bool]): whether the trajectory is finished for eos for all trajectories (including those that are not active)
+            rewards (List[float]): rewards for the trajectories, None if not applicable
+            tool_interact_info (List[Dict]): tool interaction info for each trajectory, None if not applicable
         """
         finishs = [not do_action for do_action in do_actions]
         batch_data = {
@@ -836,21 +865,21 @@ class AgentActorManager:
         }
         if extra_fields is not None:
             batch_data['extra_fields'] = extra_fields.tolist() if isinstance(extra_fields, np.ndarray) else extra_fields
-        # print(f" - Number of finished responses: {len([x for x in do_actions if not x])} / {len(do_actions)}")
-        response = self.send_batch_requests(batch_data)
+        logger.info(f" - Number of finished responses: {len([x for x in do_actions if not x])} / {len(do_actions)}")
+        response = await self.send_batch_requests_async(batch_data)
         active_observations = response['observations']
         active_dones = [int(x) for x in response['dones']]
         active_valid_actions = [int(x) for x in response['valids']]
 
-        # print("Received observations from tool server. Samples:", len(active_observations))
-        # print(f" - Number of valid actions (exclusing finish action): {len([x for x in active_valid_actions if x])} / {len(active_valid_actions)}")
-        # print(f" - Number of dones: {len([x for x in active_dones if x])} / {len(active_dones)}")
-        # print("Example observations:")
-        # non_empty_observations = [obs for obs in active_observations if obs]
-        # if len(non_empty_observations) > 0:
-        #     print(f"{non_empty_observations[0]}")
-        # else:
-        #     print("No non-empty observations.")
+        logger.debug(f"Received observations from tool server. Samples: {len(active_observations)}")
+        logger.info(f" - Number of valid actions (exclusing finish action): {len([x for x in active_valid_actions if x])} / {len(active_valid_actions)}")
+        logger.info(f" - Number of dones: {len([x for x in active_dones if x])} / {len(active_dones)}")
+        logger.debug("Example observations:")
+        non_empty_observations = [obs for obs in active_observations if obs]
+        if len(non_empty_observations) > 0:
+            logger.debug(f"{non_empty_observations[0]}")
+        else:
+            logger.debug("No non-empty observations.")
 
         next_obs, dones, valid_action, _finishs = [], [], [], []
         for i, active in enumerate(active_mask):
@@ -866,4 +895,51 @@ class AgentActorManager:
                 _finishs.append(1)
 
         assert len(active_observations) == 0
-        return next_obs, dones, valid_action, _finishs
+        
+        # postprocess next_obs. For now we support two types of observations:
+        # 1. string observations, which will be the most common case
+        # 2. dict observations, e.g. {"obs": "some observation", "reward": 1.0}
+        #     for now we only support "obs" and "reward" keys, but can be extended later
+        processed_next_obs = []
+        rewards = []
+        tool_interact_info = []
+        allowed_keys = ['obs', 'reward']
+        for i, obs in enumerate(next_obs):
+            if isinstance(obs, str):
+                processed_next_obs.append(obs)
+                rewards.append(None)
+                tool_interact_info.append({})
+            elif isinstance(obs, dict):
+                assert "obs" in obs, f"Observation dict must contain 'obs' key, but got {obs.keys()}"
+                _obs = obs.get('obs', '')
+                _reward = obs.get('reward', None)
+                assert isinstance(_obs, str), f"Expected 'obs' to be a string, but got {type(_obs)}"
+                assert _reward is None or isinstance(_reward, (int, float)), f"Expected 'reward' to be None, int, or float, but got {type(_reward)}"
+                processed_next_obs.append(_obs)
+                rewards.append(_reward)
+                # store tool interaction info if exists
+                tool_interact_info.append({k: v for k, v in obs.items() if k not in allowed_keys})
+            else:
+                raise ValueError(f"Invalid observation type: {type(obs)}. Expected str or dict.")
+        next_obs = processed_next_obs
+        return next_obs, dones, valid_action, _finishs, rewards, tool_interact_info
+
+     # Step 4: Add cleanup method (optional but recommended)
+    async def cleanup(self):
+        """Clean up HTTP session"""
+        if self._http_session:
+            await self._http_session.close()
+            self._http_session = None
+    
+    def __del__(self):
+        """Ensure session is closed when object is destroyed"""
+        if self._http_session and not self._http_session.closed:
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(self._http_session.close())
+                else:
+                    loop.run_until_complete(self._http_session.close())
+            except:
+                pass  # Best effort cleanup

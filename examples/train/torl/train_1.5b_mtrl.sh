@@ -17,7 +17,7 @@ max_response_length=2048
 max_obs_length=512
 temperature=1.0
 top_p=1.0
-strategy="fsdp_agent" # remove _agent for normal verl behavior
+strategy="fsdp"
 action_stop_tokens='<|calling system for feedback|>,```output'
 max_turns=1
 kl_loss_coef=0.0
@@ -53,7 +53,7 @@ echo "action_stop_tokens_file=$action_stop_tokens_file"
 host=$(hostname -I | awk '{print $1}')
 port=$(shuf -i 30000-31000 -n 1)
 tool_server_url=http://$host:$port/get_observation
-python -m verl_tool.servers.serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 8 &
+python -m verl_tool.servers.serve --host $host --port $port --tool_type "python_code" --workers_per_tool 8 &
 server_pid=$!
 
 echo "Server (pid=$server_pid) started at $tool_server_url"

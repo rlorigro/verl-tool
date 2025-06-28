@@ -14,7 +14,7 @@ max_response_length=2048
 reward_manager=torl
 lr=1e-6
 ppo_mini_batch_size=$batch_size
-strategy="fsdp_agent" # remove _agent for normal verl behavior
+strategy="fsdp"
 kl_loss_coef=0.0
 kl_loss_type=low_var_kl
 kl_coef=0
@@ -23,7 +23,7 @@ entropy_coeff=0
 # host=0.0.0.0
 # port=$(shuf -i 30000-31000 -n 1)
 # tool_server_url=http://$host:$port/get_observation
-# python -m verl_tool.servers.ray_serve --host $host --port $port --tool_type "firejail_python_code" --workers_per_tool 64 &
+# python -m verl_tool.servers.serve --host $host --port $port --tool_type "python_code" --workers_per_tool 64 &
 host=0.0.0.0
 port=30207
 tool_server_url=http://$host:$port/get_observation

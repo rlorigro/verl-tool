@@ -24,3 +24,12 @@ acecoder = [
 torl = [
     "math-verify",
 ]
+vllm = [
+    "vllm<0.9.0",
+]
+
+search_tool = [
+    "google-api-python-client",
+    "chardet",
+    "bs4"
+]

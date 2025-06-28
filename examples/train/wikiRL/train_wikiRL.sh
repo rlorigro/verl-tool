@@ -16,7 +16,7 @@ max_prompt_length=2048 # bottleneck of the rollout, by default keep the right si
 max_response_length=5120 # bottleneck of the right side, will used in the training
 max_obs_length=2048 # Not the bottleneck, the obs is much shorter than this
 temperature=0.5
-strategy="fsdp_agent" # remove _agent for normal verl behavior
+strategy="fsdp"
 valid_actions="[]" # "[answer,python]" are two valid actions, they are used to determine the stop
 token of
 # each action, which are </answer> and </python> respectively
