@@ -444,7 +444,7 @@ def score(
             is_match = evaluator.are_results_equivalent(gold_results, pred_results, order_matters=False)
         
         score = 1.0 if is_match else 0.0
-        message = "Success: Results match." if is_match else "Mismatch: Results are not equivalent."
+        message = "Success: Results match with the ground truth." if is_match else "Mismatch: Results do not match the ground truth."
         return score, pred_results, message
 
     finally:

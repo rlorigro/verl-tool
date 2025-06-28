@@ -107,11 +107,14 @@ class SqlTool(BaseTool):
                 execution_result = ""
 
             if not correctness:
-                observation = f"```output\n{error_message}\n```\n"
+                if execution_result:
+                    observation = f"```output\nError:\n{error_message}\n\nExecution Result:\n{execution_result}\n```\n"
+                else:
+                    observation = f"```output\nError:\n{error_message}\n```\n"
                 done = False
                 # print(f"===> error", observation, "\n", code_to_execute)
             else:
-                observation = f"```output\n{execution_result}\n```\n"
+                observation = f"```output\nExecution Result:\n{execution_result}\n```\n"
                 done = True
             
             valid = True
@@ -120,6 +123,6 @@ class SqlTool(BaseTool):
         # print(f"===> parsed code", parsed_action)
         
         # return observation, done, valid
-        return_obs = {"obs": observation, "reward": correctness, "code": code_to_execute, "correctness": correctness, "error_message": error_message}
+        return_obs = {"obs": observation, "reward": correctness, "code": code_to_execute, "correctness": correctness, "error_message": error_message, "execution_result": execution_result}
         return return_obs, done, valid
         
