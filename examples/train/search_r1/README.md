@@ -154,24 +154,21 @@ Our implementation achieves competitive results compared to the one reported by 
 Their wandb training report is [here](https://wandb.ai/lingchang-ustc/search_async_rl/runs/21rubwvs?nw=nwuserlingchang)
 
 📊 Our reimplementation's Performance
-
 | Training Steps | `popqa` | `triviaqa` | `wikimultihopqa` | `nq`  | `hotpotqa` | `bamboogle` | `musique` |
 | -------------- | ------- | ---------- | ---------------- | ----- | ---------- | ----------- | --------- |
 | 40             | 0.434   | 0.573      | 0.261            | 0.390 | 0.272      | 0.104       | 0.058     |
 | 80             | 0.438   | 0.603      | 0.280            | 0.430 | 0.301      | 0.128       | 0.068     |
 | 120            | 0.437   | 0.604      | 0.362            | 0.442 | 0.358      | 0.288       | 0.114     |
 | 160            | 0.463   | 0.617      | 0.402            | 0.448 | 0.390      | 0.368       | 0.145     |
-
+| 200            | 0.476   | 0.619      | 0.401            | 0.462 | 0.401      | 0.360       | 0.151     |
 
 📊 Original Search-R1 Performance
-
 | Training Steps | `popqa` | `triviaqa` | `wikimultihopqa` | `nq`  | `hotpotqa` | `bamboogle` | `musique` |
 | -------------- | ------- | ---------- | ---------------- | ----- | ---------- | ----------- | --------- |
 | 50             | 0.358   | 0.510      | 0.189            | 0.349 | 0.233      | 0.104       | 0.051     |
 | 100            | 0.372   | 0.524      | 0.208            | 0.365 | 0.244      | 0.136       | 0.056     |
-| 150            | 0.372   | 0.524      | 0.208            | 0.365 | 0.244      | 0.136       | 0.056     |
-| 150    | 0.378   | 0.528      | 0.221            | 0.377 | 0.250      | 0.104       | 0.061     |
-
+| 150            | 0.378   | 0.528      | 0.221            | 0.377 | 0.250      | 0.104       | 0.061     |
+| 200            | 0.388   | 0.540      | 0.253            | 0.383 | 0.267      | 0.136       | 0.057     |
 
 **Key Improvements:**
 - **WikimultihopQA**: Significant improvement (0.362 vs 0.208)
