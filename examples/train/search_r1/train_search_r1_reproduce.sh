@@ -8,9 +8,8 @@ set -x
 # Model and data configuration
 # model_name="/map-vepfs/yi/model_weights/Llama-3.2-3B"
 model_name="/map-vepfs/yi/model_weights/Qwen2.5-3B"
-train_data="/map-vepfs/yi/Search-R1/data/nq_search/train.parquet"
-val_data="/map-vepfs/yi/Search-R1/data/nq_search/test.parquet"
-
+train_data="/map-vepfs/yi/searchr1_data/training_data/searchR1_processed_direct/train.parquet"
+val_data="/map-vepfs/yi/searchr1_data/training_data/searchR1_processed_direct/test.parquet"
 
 # Search-R1 specific action tokens
 
@@ -57,7 +56,7 @@ max_action_length=2048
 # Generate run name
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
 run_name_postfix="search_r1"
-run_name="sglang_retriever_search_r1_qa_em-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}-${run_name_postfix}"
+run_name="new_data_sglang_retriever_search_r1_qa_em-${strategy}-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}-${run_name_postfix}"
 export VERL_RUN_ID=$run_name
 export NCCL_DEBUG=INFO
 export VLLM_USE_V1=1
@@ -184,7 +183,7 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     trainer.nnodes=$n_nodes \
     +trainer.remove_previous_ckpt_in_save=True \
     trainer.save_freq=20 \
-    trainer.test_freq=50 \
+    trainer.test_freq=40 \
     trainer.total_epochs=$total_epochs \
     trainer.total_training_steps=$total_training_steps \
 
