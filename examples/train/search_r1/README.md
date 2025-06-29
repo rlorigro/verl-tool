@@ -189,6 +189,30 @@ Their wandb training report is [here](https://wandb.ai/lingchang-ustc/search_asy
 | `bamboogle`      | $0.288$             | $0.136$             |
 | `musique`        | $0.114$             | $0.056$             |
 
+### 160/150 Traiining Steps
+
+| Dataset        | Our Implementation | Original Search-R1 |
+|----------------|-------------------|-------------------|
+| `popqa`          | $0.437$             | $0.372$             |
+| `triviaqa`       | $0.604$             | $0.524$             |
+| `wikimultihopqa` | $0.362$             | $0.208$             |
+| `nq`             | $0.442$             | $0.365$             |
+| `hotpotqa`       | $0.358$             | $0.244$             |
+| `bamboogle`      | $0.288$             | $0.136$             |
+| `musique`        | $0.114$             | $0.056$             |
+
+### 160/150 Traiining Steps
+
+| Dataset        | Our Implementation | Original Search-R1 |
+|----------------|-------------------|-------------------|
+| `popqa`          | $0.463$             | $0.378$             |
+| `triviaqa`       | $0.617$             | $0.528$             |
+| `wikimultihopqa` | $0.402$             | $0.221$             |
+| `nq`             | $0.448$             | $0.377$             |
+| `hotpotqa`       | $0.390$             | $0.250$             |
+| `bamboogle`      | $0.368$             | $0.104$             |
+| `musique`        | $0.145$             | $0.061$             |
+
 **Key Improvements:**
 - **WikimultihopQA**: Significant improvement (0.362 vs 0.208)
 - **HotpotQA**: Strong performance gains across all training steps
