@@ -24,16 +24,16 @@ class SearchRetrievalTool(BaseTool):
     def get_usage_inst(self):
         return "You can search for information by putting your query between <search> and </search> tags."
     
-    def parse_action(self, action: str) -> Tuple[str, bool]:
+    def _parse_search_query(self, action: str) -> str:
         """
-        Parse the raw action string to extract search queries.
-        Implements the prioritization logic that was originally in serve.py lines 112-115.
+        Extract the search query from the action string.
+        This is a helper function to parse the <search> tags.
         
         Args:
             action: Raw action string containing search query
             
         Returns:
-            Tuple containing the extracted query and a validity flag
+            Extracted search query
         """
         # Priority logic moved from serve.py: prioritize search tool for <search> tags
         # This implements the original logic: if "</search>" in action and "search_retrieval" in self.tools
@@ -45,7 +45,51 @@ class SearchRetrievalTool(BaseTool):
                 # Use the last search query if multiple are found
                 query = search_matches[-1].strip()
                 return query, True
+        return "", False
+    
+    def _parse_answer_tags(self, action: str) -> Tuple[str, bool]:
+        """
+        Parse the action string to extract answer tags.
+        This is a helper function to handle <answer> tags.
         
+        Args:
+            action: Raw action string containing answer tags
+            
+        Returns:
+            Tuple containing the extracted answer and a validity flag
+        """
+        # Priority logic moved from serve.py: check for finish condition (</answer> tag)
+        # This implements the original logic: if "</answer>" in action
+        if "</answer>" in action:
+            # Check for <answer> tags (Search-R1 style)
+            answer_matches = re.findall(r"<answer>(.*?)</answer>", action, re.DOTALL)
+            if len(answer_matches) > 0:
+                final_answer = answer_matches[-1].strip()
+                return final_answer, True
+        return "", False
+    
+    def parse_action(self, action: str) -> Tuple[str, bool]:
+        """
+        Parse the raw action string to extract search queries.
+        Implements the prioritization logic that was originally in serve.py lines 112-115.
+        
+        Args:
+            action: Raw action string containing search query
+            
+        Returns:
+            Tuple containing the extracted query and a validity flag
+        """
+        # Check for <search> tags first
+        search_query, is_valid = self._parse_search_query(action)
+        if is_valid:
+            return search_query, True
+        
+        # If no search query found, check for <answer> tags
+        answer, is_valid = self._parse_answer_tags(action)
+        if is_valid:
+            return answer, True
+        
+        # Default case - no valid action found
         return "", False
     
     def get_action_priority(self, action: str, extra_field: dict) -> int:
@@ -81,14 +125,22 @@ class SearchRetrievalTool(BaseTool):
         Returns:
             Tuple containing observation, done flag, and validity flag
         """
-        parsed_query, is_valid = self.parse_action(action)
+        parsed_query, is_valid = self._parse_search_query(action)
         env = self.load_env(trajectory_id)
         
         if not is_valid:
-            observation = ""
-            execution_result = ""
-            done = False
-            valid = False
+            # try answer tags if no valid search query found
+            parsed_query, is_valid = self._parse_answer_tags(action)
+            if is_valid:
+                observation = ""
+                execution_result = ""
+                done = True
+                valid = False
+            else:
+                observation = ""
+                execution_result = ""
+                done = False
+                valid = False
         else:
             try:
                 # Call the retrieval service (same as Search-R1)

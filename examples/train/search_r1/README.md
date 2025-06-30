@@ -31,7 +31,7 @@ We mainly refer to Search-R1's [official implementation](https://github.com/Pete
    - Handles retry logic and error recovery
 
 3. **Reward Function** (`search_r1_like_qa_em.py`)
-   - Location: `/map-vepfs/yi/verl-tool/verl_tool/workers/reward_manager/search_r1_qa_em.py`
+   - Location: `verl-tool/verl_tool/workers/reward_manager/search_r1_qa_em.py`
    - Exact match scoring for question-answering tasks
    - Extracts answers from `<answer>` tags
    - Normalizes text for robust comparison
