@@ -56,6 +56,7 @@ VerlTool: A unified and easy-to-extend tool-agent training framework based on ve
 
 
 ## News
++ [2025/06/30] We reproduce Search-R1 with even higher performance on the same benchmarks! See [PR](https://github.com/TIGER-AI-Lab/verl-tool/pull/71) and training [README](examples/train/search_r1/README.md) for more details.
 + [2025/06/26] We support DAPO recipe training. See [DAPO.md](./assets/docs/DAPO.md) for more details.
 + [2025/06/18] VerlTool now officially supports Trajectory-Level asynchronous, speeding up the rollout generation with tool calling by at least 2x! see [asyncRL.md](./assets/docs/asyncRL.md) for more details.
 + [2024/06/16] We have updated the verl submodule to the latest version (06/16) and modified some code to adapt to the new version.
@@ -82,7 +83,7 @@ git submodule update --init --recursive
 uv sync
 source .venv/bin/activate
 uv pip install -e verl
-uv pip install -e ".[vllm,acecoder,torl]"
+uv pip install -e ".[vllm,acecoder,torl,search_tool]"
 uv pip install "flash-attn<2.8.0" --no-build-isolation
 ```
 
@@ -92,7 +93,7 @@ git submodule update --init --recursive
 conda create --name verl-tool-env python=3.10
 conda activate verl-tool-env
 pip install -e verl
-pip install -e ".[vllm,acecoder,torl]"
+pip install -e ".[vllm,acecoder,torl,search_tool]"
 pip install "flash-attn<2.8.0" --no-build-isolation
 ```
 
