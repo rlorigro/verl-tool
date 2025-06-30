@@ -2,6 +2,52 @@
 
 This repository contains a complete port of the [Search-R1](https://github.com/PeterGriffinJin/Search-R1) framework to the Verl-Tool ecosystem, enabling large language models to learn search-enhanced question answering through reinforcement learning.
 
+## ⏩ Quick start
+
+You may use the below command to fire up a quick training. Detailed commands for each step and their explanations are contained in the below sections. 
+
+We assume you:
+1. Will be executing the code at the root directory of verl-tool repo.
+2. Will store both the training data and retriever index files at `./data/search_r1`.
+3. Already have the conda environment: `verl-tool-env` properly configured.
+
+```
+# download the index
+conda activate verl-tool-env
+export HF_ENDPOINT=https://hf-mirror.com
+save_path=./data/search_r1/retriever_index
+python ./verl/examples/sglang_multiturn/search_r1_like/local_dense_retriever/download.py --save_path $save_path
+
+# Prepare index
+cat $save_path/part_* > $save_path/e5_Flat.index
+gzip -d $save_path/wiki-18.jsonl.gz
+
+# activate sglang-retriever
+file_path=./data/search_r1/retriever_index
+index_file=$file_path/e5_Flat.index
+corpus_file=$file_path/wiki-18.jsonl
+retriever_name=e5
+retriever_path=intfloat/e5-base-v2
+python ./verl/examples/sglang_multiturn/search_r1_like/local_dense_retriever/retrieval_server.py \
+    --index_path $index_file \
+    --corpus_path $corpus_file \
+    --topk 3 \
+    --retriever_name $retriever_name \
+    --retriever_model $retriever_path \
+    --faiss_gpu
+
+# need to wait for 5 mins
+
+# prepare the training dataset
+python ./verl/scripts/data_preprocess/preprocess_search_r1_dataset.py\
+   --local_dir ./data/search_r1/training_data
+
+# perform model training
+export HF_ENDPOINT=https://hf-mirror.com
+bash ./examples/train/search_r1/train_search_r1_reproduce.sh
+```
+
+For model format conversation and tensorboard visualization, refer to the following sections. 
 
 ## 🎯 Overview
 
@@ -137,6 +183,18 @@ if encounter error: "/lib/x86_64-linux-gnu/libstdc++.so.6: version 'GLIBCXX_3.4.
 # Basic training command
 cd verl-tool
 bash examples/train/search_r1/train_search_r1_reproduce.sh
+```
+
+Note: by default wandb recording is disabled. To activate it, modify this line in `train_search_r1_reproduce.sh`:
+
+```bash
+trainer.logger=['console','tensorboard', 'wandb'] \
+```
+
+and set your wandb API key as an environment variable:
+
+```bash
+export WANDB_API_KEY="<your_key>"
 ```
 
 ### Model Checkpoint Merging
