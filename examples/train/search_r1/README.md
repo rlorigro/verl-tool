@@ -170,6 +170,12 @@ Their wandb training report is [here](https://wandb.ai/lingchang-ustc/search_asy
 | 150            | 0.378   | 0.528      | 0.221            | 0.377 | 0.250      | 0.104       | 0.061     |
 | 200            | 0.388   | 0.540      | 0.253            | 0.383 | 0.267      | 0.136       | 0.057     |
 
+Our implementation's training record is provided as `verl-tool/examples/train/search_r1/reimplementation_tensorboard_records.0`. To view the results on tensorboard, run:
+
+```bash
+tensorboard --logdir <folder_to_tensorboard_report>
+```
+
 **Key Improvements:**
 - **WikimultihopQA**: Significant improvement (0.362 vs 0.208)
 - **HotpotQA**: Strong performance gains across all training steps
