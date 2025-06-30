@@ -35,6 +35,7 @@ class VerlToolChatCompletionScheduler(ChatCompletionScheduler):
         self.agent_config.rollout_mode = "async"
         self.agent_actor_manager = AgentActorManager(self.model_path, self, self.agent_config)
         self.max_model_len = self.agent_actor_manager.max_model_len
+        self.max_response_length = self.agent_config.max_response_length
 
         self.tokenizer = self.agent_actor_manager.tokenizer
         print(f"AgentActorManager initialized with config: {self.agent_config}")
@@ -127,12 +128,13 @@ class VerlToolChatCompletionScheduler(ChatCompletionScheduler):
     def simple_postprocess(self, batch: DataProto, responses: List[str]) -> DataProto:
         prompt_ids = batch.batch["input_ids"]
         prompt_attention_mask = batch.batch["attention_mask"]
-        responses = self.tokenizer(responses, return_tensors="pt", padding="longest", padding_side="right")
+        responses = self.tokenizer(responses, return_tensors="pt", padding="max_length", padding_side="right", max_length=self.max_response_length, truncation=True)
 
         input_ids = torch.cat([prompt_ids, responses["input_ids"]], dim=1)
         attention_mask = torch.cat([prompt_attention_mask, responses["attention_mask"]], dim=1)
         position_ids = (attention_mask.cumsum(dim=1) - 1) * attention_mask
 
+        batch.batch['prompts'] = prompt_ids
         batch.batch['input_ids'] = input_ids
         batch.batch['attention_mask'] = attention_mask
         batch.batch['position_ids'] = position_ids
@@ -197,22 +199,29 @@ class VerlToolChatCompletionScheduler(ChatCompletionScheduler):
             kwargs["top_p"] = self.config.val_kwargs.top_p
             kwargs["temperature"] = self.config.val_kwargs.temperature
         repeated_batch = self.agent_actor_manager.repeat_inputs_by_n(batch)
-        repeated_batch = repeated_batch.chunk(len(repeated_batch))
+        repeated_chunk_batch = repeated_batch.chunk(len(repeated_batch))
         # repeated_batch = [repeated_batch] # for debug
-        logger.info(f"[VerlToolChatCompletionScheduler] generate_sequences number of chunks: {len(repeated_batch)}")
+        logger.info(f"[VerlToolChatCompletionScheduler] generate_sequences number of chunks: {len(repeated_chunk_batch)}")
         tasks = []
-        for batch_index in range(len(repeated_batch)):
-            tasks.append(
-                asyncio.create_task(
-                    self.agent_actor_manager.run_llm_loop_async(
-                        repeated_batch[batch_index],
-                        **kwargs
+        if self.agent_config.enable_agent:
+            for batch_index in range(len(repeated_chunk_batch)):
+                tasks.append(
+                    asyncio.create_task(
+                        self.agent_actor_manager.run_llm_loop_async(
+                            repeated_chunk_batch[batch_index],
+                            **kwargs
+                        )
                     )
                 )
+            # gen_outputs = await asyncio.gather(*tasks)
+            gen_outputs = await tqdm.gather(*tasks, total=len(tasks), desc="Async Generating sequences")
+            output_batch = DataProto.concat(gen_outputs)
+        else:
+            kwargs["max_tokens"] = self.max_response_length
+            output_batch = await self.simple_generate_sequences(
+                repeated_batch,
+                **kwargs
             )
-        # gen_outputs = await asyncio.gather(*tasks)
-        gen_outputs = await tqdm.gather(*tasks, total=len(tasks), desc="Async Generating sequences")
-        output_batch = DataProto.concat(gen_outputs)
         output_batch.meta_info["timing"] = {"generate_sequences": time.time() - t_start}
         logger.info(f"[VerlToolChatCompletionScheduler] generate_sequences for {len(repeated_batch)} number of trajectories done, took", output_batch.meta_info["timing"]["generate_sequences"], "seconds")
         return output_batch

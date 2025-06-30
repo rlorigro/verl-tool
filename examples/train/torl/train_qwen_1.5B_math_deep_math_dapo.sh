@@ -5,7 +5,7 @@ val_data=[$(pwd)/data/${dataset_name}/test.parquet,\
 $(pwd)/data/${dataset_name}/math500_test.parquet,\
 $(pwd)/data/${dataset_name}/aime24_test.parquet,\
 $(pwd)/data/${dataset_name}/aime25_test.parquet]
-model_name=Qwen/Qwen2.5-Math-7B
+model_name=Qwen/Qwen2.5-Math-1.5B
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
 n_gpus_per_node=4
 n_nodes=1
@@ -18,9 +18,9 @@ max_obs_length=512
 temperature=1.0
 top_p=1.0
 enable_agent=True # enable agent for tool use
-strategy="fsdp2"
+strategy="fsdp"
 action_stop_tokens='```output'
-max_turns=3
+max_turns=1
 kl_loss_coef=0.0
 kl_coef=0
 entropy_coeff=0
@@ -31,7 +31,7 @@ ppo_micro_batch_size_per_gpu=1
 log_prob_micro_batch_size_per_gpu=8
 tensor_model_parallel_size=1
 gpu_memory_utilization=0.6 # higher gpu_memory_utilization will likely cause the vllm to OOM and get stuck, so set it to a lower value like 0.4 or 0.5
-do_offload=False # control actor's fsdp.[param|optimizer]_offload and actor_rollout_ref.rollout.fsdp.[param|optimizer]_offload; if gpu_memory_utilization is set to > 0.6, then do_offload should be set to True otherwise it will cause OOM
+do_offload=True # control actor's fsdp.[param|optimizer]_offload and actor_rollout_ref.rollout.fsdp.[param|optimizer]_offload; if gpu_memory_utilization is set to > 0.6, then do_offload should be set to True otherwise it will cause OOM
 use_dynamic_bsz=True # faster
 ulysses_sequence_parallel_size=1 # set to 1 for normal verl behavior, otherwise it will cause OOM
 fsdp_size=-1
@@ -40,7 +40,7 @@ mask_observations=True # mask observations for kl loss and gradient descent
 enable_mtrl=False # enable multi-turn training
 max_action_length=2048
 model_pretty_name=$(echo $model_name | tr '/' '_' | tr '[:upper:]' '[:lower:]')
-run_name_postfix=""
+run_name_postfix="dapo-debug"
 if [ "$enable_agent" = "True" ]; then
     run_name="${reward_manager}-${strategy}-agent-${model_pretty_name}-${rl_alg}-n${n}-b${batch_size}-t${temperature}-lr${lr}${run_name_postfix}"
 else
@@ -48,6 +48,14 @@ else
 fi
 export VERL_RUN_ID=$run_name
 export NCCL_DEBUG=INFO
+export VLLM_USE_V1=1
+rollout_mode='async'
+
+# algorithm:
+#   filter_groups:
+#     enable: False # We try to avoid forgetting to set enable
+#     metric: null # acc / score / seq_reward / seq_final_reward / ...
+#     max_num_gen_batches: 0 # Non-positive values mean no upper limit
 
 # temp file for action tokens as verl cannot pass special strs as params
 action_stop_tokens_file="$(pwd)$(mktemp)"
@@ -65,6 +73,9 @@ echo "Server (pid=$server_pid) started at $tool_server_url"
 
 PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     algorithm.adv_estimator=$rl_alg \
+    +algorithm.filter_groups.enable=True \
+    +algorithm.filter_groups.metric='seq_final_reward' \
+    +algorithm.filter_groups.max_num_gen_batches=0 \
     data.train_files=$train_data \
     data.val_files=$val_data \
     data.train_batch_size=$batch_size \
@@ -93,6 +104,9 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=$do_offload \
     actor_rollout_ref.actor.fsdp_config.fsdp_size=$fsdp_size \
     actor_rollout_ref.actor.ulysses_sequence_parallel_size=$ulysses_sequence_parallel_size \
+    actor_rollout_ref.actor.clip_ratio_high=0.3 \
+    actor_rollout_ref.actor.clip_ratio_low=0.2 \
+    actor_rollout_ref.actor.loss_agg_mode='token-mean' \
     +actor_rollout_ref.agent.enable_agent=$enable_agent \
     +actor_rollout_ref.agent.tool_server_url=$tool_server_url \
     +actor_rollout_ref.agent.max_prompt_length=$max_prompt_length \
@@ -118,6 +132,7 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     actor_rollout_ref.rollout.n=$n \
     actor_rollout_ref.rollout.log_prob_use_dynamic_bsz=$use_dynamic_bsz \
     actor_rollout_ref.rollout.max_num_seqs=512 \
+    actor_rollout_ref.rollout.mode=$rollout_mode \
     actor_rollout_ref.ref.log_prob_use_dynamic_bsz=$use_dynamic_bsz \
     actor_rollout_ref.ref.fsdp_config.param_offload=$do_offload \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=$log_prob_micro_batch_size_per_gpu \
@@ -132,7 +147,7 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     trainer.logger=['console','wandb'] \
     trainer.project_name=$reward_manager \
     trainer.experiment_name=$run_name \
-    trainer.val_before_train=True \
+    trainer.val_before_train=False \
     trainer.default_hdfs_dir=null \
     trainer.n_gpus_per_node=$n_gpus_per_node \
     trainer.nnodes=$n_nodes \

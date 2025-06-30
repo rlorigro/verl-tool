@@ -17,6 +17,7 @@ from .utils import hash_requests
 from collections import defaultdict
 
 from .tools import get_tool_cls, ALL_TOOLS, set_use_tqdm
+from dataclasses import dataclass
 
 # Configure logging
 logging.basicConfig(
@@ -26,9 +27,15 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class DictObservation:
+    """Dataclass for structured observations"""
+    obs: str
+    reward: Union[int, float, None] = None
+    
 class AgentResponse(BaseModel):
     """Model for outgoing agent responses"""
-    observations: List[str]
+    observations: List[Union[str,  DictObservation]]
     dones: List[bool]
     valids: List[bool]
 

@@ -1,8 +1,8 @@
 ## Trajectory-level Asynchronous Reinforcement Learning
 
-VerlTool now officially supports Trajectory-Level asynchronous rollout by setting `rollout.mode='async'`, which speeds up the rollout generation with tool calling by at least 2x! 
-- `rollout.mode='sync'`: The default mode, where the rollout will only call the tool servers after the first turn generations of all the examples in the batch are completed.
-- `rollout.mode='async'`: The new mode, where each trajectory is independently processed, allowing for tool calls to be made as soon as the first turn generation is available. This significantly reduces the waiting time for tool calls, especially in large batches.
+VerlTool now officially supports Trajectory-Level asynchronous rollout by setting `actor_rollout_ref.rollout.mode='async'`, which speeds up the rollout generation with tool calling by at least 2x! 
+- `actor_rollout_ref.rollout.mode='sync'`: The default mode, where the rollout will only call the tool servers after the first turn generations of all the examples in the batch are completed.
+- `actor_rollout_ref.rollout.mode='async'`: The new mode, where each trajectory is independently processed, allowing for tool calls to be made as soon as the first turn generation is available. This significantly reduces the waiting time for tool calls, especially in large batches.
 
 ### Comparison
 For a simple math TIR RL training where there are 2048 trajectories in a batch, training 1.5B Qwen-Math on 4 H100 GPUs, the rollout time (excluding other RL operations) is as follows:

@@ -178,10 +178,11 @@ class BaseTool:
                                                 total=len(trajectory_ids), desc=f"Getting observations using tool {self.tool_type}", 
                                                 disable=not use_tqdm))
         
-        for i in range(len(trajectory_ids)):
-            if extra_fields[i].get('is_last_step', False):
-                self.delete_env(trajectory_ids[i])
         observations, dones, valids = zip(*results)
+        for i in range(len(trajectory_ids)):
+            if extra_fields[i].get('is_last_step', False) or dones[i]:
+                # delete the environment if it's the last step or done by the tool
+                self.delete_env(trajectory_ids[i])
         return observations, dones, valids
 
 # go through all files in the tools directory and register them

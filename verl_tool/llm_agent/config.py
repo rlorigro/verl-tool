@@ -26,4 +26,5 @@ class AgentActorConfig:
     mtrl_sep: str=None # "\n<|im_start|>system\n{obs}<|im_end|>\n<|im_start|>assistant\n"
     turn_end_token: str="<|im_end|>"
     rollout_mode: str="sync" # "sync" or "async"
+    mask_overlong_loss: bool=False # whether to mask the overlong trajectory to not train on it
     
