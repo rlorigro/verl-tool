@@ -6,13 +6,12 @@
 set -x
 
 # Model and data configuration
-# model_name="/map-vepfs/yi/model_weights/Llama-3.2-3B"
-model_name="/map-vepfs/yi/model_weights/Qwen2.5-3B"
-train_data="/map-vepfs/yi/searchr1_data/training_data/searchR1_processed_direct/train.parquet"
-val_data="/map-vepfs/yi/searchr1_data/training_data/searchR1_processed_direct/test.parquet"
+# or download at: https://huggingface.co/Qwen/Qwen2.5-3B/tree/main
+model_name="Qwen/Qwen2.5-3B"
+train_data="./data/search_r1/training_data/searchR1_processed_direct/train.parquet"
+val_data="./data/search_r1/training_data/searchR1_processed_direct/test.parquet"
 
 # Search-R1 specific action tokens
-
 action_stop_tokens="</search>,</answer>"
 retriever_url="http://127.0.0.1:8000/retrieve"
 retriever_topk=3
