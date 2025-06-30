@@ -93,7 +93,8 @@ gzip -d $save_path/wiki-18.jsonl.gz
 
 2. **Prepare Training Dataset**:
 ```bash
-python verl-tool/verl/scripts/data_preprocess/preprocess_search_r1_dataset.py
+python verl-tool/verl/scripts/data_preprocess/preprocess_search_r1_dataset.py\
+   --local_dir <path_to_target_directory>
 ```
 
 ### Configuration
@@ -126,6 +127,9 @@ python retrieval_server.py \
     --retriever_model intfloat/e5-base-v2 \
     --faiss_gpu
 ```
+
+if encounter error: "/lib/x86_64-linux-gnu/libstdc++.so.6: version 'GLIBCXX_3.4.29' not found", check solution at https://github.com/pybind/pybind11/discussions/3453. Each time the retriever might need ~5min to load.
+
 
 ### Training a Model
 
