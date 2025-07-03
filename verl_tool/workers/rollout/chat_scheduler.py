@@ -219,15 +219,16 @@ class VerlToolChatCompletionScheduler(ChatCompletionScheduler):
                             run_with_semaphore(batch_index)
                         )
                     )
-            for batch_index in range(len(repeated_chunk_batch)):
-                tasks.append(
-                    asyncio.create_task(
-                        self.agent_actor_manager.run_llm_loop_async(
-                            repeated_chunk_batch[batch_index],
-                            **kwargs
+            else:
+                for batch_index in range(len(repeated_chunk_batch)):
+                    tasks.append(
+                        asyncio.create_task(
+                            self.agent_actor_manager.run_llm_loop_async(
+                                repeated_chunk_batch[batch_index],
+                                **kwargs
+                            )
                         )
                     )
-                )
             # gen_outputs = await asyncio.gather(*tasks)
             gen_outputs = await tqdm.gather(*tasks, total=len(tasks), desc="Async Generating sequences")
             output_batch = DataProto.concat(gen_outputs)
