@@ -385,18 +385,6 @@ class AsyncToolServer:
                             dones=dones,
                             valids=valids
                         )
-                        # import json
-                        # with open(f"tmp_requests/request_response_{data_hash_str}.json", "w") as f:
-                        #     json.dump([
-                        #         {
-                        #             "trajectory_id": trajectory_ids[i],
-                        #             "action": actions[i],
-                        #             "extra_field": extra_fields[i],
-                        #             "observation": observations[i],
-                        #             "done": dones[i],
-                        #             "valid": valids[i]
-                        #         } for i in range(len(trajectory_ids))
-                        #     ], f, indent=4)
                         logger.debug(f"Sending response: {response}")
                         # Store the result for potential duplicate requests
                         self.processing_tasks[data_hash_str]['result'] = response
