@@ -35,8 +35,8 @@ def test_python(
     action = """```<python>import time\ntime.sleep(30)\nprint('Hello from Python!')</python> ... <python>print('Hello again!')</python>``` ..."""
     print(_send_test_request(url, trajectory_id, action, "Python"))
     
-    print("--- Testing 6 ---") # syntax error
-    action = """```<python>print('Hello from Python!')</python> ..."""
+    print("--- Testing 6 ---") # syntax error, this prnit is intended!
+    action = """```<python>prnit('Hello from Python!')</python> ..."""
     print(_send_test_request(url, trajectory_id, action, "Python"))
 
     print("--- Testing 7 ---") # memory limit
