@@ -143,6 +143,12 @@ class AgentRayPPOTrainer(RayPPOTrainer):
             # Store original inputs
             input_ids = test_batch.batch["input_ids"]
             # TODO: Can we keep special tokens except for padding tokens?
+
+            input_texts_raw = [self.tokenizer.decode(ids, skip_special_tokens=False) for ids in input_ids]
+
+            for i, text in enumerate(input_texts_raw[:4]):
+                print(f"Input {i}: {text}")
+
             input_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in input_ids]
             sample_inputs.extend(input_texts)
 
@@ -191,6 +197,11 @@ class AgentRayPPOTrainer(RayPPOTrainer):
 
             # Store generated outputs
             output_ids = test_output_gen_batch.batch["responses"]
+
+            output_texts_raw = [self.tokenizer.decode(ids, skip_special_tokens=False) for ids in input_ids]
+            for i, text in enumerate(output_texts_raw[:4]):
+                print(f"Output {i}: {text}")
+
             output_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in output_ids]
             sample_outputs.extend(output_texts)
 
@@ -210,6 +221,7 @@ class AgentRayPPOTrainer(RayPPOTrainer):
 
             data_source_lst.append(test_batch.non_tensor_batch.get("data_source", ["unknown"] * reward_tensor.shape[0]))
 
+        # self._maybe_log_val_generations(inputs=sample_inputs, outputs=sample_outputs, scores=sample_scores)
         self._maybe_log_val_generations(inputs=sample_inputs, outputs=sample_outputs, scores=sample_scores)
 
         # dump generations
