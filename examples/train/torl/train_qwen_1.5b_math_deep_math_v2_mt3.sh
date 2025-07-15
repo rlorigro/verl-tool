@@ -7,14 +7,10 @@ train_data=$(pwd)/data/${dataset_name}/train.parquet
 # $(pwd)/data/${dataset_name}/aime24_test.parquet,\
 # $(pwd)/data/${dataset_name}/aime25_test.parquet]
 
-val_data=[$(pwd)/data/${dataset_name}/aime24_test.parquet,\
-$(pwd)/data/${dataset_name}/aime25_test.parquet]
-
-# val_data=[$(pwd)/data/${dataset_name}/math500_test.parquet,\
-# $(pwd)/data/${dataset_name}/aime24_test.parquet,\
+val_data=[$(pwd)/data/${dataset_name}/aime24_test.parquet]
 # $(pwd)/data/${dataset_name}/aime25_test.parquet]
 
-model_name=Qwen/Qwen3-0.6B
+model_name=Qwen/Qwen2.5-Math-1.5B
 
 rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
 n_gpus_per_node=2
@@ -27,9 +23,9 @@ max_prompt_length=1024
 max_response_length=3072
 max_obs_length=512
 
-ppo_max_token_len_per_gpu=$(( 2 * ( $max_prompt_length + $max_response_length ) ))
-ref_log_prob_max_token_len_per_gpu=$(( 2 * ( $max_prompt_length + $max_response_length ) ))
-rollout_log_prob_max_token_len_per_gpu=$(( 2 * ( $max_prompt_length + $max_response_length ) ))
+ppo_max_token_len_per_gpu=$(( 1 * ( $max_prompt_length + $max_response_length ) ))
+ref_log_prob_max_token_len_per_gpu=$(( 1 * ( $max_prompt_length + $max_response_length ) ))
+rollout_log_prob_max_token_len_per_gpu=$(( 1 * ( $max_prompt_length + $max_response_length ) ))
 
 echo "using ppo_max_token_len_per_gpu $ppo_max_token_len_per_gpu"
 echo "using ref_log_prob_max_token_len_per_gpu $ref_log_prob_max_token_len_per_gpu"
@@ -37,7 +33,7 @@ echo "using rollout_log_prob_max_token_len_per_gpu $rollout_log_prob_max_token_l
 
 val_top_p=0.95
 val_temperature=0.8
-val_n=4
+val_n=2
 val_do_sample=True
 
 temperature=1.0
@@ -47,7 +43,9 @@ enable_agent=True # enable agent for tool use
 strategy="fsdp"
 
 action_stop_tokens='```output'
-max_turns=1
+
+enable_mtrl=True # enable multi-turn training
+max_turns=3
 
 kl_loss_coef=0.0
 kl_coef=0
@@ -61,7 +59,7 @@ reward_manager=torl
 #ppo_micro_batch_size_per_gpu=1
 #log_prob_micro_batch_size_per_gpu=8
 
-tensor_model_parallel_size=1
+tensor_model_parallel_size=2
 gpu_memory_utilization=0.7 # higher gpu_memory_utilization will likely cause the vllm to OOM and get stuck, so set it to a lower value like 0.4 or 0.5
 do_offload=True # control actor's fsdp.[param|optimizer]_offload and actor_rollout_ref.rollout.fsdp.[param|optimizer]_offload; if gpu_memory_utilization is set to > 0.6, then do_offload should be set to True otherwise it will cause OOM
 
@@ -71,7 +69,6 @@ fsdp_size=-1
 
 additional_eos_token_ids=[151645] # <|im_end|> token id
 mask_observations=True # mask observations for kl loss and gradient descent
-enable_mtrl=False # enable multi-turn training
 
 max_action_length=2048
 
