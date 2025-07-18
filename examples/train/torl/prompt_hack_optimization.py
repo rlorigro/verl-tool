@@ -169,7 +169,7 @@ variables
  - max output tokens
  - dspy?
 """
-def main(batch_size=64, max_batches=16):
+def main(batch_size=64, max_batches=16, tensor_parallel_size=1):
     # ---- Config ----
     model_paths = ["Qwen/Qwen3-1.7B-MLX-bf16","Qwen/Qwen3-1.7B-Base"]
 
@@ -198,7 +198,7 @@ def main(batch_size=64, max_batches=16):
                 torch.cuda.empty_cache()
         
         print(f"Loading the model... " + model_path, flush=True)
-        llm = LLM(model=model_path, tensor_parallel_size=2)
+        llm = LLM(model=model_path, tensor_parallel_size=tensor_parallel_size)
         
         for think_prefill in think_prefills:
             # only initialize model related things once to save time
@@ -252,6 +252,7 @@ if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
     argparser.add_argument('--batch_size', type=int, default=64, help='Batch size for evaluation')
     argparser.add_argument('--max_batches', type=int, default=16, help='Maximum number of batches to evaluate')
+    argparser.add_argument('--tensor_parallel_size', type=int, default=1, help='Tensor parallel size for the model')
     args = argparser.parse_args() 
 
-    main(batch_size=args.batch_size, max_batches=args.max_batches)
+    main(batch_size=args.batch_size, max_batches=args.max_batches, tensor_parallel_size=args.tensor_parallel_size)
