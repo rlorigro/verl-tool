@@ -171,7 +171,7 @@ variables
 """
 def main(batch_size=64, max_batches=16, tensor_parallel_size=1):
     # ---- Config ----
-    model_paths = ["Qwen/Qwen3-1.7B-MLX-bf16","Qwen/Qwen3-1.7B-Base"]
+    model_paths = ["Qwen/Qwen3-1.7B","Qwen/Qwen3-1.7B-Base"]
 
     data_source = 'DigitalLearningGmbH/MATH-lighteval'
 
@@ -236,7 +236,7 @@ def main(batch_size=64, max_batches=16, tensor_parallel_size=1):
         model_path, think_prefill, temperature, max_token = key
         n_success, n_total = value
         # rewrite the above as single line JSON and breakout integers and float success as sep items
-        print(f'{{"model_path": "{model_path}", "think_prefill": {"len(think_prefill)>0"}, "temperature": {temperature}, "max_token": {max_token}, "n_success": {n_success}, "n_total": {n_total}, "success_rate": {float(n_success) / float(n_total):.3f}}}')
+        print(f'{{"model_path": "{model_path}", "think_prefill": {len(think_prefill)>0}, "temperature": {temperature}, "max_token": {max_token}, "n_success": {n_success}, "n_total": {n_total}, "success_rate": {float(n_success) / float(n_total):.3f}}}')
 
 
 
