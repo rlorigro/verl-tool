@@ -1,0 +1,19 @@
+output_dir: "/data/prompt_optimization/run1"
+batch_size: 64
+max_batches: 16
+tensor_parallel_size: 1
+
+model_paths:
+  - "Qwen/Qwen3-1.7B"
+  - "Qwen/Qwen3-1.7B-Base"
+
+data_source: "DigitalLearningGmbH/MATH-lighteval"
+system_prompt: "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. Please integrate natural language reasoning with programs to solve the problem above. Your final answer should be a single integer in \\boxed{}."
+user_prompt_suffix: "Pretend you are able to execute code, but only using a particular syntax. The syntax is ```python ... ``` for code and then you need to open a markdown block ```output to trigger the execution while reasoning. You can use this syntax to reason about the problem. Remember, you are not actually executing code, but pretending to do so."
+think_prefills:
+  - ""
+  - "Okay, so I will use remote execution to reason about the problem step by step, using the following syntax: ```python ... ``` for code and then I will open a markdown block ```output to trigger the execution while reasoning. This way my reasoning will be more robust."
+temperatures: [1.0, 1.2, 1.4]
+top_p: 1.0
+max_tokens: [4096, 2048, 1024]
+n: 4

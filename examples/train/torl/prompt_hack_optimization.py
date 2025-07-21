@@ -9,6 +9,7 @@ import datasets
 from transformers import AutoTokenizer
 import torch
 import argparse
+from omegaconf import OmegaConf
 
 
 """
@@ -42,15 +43,18 @@ def validate_output(output: str, max_python_length: int) -> bool:
 
     is_valid = False
     for i,item in enumerate(results):
+        # Strip the code block markers so that we can validate the Python code
         item = re.sub(r"^```python", "", item)
         item = re.sub(r"```$", "", item)
         results[i] = item.strip()
 
-        print(results[i])
         if is_valid_python(results[i], max_length=max_python_length):
             is_valid = True
 
+    # Check if there is at least one code block based on regex results
     has_code_block = len(results) > 0
+
+    # Check if there is an output block, only valid if ```output is the only stop token provided to vLLM`
     has_output_block = output.stop_reason is not None
 
     success = has_code_block and has_output_block and is_valid
@@ -103,6 +107,8 @@ def make_map_fn(split, data_source, system_prompt=None, user_prompt_suffix=""):
 Evaluate a model and a combination of parameters for its ability to generate the correct syntax for python code tool use
 """
 def evaluate(
+        output_dir,
+        model_path,
         data_source,
         tokenizer,
         llm,
@@ -137,25 +143,27 @@ def evaluate(
     n_batches = int(len(train_dataset) / batch_size)
     n_batches = min(n_batches, max_batches)
 
-    for i in range(n_batches):
-        sys.stdout.write("Batch %d/%d\n" % (i+1, n_batches))
+    out_path = os.path.join(output_dir, '_'.join([model_path.replace('/', "_"),str(temperature), str(max_tokens), str(n), str(batch_size)]))
+    
+    with open(out_path, 'w') as f:
+        for i in range(n_batches):
+            print("Batch %d/%d\n" % (i+1, n_batches))
 
-        batch = prompts[i*batch_size:(i+1)*batch_size]
+            batch = prompts[i*batch_size:(i+1)*batch_size]
 
-        print(batch[0])
+            response = llm.generate(batch, sampling_params=sampling_params)
 
-        response = llm.generate(batch, sampling_params=sampling_params)
+            for r, response in enumerate(response):
+                for o, output in enumerate(response.outputs):
+                    success = validate_output(output, max_python_length=1024)
 
-        for r, response in enumerate(response):
-            for o, output in enumerate(response.outputs):
-                success = validate_output(output, max_python_length=1024)
+                    print("Response: %d-%d Length: %d Success: %d\n" % (r,o,len(output.text),success))
 
-                sys.stdout.write("Response: %d-%d Length: %d Success: %d\n" % (r,o,len(output.text),success))
+                    f.write(output.text + "\n")
+                    n_success += success
+                    n_total += 1
 
-                n_success += success
-                n_total += 1
-
-        print("Success rate: %.3f" % (float(n_success) / float(n_total)))
+            print("Success rate: %.3f" % (float(n_success) / float(n_total)))
 
     return n_success, n_total
 
@@ -169,25 +177,31 @@ variables
  - max output tokens
  - dspy?
 """
-def main(batch_size=64, max_batches=16, tensor_parallel_size=1):
-    # ---- Config ----
-    model_paths = ["Qwen/Qwen3-1.7B","Qwen/Qwen3-1.7B-Base"]
+def main(
+        output_dir,
+        model_paths,
+        data_source,
+        system_prompt,
+        user_prompt_suffix,
+        think_prefills,
+        temperatures,
+        max_tokens,
+        n,
+        batch_size=64, 
+        max_batches=16, 
+        tensor_parallel_size=1
+):
 
-    data_source = 'DigitalLearningGmbH/MATH-lighteval'
-
-    system_prompt = "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. Please integrate natural language reasoning with programs to solve the problem above. Your final answer should be a single integer in \\boxed{}."
-    user_prompt_suffix = "Pretend you are able to execute code, but only using a particular syntax. The syntax is ```python ... ``` for code and then you need to open a markdown block ```output to trigger the execution while reasoning. You can use this syntax to reason about the problem. Remember, you are not actually executing code, but pretending to do so."
-
-    think_prefills = ["", "Okay, so I will use remote execution to reason about the problem step by step, using the following syntax: ```python ... ``` for code and then I will open a markdown block ```output to trigger the execution while reasoning. This way my reasoning will be more robust."]
-
-    temperatures = [1.0, 1.2, 1.4]
-    top_p = 1.0
-    max_tokens = [4096,2048,1024]
-    n = 4
-    stop_tokens = ["```output"]
     detokenize = True
+    top_p = 1.0
+    stop_tokens = ["```output"]
 
     results = dict()
+
+    if os.path.exists(output_dir):
+        raise Exception(f"Output directory {output_dir} already exists. Please choose a different directory.")
+    
+    os.makedirs(output_dir, exist_ok=True)
 
     # ---- Execution ----
     for m,model_path in enumerate(model_paths):
@@ -212,6 +226,8 @@ def main(batch_size=64, max_batches=16, tensor_parallel_size=1):
                 for max_token in max_tokens:
                     print(f"Evaluating {model_path} with temperature {temperature}, max_tokens {max_token}, think_prefill '{think_prefill}'")
                     n_success, n_total = evaluate(
+                        output_dir=output_dir,
+                        model_path=model_path,
                         data_source=data_source,
                         tokenizer=tokenizer,
                         llm=llm,
@@ -231,28 +247,60 @@ def main(batch_size=64, max_batches=16, tensor_parallel_size=1):
     
                     results[(model_path, think_prefill, temperature, max_token)] = (n_success, n_total)
 
-    print("Results:")
-    for key, value in results.items():
-        model_path, think_prefill, temperature, max_token = key
-        n_success, n_total = value
-        # rewrite the above as single line JSON and breakout integers and float success as sep items
-        print(f'{{"model_path": "{model_path}", "think_prefill": {len(think_prefill)>0}, "temperature": {temperature}, "max_token": {max_token}, "n_success": {n_success}, "n_total": {n_total}, "success_rate": {float(n_success) / float(n_total):.3f}}}')
+    out_path = os.path.join(output_dir, 'results.jsonl')
+    with open(out_path, 'w') as out_file:
+        print("Results saved to", out_path)
+        for key, value in results.items():
+            model_path, think_prefill, temperature, max_token = key
+            n_success, n_total = value
+
+            out_file.write(f'{{"model_path": "{model_path}", "think_prefill": "{len(think_prefill)>0}", "temperature": {temperature}, "max_token": {max_token}, "n_success": {n_success}, "n_total": {n_total}, "success_rate": {float(n_success) / float(n_total):.3f}}}\n')
 
 
 
 if __name__ == "__main__":
-    if torch.cuda.is_available():
-        n_devices = torch.cuda.device_count()
-        print(f"{n_devices} CUDA device(s) available.")
-        for i in range(n_devices):
-            print(f"Device {i}: {torch.cuda.get_device_name(i)}")
-    else:
-        print("No CUDA devices available.")
-        
     argparser = argparse.ArgumentParser()
-    argparser.add_argument('--batch_size', type=int, default=64, help='Batch size for evaluation')
-    argparser.add_argument('--max_batches', type=int, default=16, help='Maximum number of batches to evaluate')
-    argparser.add_argument('--tensor_parallel_size', type=int, default=1, help='Tensor parallel size for the model')
-    args = argparser.parse_args() 
+    argparser.add_argument('--config', type=str, required=True, help='Path to config file (YAML)')
+    args = argparser.parse_args()
+    
+    config = OmegaConf.load(args.config)
 
-    main(batch_size=args.batch_size, max_batches=args.max_batches, tensor_parallel_size=args.tensor_parallel_size)
+    main(
+        output_dir=config.output_dir,
+        model_paths=config.model_paths,
+        data_source=config.data_source,
+        system_prompt=config.system_prompt,
+        user_prompt_suffix=config.user_prompt_suffix,
+        think_prefills=config.think_prefills,
+        temperatures=config.temperatures,
+        max_tokens=config.max_tokens,
+        n=config.n,
+        batch_size=config.batch_size,
+        max_batches=config.max_batches,
+        tensor_parallel_size=config.tensor_parallel_size
+    )
+
+
+"""
+Example config:
+
+output_dir: "/data/prompt_optimization/run1"
+batch_size: 64
+max_batches: 16
+tensor_parallel_size: 1
+temperatures: [1.0, 1.2, 1.4]
+top_p: 1.0
+max_tokens: [4096, 2048, 1024]
+n: 4
+
+model_paths:
+  - "Qwen/Qwen3-1.7B"
+  - "Qwen/Qwen3-1.7B-Base"
+
+data_source: "DigitalLearningGmbH/MATH-lighteval"
+system_prompt: "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. Please integrate natural language reasoning with programs to solve the problem above. Your final answer should be a single integer in \\boxed{}."
+user_prompt_suffix: "Pretend you are able to execute code, but only using a particular syntax. The syntax is ```python ... ``` for code and then you need to open a markdown block ```output to trigger the execution while reasoning. You can use this syntax to reason about the problem. Remember, you are not actually executing code, but pretending to do so."
+think_prefills:
+  - ""
+  - "Okay, so I will use remote execution to reason about the problem step by step, using the following syntax: ```python ... ``` for code and then I will open a markdown block ```output to trigger the execution while reasoning. This way my reasoning will be more robust."
+"""
