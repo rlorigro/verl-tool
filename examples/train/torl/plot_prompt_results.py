@@ -26,8 +26,11 @@ def plot_variable(df, var, output_dir):
         sns.scatterplot(data=df, x=var, y="success_rate")
         sns.lineplot(data=df.groupby(var)["success_rate"].mean().reset_index(), x=var, y="success_rate", color='red', label='mean')
 
+    # get y_max from current y limits
+    y_max = plt.ylim()[1]
+
     # set ylim lower bound to 0
-    plt.ylim(0, 1)
+    plt.ylim(0, y_max*1.1)
 
     plt.title(f"Success Rate vs {var}")
     plt.ylabel("Success Rate")
