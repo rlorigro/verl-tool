@@ -10,6 +10,7 @@ from transformers import AutoTokenizer
 import torch
 import argparse
 from omegaconf import OmegaConf
+import json
 
 
 """
@@ -39,7 +40,7 @@ Check three conditions:
 If all conditions are met, return True; otherwise, return False.
 """
 def validate_output(output: str, max_python_length: int) -> bool:
-    results = re.findall(r"```python[^`]+```", output.text)
+    results = re.findall(r"```python(.*?)```", output.text, re.DOTALL)
 
     is_valid = False
     for i,item in enumerate(results):
@@ -59,7 +60,7 @@ def validate_output(output: str, max_python_length: int) -> bool:
 
     success = has_code_block and has_output_block and is_valid
 
-    return success
+    return success, is_valid, has_code_block, has_output_block
 
 
 """
@@ -108,7 +109,7 @@ Evaluate a model and a combination of parameters for its ability to generate the
 """
 def evaluate(
         output_dir,
-        model_path,
+        output_name,
         data_source,
         tokenizer,
         llm,
@@ -143,7 +144,7 @@ def evaluate(
     n_batches = int(len(train_dataset) / batch_size)
     n_batches = min(n_batches, max_batches)
 
-    out_path = os.path.join(output_dir, '_'.join([model_path.replace('/', "_"),str(temperature), str(max_tokens), str(n), str(batch_size)]))
+    out_path = os.path.join(output_dir, output_name + ".jsonl")
     
     with open(out_path, 'w') as f:
         for i in range(n_batches):
@@ -155,11 +156,22 @@ def evaluate(
 
             for r, response in enumerate(response):
                 for o, output in enumerate(response.outputs):
-                    success = validate_output(output, max_python_length=1024)
+                    result = validate_output(output, max_python_length=1024)
+                    success, is_valid, has_code_block, has_output_block = result
 
                     print("Response: %d-%d Length: %d Success: %d\n" % (r,o,len(output.text),success))
 
-                    f.write(output.text + "\n")
+                    out_json = {
+                        "prompt": response.prompt,
+                        "response": output.text,
+                        "success": success,
+                        "is_valid": is_valid,
+                        "has_code_block": has_code_block,
+                        "has_output_block": has_output_block
+                    }
+
+                    # Append to file
+                    f.write(json.dumps(out_json) + "\n")
                     n_success += success
                     n_total += 1
 
@@ -224,10 +236,11 @@ def main(
 
             for temperature in temperatures:
                 for max_token in max_tokens:
+                    output_name = '_'.join([re.sub(r'\W+', '_', model_path), "think"+str(int(len(think_prefill)>0)), "temp"+str(temperature), "maxlen"+str(max_token)])
                     print(f"Evaluating {model_path} with temperature {temperature}, max_tokens {max_token}, think_prefill '{think_prefill}'")
                     n_success, n_total = evaluate(
                         output_dir=output_dir,
-                        model_path=model_path,
+                        output_name=output_name,
                         data_source=data_source,
                         tokenizer=tokenizer,
                         llm=llm,
