@@ -194,7 +194,7 @@ def main(
         model_paths,
         data_source,
         system_prompt,
-        user_prompt_suffix,
+        user_prompt_suffixes,
         think_prefills,
         temperatures,
         max_tokens,
@@ -234,41 +234,43 @@ def main(
             + "<think>\n" + think_prefill \
             + "' }}{% endif %}"
 
-            for temperature in temperatures:
-                for max_token in max_tokens:
-                    output_name = '_'.join([re.sub(r'\W+', '_', model_path), "think"+str(int(len(think_prefill)>0)), "temp"+str(temperature), "maxlen"+str(max_token)])
-                    print(f"Evaluating {model_path} with temperature {temperature}, max_tokens {max_token}, think_prefill '{think_prefill}'")
-                    n_success, n_total = evaluate(
-                        output_dir=output_dir,
-                        output_name=output_name,
-                        data_source=data_source,
-                        tokenizer=tokenizer,
-                        llm=llm,
-                        system_prompt=system_prompt,
-                        user_prompt_suffix=user_prompt_suffix,
-                        temperature=temperature,
-                        top_p=top_p,
-                        max_tokens=max_token,
-                        n=n,
-                        stop_tokens=stop_tokens,
-                        detokenize=detokenize,
-                        batch_size=batch_size,
-                        max_batches=max_batches
-                    )
-                    
-                    print(f"Success rate: {n_success}/{n_total} = {float(n_success) / float(n_total):.3f}")
-    
-                    results[(model_path, think_prefill, temperature, max_token)] = (n_success, n_total)
+            for user_prompt_suffix in user_prompt_suffixes:
+                for temperature in temperatures:
+                    for max_token in max_tokens:
+                        output_name = '_'.join([re.sub(r'\W+', '_', model_path), "think"+str(int(len(think_prefill)>0)), "suffix"+str(int(len(user_prompt_suffixes)>0)), "temp"+str(temperature), "maxlen"+str(max_token)])
+                        
+                        print(f"Evaluating: {output_name}", flush=True)
+
+                        n_success, n_total = evaluate(
+                            output_dir=output_dir,
+                            output_name=output_name,
+                            data_source=data_source,
+                            tokenizer=tokenizer,
+                            llm=llm,
+                            system_prompt=system_prompt,
+                            user_prompt_suffix=user_prompt_suffix,
+                            temperature=temperature,
+                            top_p=top_p,
+                            max_tokens=max_token,
+                            n=n,
+                            stop_tokens=stop_tokens,
+                            detokenize=detokenize,
+                            batch_size=batch_size,
+                            max_batches=max_batches
+                        )
+                        
+                        print(f"Success rate: {n_success}/{n_total} = {float(n_success) / float(n_total):.3f}")
+        
+                        results[(model_path, think_prefill, user_prompt_suffix, temperature, max_token)] = (n_success, n_total)
 
     out_path = os.path.join(output_dir, 'results.jsonl')
     with open(out_path, 'w') as out_file:
         print("Results saved to", out_path)
         for key, value in results.items():
-            model_path, think_prefill, temperature, max_token = key
+            model_path, think_prefill, user_prompt_suffix, temperature, max_token = key
             n_success, n_total = value
 
-            out_file.write(f'{{"model_path": "{model_path}", "think_prefill": "{len(think_prefill)>0}", "temperature": {temperature}, "max_token": {max_token}, "n_success": {n_success}, "n_total": {n_total}, "success_rate": {float(n_success) / float(n_total):.3f}}}\n')
-
+            out_file.write(f'{{"model_path": "{model_path}", "think_prefill": "{len(think_prefill)>0}", "user_prompt_suffix": "{len(user_prompt_suffix)>0}", "temperature": {temperature}, "max_token": {max_token}, "n_success": {n_success}, "n_total": {n_total}, "success_rate": {float(n_success) / float(n_total):.3f}}}\n')
 
 
 if __name__ == "__main__":
@@ -278,12 +280,25 @@ if __name__ == "__main__":
     
     config = OmegaConf.load(args.config)
 
+    # check that think prefill and user prompt suffixes are lists with at most 2 items
+    if len(config.think_prefills) != 2 or len(config.user_prompt_suffixes) != 2:
+        raise ValueError("Both think_prefills and user_prompt_suffixes must be lists with exactly 2 items, one of which is an empty string.")
+
+    if len(config.think_prefills) == 2:
+        # check one is empty
+        if not (config.think_prefills[0] == "" or config.think_prefills[1] == ""):
+            raise ValueError("One of the think_prefills must be an empty string.")
+    
+    if len(config.user_prompt_suffixes) == 2:
+        if not (config.user_prompt_suffixes[0] == "" or config.user_prompt_suffixes[1] == ""):
+            raise ValueError("One of the user_prompt_suffixes must be an empty string.")
+
     main(
         output_dir=config.output_dir,
         model_paths=config.model_paths,
         data_source=config.data_source,
         system_prompt=config.system_prompt,
-        user_prompt_suffix=config.user_prompt_suffix,
+        user_prompt_suffixes=config.user_prompt_suffixes,
         think_prefills=config.think_prefills,
         temperatures=config.temperatures,
         max_tokens=config.max_tokens,
@@ -312,7 +327,9 @@ model_paths:
 
 data_source: "DigitalLearningGmbH/MATH-lighteval"
 system_prompt: "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. Please integrate natural language reasoning with programs to solve the problem above. Your final answer should be a single integer in \\boxed{}."
-user_prompt_suffix: "Pretend you are able to execute code, but only using a particular syntax. The syntax is ```python ... ``` for code and then you need to open a markdown block ```output to trigger the execution while reasoning. You can use this syntax to reason about the problem. Remember, you are not actually executing code, but pretending to do so."
+user_prompt_suffixes:
+  - ""
+  - "Pretend you are able to execute code, but only using a particular syntax. The syntax is ```python ... ``` for code and then you need to open a markdown block ```output to trigger the execution while reasoning. You can use this syntax to reason about the problem. Remember, you are not actually executing code, but pretending to do so."
 think_prefills:
   - ""
   - "Okay, so I will use remote execution to reason about the problem step by step, using the following syntax: ```python ... ``` for code and then I will open a markdown block ```output to trigger the execution while reasoning. This way my reasoning will be more robust."
