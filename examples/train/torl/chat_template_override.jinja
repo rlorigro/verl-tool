@@ -1,0 +1,6 @@
+{{bos_token}}{% for message in messages %}{{'<|im_start|>' + message['role'] + '
+' + message['content'] + '<|im_end|>' + '
+'}}{% endfor %}{% if add_generation_prompt %}{{ '<|im_start|>assistant
+<think>
+Okay, so I will use remote execution to reason about the problem step by step, using the following syntax: ```python ... ``` for code and then I will open a markdown block ```output to trigger the execution while reasoning. This way my reasoning will be more robust.'
+}}{% endif %}

@@ -74,6 +74,32 @@ class TaskRunner:
 
         trust_remote_code = config.data.get("trust_remote_code", False)
         tokenizer = hf_tokenizer(local_path, trust_remote_code=trust_remote_code)
+
+        if config.data.chat_template_override_jinja_path is not None or len(config.data.chat_template_override_jinja_path) > 0:
+            with open(config.data.chat_template_override_jinja_path, 'r') as template_file:
+                template = template_file.read()
+                tokenizer.chat_template = template
+            
+            print("WARNING: overriding chat template as:")
+            print(tokenizer.chat_template)
+
+            print("Example chat template:")
+
+            prompt1 = "[SYSTEMPROMPT]"
+            prompt2 = "[USERPROMPT]"
+
+            input_ids = tokenizer.apply_chat_template(
+                [   
+                    {"role": "system", "content": prompt1},
+                    {"role": "user", "content": prompt2}
+                ],
+                return_tensors="pt",
+                add_generation_prompt=True,
+                tokenize=True,
+            )
+
+            print(tokenizer.decode(input_ids[0], skip_special_tokens=False))
+
         # Used for multimodal LLM, could be None
         processor = hf_processor(local_path, trust_remote_code=trust_remote_code, use_fast=True)
 
