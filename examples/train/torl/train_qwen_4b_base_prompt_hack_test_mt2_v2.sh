@@ -141,6 +141,7 @@ PYTHONUNBUFFERED=1 python3 -m verl_tool.trainer.main_ppo \
     actor_rollout_ref.agent.max_start_length=$max_prompt_length \
     actor_rollout_ref.agent.max_obs_length=$max_obs_length \
     actor_rollout_ref.agent.max_turns=$max_turns \
+    actor_rollout_ref.rollout.multi_turn.max_turns=$max_turns \
     actor_rollout_ref.agent.additional_eos_token_ids=$additional_eos_token_ids \
     actor_rollout_ref.agent.mask_observations=$mask_observations \
     actor_rollout_ref.agent.action_stop_tokens=$action_stop_tokens_file \
