@@ -46,8 +46,8 @@ strategy="fsdp"
 
 action_stop_tokens='```output'
 
-enable_mtrl=False # enable multi-turn training
-max_turns=1
+enable_mtrl=True # enable multi-turn training
+max_turns=2
 
 kl_loss_coef=0.0
 kl_coef=0
