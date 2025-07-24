@@ -518,6 +518,12 @@ cd verl && git pull origin main && cd ..
 cp -r verl/verl/trainer/config/* ./verl_tool/trainer/config/
 uv pip install -e verl
 ```
+Then copy following to the proper place in `verl_tool/trainer/config/ppo_trainer.yaml`:
+```yaml
+defaults:
+  # VerlTool Agent
+  - verltool@actor_rollout_ref.agent: agent.yaml
+```
 Note there might be some small parameters needed to remove the '+' prefix in the training script because default values may be added to the new config files.
 
 ## Contributing
@@ -617,3 +623,8 @@ We thank [Netmind.AI](https://www.netmind.ai/), [SeaAI Lab](https://sail.sea.com
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=TIGER-AI-Lab/verl-tool&type=Date)](https://www.star-history.com/#TIGER-AI-Lab/verl-tool&Date)
+
+
+## Badge
+
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/tiger-ai-lab-verl-tool-badge.png)](https://mseep.ai/app/tiger-ai-lab-verl-tool)

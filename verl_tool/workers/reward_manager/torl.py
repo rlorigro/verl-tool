@@ -27,12 +27,13 @@ from collections import defaultdict
 class ToRLRewardManager:
     """The reward manager.
     """
+    name="torl"
 
     def __init__(self, tokenizer, num_examine, compute_score=None, reward_fn_key='data_source') -> None:
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
-        self.compute_score = compute_score if compute_score else _default_compute_score
-        self.torl_compute_score = torl_compute_score
+        # self.compute_score = compute_score if compute_score else _default_compute_score
+        self.compute_score = torl_compute_score
         self.reward_fn_key = reward_fn_key
         self.step = None
         self.add_format_think_penalty = False # -0.5 if not begines with <think> and end with </think>
@@ -164,7 +165,7 @@ class ToRLRewardManager:
 
             extra_info = data_item.non_tensor_batch.get('extra_info', None)
 
-            torl_score = self.torl_compute_score(
+            torl_score = self.compute_score(
                 # data_source=data_source,
                 solution_str=response_str,
                 ground_truth=ground_truth,
@@ -225,9 +226,9 @@ class ToRLRewardManager:
         if save_record:
             # Save the records to a file
             if self.num_examine == 1:
-                temp_file = self.record_dir / f"math-step-val-{self.step}.json"
+                temp_file = self.record_dir / f"{self.name}-step-val-{self.step}.json"
             else:
-                temp_file = self.record_dir / f"math-step-{self.step}.json"
+                temp_file = self.record_dir / f"{self.name}-step-{self.step}.json"
             self.step += 1
             with open(temp_file, "w") as f:
                 json.dump(to_save_records, f, indent=4)
