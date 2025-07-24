@@ -18,7 +18,7 @@ n=8
 batch_size=128
 ppo_mini_batch_size=8
 max_prompt_length=1024
-max_response_length=3072
+max_response_length=$(( 3072 - 32 ))
 max_obs_length=512
 
 ppo_max_token_len_per_gpu=$(( 4 * ( $max_prompt_length + $max_response_length ) ))

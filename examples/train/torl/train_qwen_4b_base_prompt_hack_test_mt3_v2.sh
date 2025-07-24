@@ -43,7 +43,7 @@ strategy="fsdp"
 action_stop_tokens='```output'
 
 enable_mtrl=False # enable multi-turn training (NOT NECESSARY FOR max_turns to take effect, ONLY affects chat formatting)
-max_turns=2
+max_turns=3
 
 kl_loss_coef=0.0
 kl_coef=0
